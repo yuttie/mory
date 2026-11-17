@@ -1002,6 +1002,38 @@ async fn a_row_schema_2_left_is_refilled_although_its_blob_is_unchanged() {
 }
 
 #[tokio::test]
+async fn a_subscription_keeps_its_browser_when_its_zone_column_goes() {
+    // As moried left the table while each browser's alarms rang in that browser's zone.
+    let opts = SqliteConnectOptions::from_str("sqlite::memory:").unwrap();
+    let mut conn = SqliteConnection::connect_with(&opts).await.unwrap();
+    sqlx::query("
+            CREATE TABLE push_subscription (
+                endpoint  TEXT PRIMARY KEY,
+                p256dh    TEXT NOT NULL,
+                auth      TEXT NOT NULL,
+                zone      TEXT NOT NULL
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO push_subscription VALUES ('https://push.example/abc', 'k', 'a', 'Asia/Tokyo');")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    // Twice, as every start does it.
+    crate::init_cache_database(&mut conn).await.unwrap();
+    crate::init_cache_database(&mut conn).await.unwrap();
+
+    let rows: Vec<(String, String, String)> = sqlx::query_as("SELECT * FROM push_subscription;")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(rows, [("https://push.example/abc".to_owned(), "k".to_owned(), "a".to_owned())]);
+}
+
+#[tokio::test]
 async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
     // The first sync runs before moried listens, so a panic in it keeps moried from starting.
     let fixture = RepoFixture::new();

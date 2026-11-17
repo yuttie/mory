@@ -11,8 +11,9 @@
 //!     that a bare `10m` is reported rather than read as "ten minutes after".
 //!   * a time on the start's day, `[[+-]N d|w ]HH:MM`: `09:00`, `-1d 18:00`.
 //!
-//! `d` and `w` count calendar days in the reader's zone, so a 09:00 event with `-1d` rings at 09:00
-//! the day before across a daylight-saving change, and take whole numbers. `h m s` count elapsed
+//! `d` and `w` count calendar days in the zone the notes are read in, moried's, so a 09:00 event
+//! with `-1d` rings at 09:00 the day before across a daylight-saving change, and take whole
+//! numbers. `h m s` count elapsed
 //! time and may be decimal. An all-day event starts at the first moment of its day.
 //!
 //! Where a note says nothing, `.mory/calendars.yaml` may: for a category of event, and then for all

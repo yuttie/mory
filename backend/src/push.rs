@@ -16,11 +16,15 @@
 //! What rings when is `schedule`'s answer. This module is what carries it to a browser: the key,
 //! the subscriptions, the push, and the loop that asks once a minute.
 //!
+//! A time a note writes without an offset rings when it comes in moried's zone, in every browser:
+//! it is the zone the notes are read in everywhere, so that a note means the same moments wherever
+//! it is opened. Only the words the worker shows are the reader's.
+//!
 //! The scheduler must not talk to the database while nothing changes: production logs at debug,
 //! and `sqlx` logs every statement there. It keeps the listing and the subscriptions in memory, and
 //! reads them again only when a sync or a handler says they changed.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::time::Duration as StdDuration;
 
 use anyhow::{Context, Result, bail};
@@ -99,15 +103,14 @@ impl Push {
 
 // --- subscriptions --------------------------------------------------------------------------
 
-/// A browser's subscription, as `PushSubscription.toJSON()` gives it, with the zone it reads
-/// the calendar in.
+/// A browser's subscription, as `PushSubscription.toJSON()` gives it.
+///
+/// A page from before alarms rang in moried's zone also sends the zone it reads the calendar in,
+/// which is let pass unread.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubscriptionRequest {
     pub endpoint: String,
     pub keys: SubscriptionKeys,
-    /// An IANA zone name. A note without offsets means a different moment in every zone, and the
-    /// alarm should ring when the calendar in this browser shows the event.
-    pub zone: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -131,7 +134,6 @@ struct Subscription {
     host: String,
     /// The endpoint and the browser's keys, parsed once into what sends to them.
     builder: WebPushBuilder,
-    zone: Zone,
 }
 
 fn decode(value: &str) -> Option<Vec<u8>> {
@@ -140,7 +142,7 @@ fn decode(value: &str) -> Option<Vec<u8>> {
 }
 
 impl Subscription {
-    fn parse(endpoint: &str, p256dh: &str, auth: &str, zone: &str) -> Result<Self> {
+    fn parse(endpoint: &str, p256dh: &str, auth: &str) -> Result<Self> {
         // Parsed as the type it is sent to, so that nothing is stored that could never be sent.
         let uri = endpoint.parse::<Uri>().context("the endpoint is not a URL")?;
         // A push service is always reached over TLS, and moried should not be made to post to
@@ -156,15 +158,14 @@ impl Subscription {
             .filter(|bytes| bytes.len() == 16)
             .map(|bytes| Auth::clone_from_slice(&bytes))
             .context("keys.auth is not 16 bytes")?;
-        let zone = zone.parse::<Zone>().ok().context("zone is not an IANA zone name")?;
         let builder = WebPushBuilder::new(uri, ua_public, ua_auth).with_valid_duration(LATE_LIMIT);
-        Ok(Subscription { endpoint: endpoint.to_owned(), host, builder, zone })
+        Ok(Subscription { endpoint: endpoint.to_owned(), host, builder })
     }
 }
 
 async fn load_subscriptions(state: &AppState) -> Vec<Subscription> {
-    let rows = sqlx::query_as::<_, (String, String, String, String)>(
-            "SELECT endpoint, p256dh, auth, zone FROM push_subscription;",
+    let rows = sqlx::query_as::<_, (String, String, String)>(
+            "SELECT endpoint, p256dh, auth FROM push_subscription;",
         )
         .fetch_all(&state.cache_db)
         .await;
@@ -173,7 +174,7 @@ async fn load_subscriptions(state: &AppState) -> Vec<Subscription> {
             .into_iter()
             // Stored only after the same parse succeeded, so a row that fails it now is one
             // written by hand, and is better skipped than fatal.
-            .filter_map(|(endpoint, p256dh, auth, zone)| Subscription::parse(&endpoint, &p256dh, &auth, &zone).ok())
+            .filter_map(|(endpoint, p256dh, auth)| Subscription::parse(&endpoint, &p256dh, &auth).ok())
             .collect(),
         Err(e) => {
             tracing::error!("Failed to read the push subscriptions: {:?}", e);
@@ -201,21 +202,19 @@ pub async fn put_subscription(
     extract::State(state): extract::State<AppState>,
     Json(request): Json<SubscriptionRequest>,
 ) -> Result<Response, AppError> {
-    let SubscriptionRequest { endpoint, keys, zone } = request;
-    if let Err(e) = Subscription::parse(&endpoint, &keys.p256dh, &keys.auth, &zone) {
+    let SubscriptionRequest { endpoint, keys } = request;
+    if let Err(e) = Subscription::parse(&endpoint, &keys.p256dh, &keys.auth) {
         return Ok((StatusCode::BAD_REQUEST, e.to_string()).into_response());
     }
     sqlx::query(
-            "INSERT INTO push_subscription (endpoint, p256dh, auth, zone) VALUES (?, ?, ?, ?)
+            "INSERT INTO push_subscription (endpoint, p256dh, auth) VALUES (?, ?, ?)
              ON CONFLICT(endpoint) DO UPDATE SET
                  p256dh = excluded.p256dh,
-                 auth = excluded.auth,
-                 zone = excluded.zone;",
+                 auth = excluded.auth;",
         )
         .bind(&endpoint)
         .bind(&keys.p256dh)
         .bind(&keys.auth)
-        .bind(&zone)
         .execute(&state.cache_db_writer)
         .await?;
     state.push.subscriptions_changed.notify_one();
@@ -333,48 +332,37 @@ async fn deliver(
     }
 }
 
-/// What one look at the schedule found: the alarms due now, each with the browsers to send it to,
-/// and when the next one after them is due.
-struct Plan<'a> {
-    due: Vec<(Alarm, Vec<&'a Subscription>)>,
+/// What one look at the schedule found: the alarms due now, and when the next one after them is
+/// due.
+struct Plan {
+    due: Vec<Alarm>,
     next: Option<DateTime<Utc>>,
 }
 
-/// The alarms due in `(after, now]` for each zone's browsers, and the first due after `now` within
-/// `CHECK_INTERVAL`. One more than `LATE_LIMIT` late is let pass.
-fn plan<'a>(
-    schedule: &Schedule,
-    subscriptions: &'a [Subscription],
-    after: DateTime<Utc>,
-    now: DateTime<Utc>,
-) -> Plan<'a> {
-    let mut by_zone: HashMap<Zone, Vec<&Subscription>> = HashMap::new();
-    for subscription in subscriptions {
-        by_zone.entry(subscription.zone).or_default().push(subscription);
-    }
+/// The alarms due in `(after, now]`, with a time written without an offset read in `zone`, and the
+/// first due after `now` within `CHECK_INTERVAL`. One more than `LATE_LIMIT` late is let pass.
+fn plan(schedule: &Schedule, zone: Zone, after: DateTime<Utc>, now: DateTime<Utc>) -> Plan {
     let mut plan = Plan { due: Vec::new(), next: None };
-    for (zone, group) in by_zone {
-        for alarm in alarms_between(schedule, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
-            if alarm.at > now {
-                plan.next = Some(plan.next.map_or(alarm.at, |next| next.min(alarm.at)));
-                break;
-            }
-            if alarm.at >= now - LATE_LIMIT {
-                plan.due.push((alarm, group.clone()));
-            }
+    for alarm in alarms_between(schedule, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
+        if alarm.at > now {
+            plan.next = Some(alarm.at);
+            break;
+        }
+        if alarm.at >= now - LATE_LIMIT {
+            plan.due.push(alarm);
         }
     }
     plan
 }
 
-/// Sends each due alarm to its browsers, and returns the endpoints their push services reported
+/// Sends each due alarm to every browser, and returns the endpoints their push services reported
 /// ended. One reported ended is not sent the alarms after it.
-async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> HashSet<String> {
+async fn send(state: &AppState, due: &[Alarm], subscriptions: &[Subscription]) -> HashSet<String> {
     let mut gone = HashSet::new();
-    for (alarm, group) in due {
+    for alarm in due {
         let payload = Payload::of(alarm);
         let mut sent = 0;
-        for subscription in group {
+        for subscription in subscriptions {
             if gone.contains(&subscription.endpoint) {
                 continue;
             }
@@ -391,7 +379,7 @@ async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> HashSet<
             alarm.name,
             alarm.path,
             sent,
-            group.len(),
+            subscriptions.len(),
         );
     }
     gone
@@ -423,6 +411,7 @@ pub fn spawn(state: AppState) {
 }
 
 async fn run(state: AppState) {
+    let zone = crate::urgency::local_zone();
     let mut subscriptions = load_subscriptions(&state).await;
     // Loaded again only once a sync says the listing moved.
     let mut schedule: Option<Schedule> = None;
@@ -457,9 +446,9 @@ async fn run(state: AppState) {
                 wait(&state, &mut done, &mut subscriptions, &mut schedule, CHECK_INTERVAL).await;
                 continue;
             };
-            let plan = plan(current, &subscriptions, checked_up_to, now);
+            let plan = plan(current, zone, checked_up_to, now);
             next = plan.next;
-            let gone = send(&state, &plan.due).await;
+            let gone = send(&state, &plan.due, &subscriptions).await;
             if !gone.is_empty() {
                 for endpoint in &gone {
                     if let Err(e) = forget(&state, endpoint).await {
@@ -538,19 +527,14 @@ mod tests {
         assert_eq!(decode(&one.public_key).unwrap().len(), 65);
     }
 
-    fn subscription_in(zone: Zone) -> Subscription {
+    fn subscription() -> Subscription {
         let (_, p256dh, _, auth) = subscription_keys();
-        let endpoint = format!("https://push.example/{}", zone.name());
-        Subscription::parse(&endpoint, &p256dh, &auth, zone.name()).unwrap()
+        Subscription::parse("https://push.example/abc", &p256dh, &auth).unwrap()
     }
 
-    fn names(plan: &Plan<'_>) -> Vec<(String, Vec<Zone>)> {
-        let mut due: Vec<(String, Vec<Zone>)> = plan
-            .due
-            .iter()
-            .map(|(alarm, group)| (alarm.name.clone(), group.iter().map(|s| s.zone).collect()))
-            .collect();
-        due.sort_by(|a, b| a.0.cmp(&b.0));
+    fn names(plan: &Plan) -> Vec<&str> {
+        let mut due: Vec<&str> = plan.due.iter().map(|alarm| alarm.name.as_str()).collect();
+        due.sort_unstable();
         due
     }
 
@@ -564,36 +548,35 @@ events:
     Next: { start: '2024-05-06 10:00:30+00:00' }
     After the lookahead: { start: '2024-05-06 10:05:00+00:00' }
 ")]);
-        let subscriptions = [subscription_in(LOS_ANGELES)];
-        let plan = plan(&schedule, &subscriptions, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
-        assert_eq!(names(&plan), [
-            ("Late but in time".to_owned(), vec![LOS_ANGELES]),
-            ("Now".to_owned(), vec![LOS_ANGELES]),
-        ]);
+        let plan = plan(&schedule, LOS_ANGELES, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
+        assert_eq!(names(&plan), ["Late but in time", "Now"]);
         assert_eq!(plan.next, Some(at("2024-05-06T10:00:30Z")));
     }
 
     #[test]
-    fn a_plan_sends_a_wall_clock_to_the_browsers_whose_zone_it_is_due_in() {
-        let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00' } }")]);
-        let tokyo = chrono_tz::Asia::Tokyo;
-        let subscriptions = [subscription_in(LOS_ANGELES), subscription_in(tokyo)];
-        // 09:00 in Tokyo; still the night before in Los Angeles.
-        let plan = plan(&schedule, &subscriptions, at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
-        assert_eq!(names(&plan), [("Call".to_owned(), vec![tokyo])]);
-        assert_eq!(plan.next, None);
+    fn a_plan_reads_a_wall_clock_in_the_zone_it_is_given() {
+        let schedule = schedule_of([entry("
+events:
+    Call: { start: '2024-05-06 09:00' }
+    Holiday: { start: '2024-05-06', alarms: [09:00] }
+")]);
+        // 09:00 in Tokyo, and still the night before in Los Angeles, where the browser may be.
+        let (after, now) = (at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
+        let plan_in_tokyo = plan(&schedule, chrono_tz::Asia::Tokyo, after, now);
+        assert_eq!(names(&plan_in_tokyo), ["Call", "Holiday"]);
+        assert_eq!(plan_in_tokyo.next, None);
+        assert_eq!(names(&plan(&schedule, LOS_ANGELES, after, now)), Vec::<&str>::new());
     }
 
     #[test]
     fn a_plan_finds_the_next_early_alarm() {
         let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00:00+00:00', alarms: [-30s, 0m] } }")]);
-        let subscriptions = [subscription_in(LOS_ANGELES)];
-        let plan = plan(&schedule, &subscriptions, at("2024-05-06T08:59:00Z"), at("2024-05-06T08:59:10Z"));
+        let plan = plan(&schedule, LOS_ANGELES, at("2024-05-06T08:59:00Z"), at("2024-05-06T08:59:10Z"));
         assert!(plan.due.is_empty());
         assert_eq!(plan.next, Some(at("2024-05-06T08:59:30Z")));
 
-        let plan = super::plan(&schedule, &subscriptions, at("2024-05-06T08:59:10Z"), at("2024-05-06T08:59:30Z"));
-        assert_eq!(names(&plan), [("Call".to_owned(), vec![LOS_ANGELES])]);
+        let plan = super::plan(&schedule, LOS_ANGELES, at("2024-05-06T08:59:10Z"), at("2024-05-06T08:59:30Z"));
+        assert_eq!(names(&plan), ["Call"]);
         assert_eq!(plan.next, Some(at("2024-05-06T09:00:00Z")));
     }
 
@@ -637,26 +620,31 @@ events:
     }
 
     #[test]
-    fn a_subscription_must_be_https_with_real_keys_and_a_zone() {
+    fn a_subscription_must_be_https_with_real_keys() {
         let (_, p256dh, _, auth) = subscription_keys();
-        let ok = |endpoint: &str, p256dh: &str, auth: &str, zone: &str| {
-            Subscription::parse(endpoint, p256dh, auth, zone).is_ok()
-        };
-        assert!(ok("https://push.example/abc", &p256dh, &auth, "Asia/Tokyo"));
-        assert!(ok("https://push.example/abc", &format!("{p256dh}="), &format!("{auth}=="), "UTC"));
-        assert!(!ok("http://push.example/abc", &p256dh, &auth, "Asia/Tokyo"));
+        let ok = |endpoint: &str, p256dh: &str, auth: &str| Subscription::parse(endpoint, p256dh, auth).is_ok();
+        assert!(ok("https://push.example/abc", &p256dh, &auth));
+        assert!(ok("https://push.example/abc", &format!("{p256dh}="), &format!("{auth}==")));
+        assert!(!ok("http://push.example/abc", &p256dh, &auth));
         // A URL, but not one a request can be sent to: stored, it would fail every send for good.
-        assert!(!ok("https://push.example/a b", &p256dh, &auth, "Asia/Tokyo"));
-        assert!(!ok("https://push.example/abc", "AAAA", &auth, "Asia/Tokyo"));
-        assert!(!ok("https://push.example/abc", &p256dh, "AAAA", "Asia/Tokyo"));
-        assert!(!ok("https://push.example/abc", &p256dh, &auth, "+09:00"));
+        assert!(!ok("https://push.example/a b", &p256dh, &auth));
+        assert!(!ok("https://push.example/abc", "AAAA", &auth));
+        assert!(!ok("https://push.example/abc", &p256dh, "AAAA"));
+    }
+
+    #[test]
+    fn a_subscription_from_a_page_that_sends_its_zone_is_still_taken() {
+        let request: SubscriptionRequest = serde_json::from_str(
+            r#"{"endpoint": "https://push.example/abc", "keys": {"p256dh": "a", "auth": "b"}, "zone": "Asia/Tokyo"}"#,
+        ).unwrap();
+        assert_eq!(request.endpoint, "https://push.example/abc");
     }
 
     #[test]
     fn an_alarm_is_encrypted_for_the_browser_and_signed_as_this_server() {
         let push = Push::derive(b"secret", "mailto:a@example.invalid".into()).unwrap();
         let (ua_secret, _, ua_auth, _) = subscription_keys();
-        let subscription = subscription_in(LOS_ANGELES);
+        let subscription = subscription();
         let alarm = Alarm {
             at: at("2024-05-06T15:50:00Z"),
             name: "Standup".into(),
@@ -666,7 +654,7 @@ events:
         };
 
         let request = request(&push, &subscription, &Payload::of(&alarm)).unwrap();
-        assert_eq!(request.url().as_str(), "https://push.example/America/Los_Angeles");
+        assert_eq!(request.url().as_str(), "https://push.example/abc");
         let headers = request.headers();
         assert_eq!(headers["urgency"], "high");
         assert_eq!(headers["ttl"], "600");

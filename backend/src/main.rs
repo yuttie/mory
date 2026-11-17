@@ -406,12 +406,22 @@ async fn init_cache_database(
             CREATE TABLE IF NOT EXISTS push_subscription (
                 endpoint  TEXT PRIMARY KEY,
                 p256dh    TEXT NOT NULL,
-                auth      TEXT NOT NULL,
-                zone      TEXT NOT NULL
+                auth      TEXT NOT NULL
             ) STRICT, WITHOUT ROWID;
         ")
         .execute(&mut *conn)
         .await?;
+    // A subscription once kept the zone its browser read the notes in, which alarms rang in before
+    // they rang in moried's. Dropped as a column, not with the table: a browser whose subscription
+    // went would hear nothing until the next time it opened mory.
+    let keeps_zone: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM pragma_table_info('push_subscription') WHERE name = 'zone');",
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+    if keeps_zone {
+        sqlx::query("ALTER TABLE push_subscription DROP COLUMN zone;").execute(&mut *conn).await?;
+    }
     sqlx::query("
             CREATE TABLE IF NOT EXISTS ical_cache (
                 url            TEXT PRIMARY KEY,
