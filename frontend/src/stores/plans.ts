@@ -2,13 +2,13 @@ import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import axios from 'axios';
 import { useFilesStore } from '@/stores/files';
-import { collectUndone, isPlanDate, PLAN_UUID, putPlanEntry, readPlan, writePlan, type MonthPlan, type PlanOrigin, type PlanResult } from '@/plans';
+import { collectUndone, isPlanDate, PLAN_UUID, planMonthOf, putPlanEntry, readPlan, writePlan, type MonthPlan, type PlanOrigin, type PlanResult } from '@/plans';
 
 const planPath = (month: string) => `.mory/plans/${month}.yaml`;
 // Only a file named for a month holds a plan. One named otherwise, such as `2026-13.yaml`, is never
 // read as one, and the health check reports it.
 function listedMonths(entries: readonly { path: string }[]): string[] {
-    return entries.map((entry) => /^\.mory\/plans\/([0-9]{4}-(?:0[1-9]|1[0-2]))\.yaml$/.exec(entry.path)?.[1]).filter((month): month is string => month !== undefined);
+    return entries.map((entry) => planMonthOf(entry.path)).filter((month): month is string => month !== null);
 }
 export const usePlansStore = defineStore('plans', () => {
     const files = useFilesStore();

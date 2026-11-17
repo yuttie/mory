@@ -10,6 +10,12 @@ export interface PlanEntry {
 export type MonthPlan = Record<string, PlanEntry[]>;
 export const PLAN_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/// The month a file under `.mory/plans/` holds the plan of, or `null` for one no plan is read from.
+/// The store reads only these, and the health check reports any other file there, so both ask here.
+export function planMonthOf(path: string): string | null {
+    return /^\.mory\/plans\/([0-9]{4}-(?:0[1-9]|1[0-2]))\.yaml$/.exec(path)?.[1] ?? null;
+}
+
 export function isPlanDate(value: string): boolean {
     if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) {
         return false;

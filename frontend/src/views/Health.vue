@@ -115,8 +115,9 @@ import dayjs from 'dayjs';
 
 import AppBarContent from '@/components/AppBarContent.vue';
 import { routeForMime } from '@/file-route';
-import { eventChecks, frontmatterChecks, guardChecks, planMonthOf, settingsChecks, taskChecks } from '@/health';
+import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, taskChecks } from '@/health';
 import type { HealthCheck, HealthProblem, HealthSeverity } from '@/health';
+import { planMonthOf } from '@/plans';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { usePlansStore } from '@/stores/plans';

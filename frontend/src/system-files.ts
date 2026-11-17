@@ -9,7 +9,7 @@ import dayjs from 'dayjs';
 import { AI_ACTIONS_PATH } from '@/ai-actions';
 import { TASK_DATA_PATH } from '@/api';
 import { DEFAULT_CONFIG_PATH } from '@/config';
-import { planMonthOf } from '@/health';
+import { planMonthOf } from '@/plans';
 import { CALENDARS_PATH } from '@/stores/calendars';
 import { TASK_SETTINGS_PATH } from '@/stores/taskSettings';
 import { TASK_ASSESSMENT_PROMPT_PATH } from '@/task-assessment';
