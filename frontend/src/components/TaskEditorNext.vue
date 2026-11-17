@@ -1037,6 +1037,7 @@ function taskOf(base: Task | null | undefined): Task {
         ...(form.due_by !== '' ? { due_by: form.due_by } : {}),
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
         ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
+        ...(base?.beforeTitle ? { beforeTitle: base.beforeTitle } : {}),
         note: form.note,
     };
 }

@@ -120,6 +120,9 @@ export interface Task {
     // When `due_by` and `deadline` ring, where this task says so; `render` has to write it, or a
     // save from the editor would delete it.
     alarms?: TaskAlarms;
+    // What the note holds between its frontmatter and its title, which the editor does not show:
+    // `render` writes the title first and then the note, so without this a save would drop it.
+    beforeTitle?: string;
     note: string;
 }
 
@@ -217,7 +220,10 @@ export function render(task: Task): string {
             return source;
         });
     }
-    return '---\n' + frontmatter + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
+    return '---\n' + frontmatter + '---\n'
+        + (task.beforeTitle ? `\n${task.beforeTitle}\n` : '')
+        + (task.title ? `\n# ${task.title}\n` : '')
+        + `\n${task.note}`;
 }
 
 // A note with its task's status replaced, and every other byte left alone.

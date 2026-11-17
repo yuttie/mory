@@ -1,7 +1,6 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkFrontmatter from 'remark-frontmatter';
-import { visit } from 'unist-util-visit';
 import type { Root, Heading, Yaml } from 'mdast';
 
 /**
@@ -86,17 +85,24 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
 }
 
 /**
- * Parse markdown and return frontmatter (YAML), first H1 text, and the rest after the H1.
+ * Parse markdown and return frontmatter (YAML), first H1 text, what comes before that H1, and the
+ * rest after it.
  *
  * Behavior:
  * - frontmatter: content of the initial YAML block (without the --- fences), or "" if none.
- * - heading: first level-1 heading's text (ATX or Setext) as written, inline Markdown and all, or
- *   "" if none.
- * - rest: markdown after that H1 block (or after frontmatter if no H1), with leading blank lines trimmed.
+ * - heading: the first top-level level-1 heading's text (ATX or Setext) as written, inline Markdown
+ *   and all, or "" if none. Top-level, as the listing's title is (`get_first_toplevel_rank1_heading`
+ *   in the backend): a `# ` inside a block quote or a list item is part of the body there.
+ * - before: markdown between the frontmatter and that H1, without the blank lines around it, or ""
+ *   if none. A task is written back as its title and then its note, so whatever came first has to
+ *   be carried apart or a save would drop it.
+ * - rest: markdown after that H1 block (or after frontmatter if no H1, and from an empty H1 on), with
+ *   leading blank lines trimmed.
  */
 export function extractFrontmatterH1AndRest(markdown: string): {
     frontmatter: string;
     heading: string;
+    before: string;
     rest: string;
 } {
     const processor = unified()
@@ -114,18 +120,13 @@ export function extractFrontmatterH1AndRest(markdown: string): {
         afterFrontmatterOffset = first.position?.end.offset ?? 0;
     }
 
-    // 2) Find the first depth-1 heading anywhere in document order. Set in a callback, which
-    // TypeScript does not follow, so a plain `null` would leave it typed as never set.
-    let h1Node = null as Heading | null;
-    visit(tree, 'heading', (node: Heading) => {
-        if (!h1Node && node.depth === 1) {
-            h1Node = node;
-        }
-    });
+    // 2) Find the first depth-1 heading among the top-level blocks.
+    const h1Node = tree.children.find((node): node is Heading => node.type === 'heading' && node.depth === 1);
 
     // 3) Compute heading text and 'rest' slice point
     let headingText = '';
     let sliceFrom = afterFrontmatterOffset; // default: after frontmatter (or 0 if none)
+    let before = '';
 
     if (h1Node?.position?.end?.offset != null) {
         // As written rather than as plain text: a task's title is written back after `# ` as the
@@ -133,7 +134,12 @@ export function extractFrontmatterH1AndRest(markdown: string): {
         const start = h1Node.children[0]?.position?.start.offset;
         const end = h1Node.children.at(-1)?.position?.end.offset;
         headingText = start != null && end != null ? markdown.slice(start, end).trim() : '';
-        sliceFrom = h1Node.position.end.offset;
+        // An empty `#` is no title, as the listing reads it, but it is a line of the note: it stays
+        // at the start of the rest rather than going with a title there is none of.
+        sliceFrom = headingText === '' ? h1Node.position.start.offset ?? afterFrontmatterOffset : h1Node.position.end.offset;
+        before = markdown.slice(afterFrontmatterOffset, h1Node.position.start.offset)
+            .replace(/^(?:[ \t]*\r?\n)+/, '')
+            .trimEnd();
     }
 
     // 4) Slice the rest and strip any blank lines immediately following
@@ -143,6 +149,7 @@ export function extractFrontmatterH1AndRest(markdown: string): {
     return {
         frontmatter,
         heading: headingText,
+        before,
         rest,
     };
 }

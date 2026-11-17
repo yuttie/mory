@@ -42,6 +42,7 @@ describe('extractFrontmatterH1AndRest', () => {
         expect(read).toEqual({
             frontmatter: 'task: {}',
             heading: 'Read *the* `spec` [here](https://example.com) \\#',
+            before: '',
             rest: 'Body\n',
         });
     });
@@ -50,9 +51,26 @@ describe('extractFrontmatterH1AndRest', () => {
         expect(extractFrontmatterH1AndRest('Title **bold**\n===\n\nBody').heading).toBe('Title **bold**');
     });
 
-    it('reads an empty heading, or none, as no title', () => {
-        expect(extractFrontmatterH1AndRest('#\n\nBody')).toMatchObject({ heading: '', rest: 'Body' });
+    // An empty heading is a line of the note all the same, which a save must not drop.
+    it('reads an empty heading, or none, as no title, keeping an empty one in the rest', () => {
+        expect(extractFrontmatterH1AndRest('#\n\nBody')).toMatchObject({ heading: '', rest: '#\n\nBody' });
+        expect(extractFrontmatterH1AndRest('Intro\n\n#\n\nBody\n')).toEqual({ frontmatter: '', heading: '', before: 'Intro', rest: '#\n\nBody\n' });
         expect(extractFrontmatterH1AndRest('Body')).toMatchObject({ heading: '', rest: 'Body' });
+    });
+
+    // As the listing's title is: a `# ` in a block quote or a list belongs to the body there.
+    it('takes only a top-level heading as the title', () => {
+        expect(extractFrontmatterH1AndRest('> # Quoted\n\nBody')).toMatchObject({ heading: '', before: '', rest: '> # Quoted\n\nBody' });
+        expect(extractFrontmatterH1AndRest('- # Listed\n\n# Title\n\nBody')).toMatchObject({ heading: 'Title', before: '- # Listed', rest: 'Body' });
+    });
+
+    it('gives what comes before the heading apart from what comes after it', () => {
+        expect(extractFrontmatterH1AndRest('---\na: 1\n---\n\nIntro.\n\n```\n# code\n```\n\n# Title\n\nBody\n')).toEqual({
+            frontmatter: 'a: 1',
+            heading: 'Title',
+            before: 'Intro.\n\n```\n# code\n```',
+            rest: 'Body\n',
+        });
     });
 
     it('gives back the title a task was written with', () => {

@@ -24,7 +24,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
     else {
         const { extractFrontmatterH1AndRest } = await import('@/markdown-utils');
         const md = res.data as string;
-        const { frontmatter, heading: title, rest } = extractFrontmatterH1AndRest(md);
+        const { frontmatter, heading: title, before, rest } = extractFrontmatterH1AndRest(md);
         const metadata = YAML.parse(frontmatter);
         const uuid = extractFileUuid(taskPath);
         const alarms = readTaskAlarms(metadata.task.alarms);
@@ -42,6 +42,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             ...(metadata.task.due_by ? { due_by: metadata.task.due_by } : {}),
             ...(metadata.task.deadline ? { deadline: metadata.task.deadline } : {}),
             ...(alarms === undefined ? {} : { alarms }),
+            ...(before ? { beforeTitle: before } : {}),
             note: rest,
         };
 
