@@ -380,7 +380,8 @@ struct TaskSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     /// The `task:` block as `canonical_task` reads it: as declared, but for the keys an older
-    /// task model wrote.
+    /// task model wrote. A note in the tree whose `task:` is not a mapping has it as written, and
+    /// one without any has null (`task_summaries`).
     task: serde_json::Value,
     urgency: crate::urgency::Urgency,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -450,6 +451,55 @@ fn derived_task(index: usize, entries: &[crate::models::ListEntry], hierarchy: &
     (urgency, progress)
 }
 
+/// The tasks `list_tasks` lists, before they are sorted and paged: every note in the task tree, as
+/// the web app's tree and `TaskHierarchy` count them, by the path alone. One without a `task:`
+/// mapping is listed too, with `task` as written -- null where there is none -- rather than left
+/// out while the tree still shows it; a status filter matches only a status the note writes.
+fn task_summaries(
+    entries: &[crate::models::ListEntry],
+    args: &ListTasksArgs,
+    settings: &crate::urgency::Settings,
+    now: chrono::DateTime<chrono::Utc>,
+    zone: chrono_tz::Tz,
+) -> Vec<(chrono::DateTime<chrono::FixedOffset>, TaskSummary)> {
+    let hierarchy = crate::tasks::TaskHierarchy::new(entries);
+    let mut tasks = Vec::new();
+    for (index, entry) in entries.iter().enumerate() {
+        if !hierarchy.valid[index] { continue; }
+        let task = match task_of(entry) {
+            Some((_, block)) => canonical_task(block),
+            None => entry.metadata.as_ref()
+                .and_then(|root| root.get("task"))
+                .and_then(|value| serde_json::to_value(value).ok())
+                .unwrap_or(serde_json::Value::Null),
+        };
+        if let Some(wanted) = args.status.as_deref() {
+            if task_status_of(entry.metadata.as_ref()).as_deref() != Some(wanted) {
+                continue;
+            }
+        }
+        let tags = tags_of(entry.metadata.as_ref());
+        if let Some(wanted) = args.tag.as_deref() {
+            if !tags.iter().any(|tag| tag == wanted) {
+                continue;
+            }
+        }
+        let (urgency, progress) = derived_task(index, entries, &hierarchy, settings, now, zone);
+        tasks.push((
+            entry.time,
+            TaskSummary {
+                path: entry.path.to_string_lossy().into_owned(),
+                title: entry.title.clone(),
+                task,
+                urgency,
+                progress,
+                tags,
+            },
+        ));
+    }
+    tasks
+}
+
 pub async fn list_tasks(
     state: &AppState,
     args: ListTasksArgs,
@@ -475,41 +525,7 @@ pub async fn list_tasks(
     };
 
     let (settings, warnings) = task_settings(state).await?;
-    let now = chrono::Utc::now();
-    let zone = crate::urgency::local_zone();
-    let hierarchy = crate::tasks::TaskHierarchy::new(&entries);
-    let mut tasks = Vec::new();
-    for (index, entry) in entries.iter().enumerate() {
-        if !hierarchy.valid[index] { continue; }
-        let Some((_, block)) = task_of(entry) else {
-            continue;
-        };
-        let task = canonical_task(block);
-        let (urgency, progress) = derived_task(index, &entries, &hierarchy, &settings, now, zone);
-        if let Some(wanted) = args.status.as_deref() {
-            if task_status_of(entry.metadata.as_ref()).as_deref() != Some(wanted) {
-                continue;
-            }
-        }
-        let tags = tags_of(entry.metadata.as_ref());
-        if let Some(wanted) = args.tag.as_deref() {
-            if !tags.iter().any(|tag| tag == wanted) {
-                continue;
-            }
-        }
-        tasks.push((
-            entry.time,
-            TaskSummary {
-                path: entry.path.to_string_lossy().into_owned(),
-                title: entry.title.clone(),
-                task,
-                urgency,
-                progress,
-                tags,
-            },
-        ));
-    }
-
+    let mut tasks = task_summaries(&entries, &args, &settings, chrono::Utc::now(), crate::urgency::local_zone());
     tasks.sort_by_key(|(time, _)| std::cmp::Reverse(*time));
     let total = tasks.len();
     let offset = args.offset.unwrap_or(0).min(total);
@@ -1610,6 +1626,31 @@ mod tests {
                 assert_eq!(progress, expected["progress"].as_f64(), "{}", fixture["name"]);
             }
         }
+    }
+
+    /// A note in the task tree is a task by its path, as the web app's tree has it, whether or not
+    /// it holds a status; one outside the tree is none.
+    #[test]
+    fn list_tasks_lists_every_note_in_the_tree() {
+        let entries = vec![
+            listed(TASK_A, "task: {status: {kind: todo}}"),
+            listed(TASK_B, "tags: [work]"),
+            listed(".tasks/0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2c.md", "task: {due_by: 2026-11-20}"),
+            listed(".tasks/untitled.md", "task: {status: {kind: todo}}"),
+        ];
+        let args = |status: Option<&str>| ListTasksArgs { status: status.map(str::to_owned), tag: None, limit: None, offset: None };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-10-04T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
+        let listed = |status| task_summaries(&entries, &args(status), &crate::urgency::Settings::default(), now, chrono_tz::Asia::Tokyo)
+            .into_iter()
+            .map(|(_, summary)| (summary.path, summary.task))
+            .collect::<Vec<_>>();
+        assert_eq!(listed(None), vec![
+            (TASK_A.to_owned(), serde_json::json!({"status": {"kind": "todo"}})),
+            (TASK_B.to_owned(), serde_json::Value::Null),
+            (".tasks/0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2c.md".to_owned(), serde_json::json!({"due_by": "2026-11-20"})),
+        ]);
+        assert_eq!(listed(Some("backlog")), vec![]);
+        assert_eq!(listed(Some("todo")).len(), 1);
     }
 
     const TASK_A: &str = ".tasks/6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60.md";

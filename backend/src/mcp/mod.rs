@@ -174,7 +174,11 @@ impl Mory {
                        leaves less than one lead time before the date. `progress`, on a task \
                        with subtasks, is the percentage of its leaf subtasks that are done, \
                        canceled ones left out.\n\nStatuses are backlog, todo, in_progress, \
-                       waiting, blocked, on_hold, done and canceled.",
+                       waiting, blocked, on_hold, done and canceled. A note in the task tree is \
+                       a task by its path, so one without a `task:` block, or whose block holds \
+                       no status, is listed too, with `task` as written (null where there is \
+                       none); the web app draws it as Backlog, but a status filter matches only a \
+                       status the note writes.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_tasks(
