@@ -24,6 +24,9 @@ interface Recorded {
 
 interface RecordedNote extends Recorded {
     drawn: string[];
+    // One `start  name  end` line for each occurrence drawn, `end` as the calendar draws it or
+    // `none`.
+    ends: string[];
 }
 
 // A task fixture also records the dates the MCP tool returns for it inside the window, one
@@ -74,6 +77,15 @@ function drawn(path: string, note: RecordedNote): string[] {
             return start >= from && start <= to;
         })
         .map((event) => `${event.start}  ${event.name}`)
+        .sort();
+}
+
+/// `start  name  end` for the same, `end` as drawn or `none` -- what `ends_of_note_fixture` computes
+/// on the backend's side.
+function ends(path: string, note: RecordedNote): string[] {
+    return eventsFromEntries([entryOf(path, note)], window).events
+        .filter((event) => inWindow(event.start))
+        .map((event) => `${event.start}  ${event.name}  ${event.end ?? 'none'}`)
         .sort();
 }
 
@@ -166,6 +178,10 @@ it('records every note fixture', () => {
 describe.each(Object.keys(notes))('%s', (path) => {
     it('draws what the backend draws', () => {
         expect(drawn(path, notes[path])).toEqual(notes[path].drawn);
+    });
+
+    it('ends each occurrence where the backend ends it', () => {
+        expect(ends(path, notes[path])).toEqual(notes[path].ends);
     });
 
     // The two sides can agree on an occurrence the calendar then throws on, which blanks it: only
