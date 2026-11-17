@@ -276,7 +276,10 @@ impl Mory {
                        `path` and it becomes `<uuid>.md` at the repository root, which is what \
                        the web app does. A path under `.tasks/` must end with a UUIDv4 -- \
                        `<uuid>.md` or `readable-name-<uuid>.md` -- because the task tree is \
-                       derived from the paths. Fails rather than overwriting an existing file.",
+                       derived from the paths. Fails rather than overwriting an existing file.\
+                       \n\nA Markdown note without `created_at` in its frontmatter is given one \
+                       of now, as the web app gives a new note, and one whose frontmatter does \
+                       not read as a YAML mapping is refused.",
         annotations(title = "Create a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -299,10 +302,12 @@ impl Mory {
                        It also writes over anything changed in the note since you read it. A \
                        file read_note does not return whole -- one longer than it returns, an \
                        image, or text not in UTF-8 -- is refused, since it cannot have been \
-                       read whole.\
+                       read whole. A Markdown note sent without `created_at` keeps the one it \
+                       had, or is given one of now.\
                        \n\nTo change a task or an event, use the task and event tools instead: \
                        they edit its frontmatter in place, in one step, and check what they \
-                       write, where this writes whatever it is sent.",
+                       write, where this checks only that the frontmatter it is sent reads as a \
+                       YAML mapping.",
         annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
