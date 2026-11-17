@@ -242,7 +242,11 @@ impl Mory {
     #[tool(
         name = "list_imported_events",
         description = "List the events from the external calendars subscribed in \
-                       `.mory/calendars.yaml`, expanded over a window of whole days.\n\nThese \
+                       `.mory/calendars.yaml`, expanded over a window of whole days and a day \
+                       either side of it in UTC: each feed keeps its own zone, so the window is \
+                       widened rather than cut in one, and events from just outside the days \
+                       asked for may be listed too. Each time carries the offset of the zone its \
+                       feed gives it. Check a `start` against the days meant.\n\nThese \
                        are a live view of someone else's calendar: they are read-only, they are \
                        not stored in the repository, and they must never be written into it. A \
                        calendar that could not be read is reported in `calendars` with its \
@@ -255,8 +259,8 @@ impl Mory {
                        note, so count such an event once.\n\nEach occurrence is listed on its \
                        own. The whole definition of the series it belongs to is returned under \
                        `series`, keyed by `uid`, only with `include_series`.\n\nTo ask what is \
-                       on, use list_agenda, which expands the notes too and leaves out what a \
-                       note claims.",
+                       on, use list_agenda, which keeps to the days asked for in one zone, \
+                       expands the notes too and leaves out what a note claims.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
