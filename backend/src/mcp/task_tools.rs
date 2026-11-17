@@ -27,16 +27,22 @@ pub struct UpdateTaskArgs {
 
     /// `backlog`, `todo`, `in_progress`, `waiting`, `blocked`, `on_hold`, `done` or `canceled`.
     /// Changing it replaces the whole status, so the fields the new one needs must come with it.
-    /// Setting the status the task already has changes only the fields given.
+    /// Setting the status the task already has changes only the fields given. A field that
+    /// belongs to a status, such as waiting_for or completed_at, is written only with `status`,
+    /// and only for the status it names; any other is not written.
     #[serde(default)]
     pub status: Option<String>,
     /// Required by `waiting`: what is being waited for.
     #[serde(default)]
     pub waiting_for: Option<String>,
+    /// With `waiting`: when what is waited for should arrive. A date, or a datetime carrying its
+    /// offset.
     #[serde(default)]
     pub expected_by: Option<String>,
+    /// With `waiting`: who to ask about it.
     #[serde(default)]
     pub contact: Option<String>,
+    /// With `waiting`: when to chase it, written as `expected_by` is.
     #[serde(default)]
     pub follow_up_at: Option<String>,
     /// Required by `blocked`: what is blocking it.
@@ -45,12 +51,14 @@ pub struct UpdateTaskArgs {
     /// Required by `on_hold`: why.
     #[serde(default)]
     pub hold_reason: Option<String>,
+    /// With `on_hold`: when to look at it again. A date, or a datetime carrying its offset.
     #[serde(default)]
     pub review_at: Option<String>,
     /// Required by `done`. A date (`2026-03-15`) or a datetime carrying its offset
     /// (`2026-03-15 18:17:46+09:00`). Defaults to now when the status becomes `done`.
     #[serde(default)]
     pub completed_at: Option<String>,
+    /// With `done`: how it went.
     #[serde(default)]
     pub completion_note: Option<String>,
     /// Required by `canceled`, along with `cancel_reason`. Defaults to now.
@@ -63,11 +71,14 @@ pub struct UpdateTaskArgs {
     /// low, medium or high; use clear_importance to return to unrated.
     #[serde(default)]
     pub importance: Option<Importance>,
+    /// True to remove `importance`, leaving the task unrated.
     #[serde(default)]
     pub clear_importance: Option<bool>,
     /// Whole calendar days or weeks, such as 14d or 2w.
     #[serde(default)]
     pub lead_time: Option<String>,
+    /// True to remove `lead_time`, so the task takes the longest `.mory/tasks.yaml` sets for one
+    /// of its tags, else that file's default, else 7d.
     #[serde(default)]
     pub clear_lead_time: Option<bool>,
 }
