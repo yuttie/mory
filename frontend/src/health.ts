@@ -10,10 +10,11 @@ import type { DefinedError } from 'ajv';
 
 import type { AlarmDefaults } from '@/alarms';
 import type { ListEntry2 } from '@/api';
-import { eventsFromEntries, taskDatesFromEntries } from '@/events';
+import { eventsFromEntries, isCalendarReadable, taskDatesFromEntries, toWallClock } from '@/events';
 import type { EventCategories, EventError, EventWindow } from '@/events';
 import metadataSchema from '@/metadata-schema.json';
 import { planMonthOf } from '@/plans';
+import { readDatetime } from '@/recurrence';
 import { tagsOf } from '@/tags';
 import { isTaskPath, taskDirectoryOf, taskUuidOf } from '@/task-forest';
 import { readStatus } from '@/task';
@@ -346,6 +347,25 @@ export function eventChecks(
 // The dates a task's urgency is worked out from, which `taskInstant` must read.
 const TASK_DATE_KEYS = ['due_by', 'deadline', 'available_from'];
 
+// Who reads a task date in the years 0 to 99 as one in the 1900s, which urgency reads as written:
+// `Date` takes a year below 100 so, and `dayjs` reads through it. The task editor's date field reads
+// any such value so, its offset set aside; the calendar and moried's alarms (`make_date`) one
+// without an offset, as they read a due_by or deadline at all, and one with its offset as written.
+// `null` for a date in a later year.
+function centuryMisreadBy(key: string, value: string): string | null {
+    const text = value.trim();
+    const year = Number(text.slice(0, 4));
+    if (!(year < 100)) {
+        return null;
+    }
+    const offset = text.length > 10 && /(?:Z|[+-][0-9]{2}:[0-9]{2})$/i.test(text);
+    const calendar = (key === 'due_by' || key === 'deadline')
+        && readDatetime(value) !== null && isCalendarReadable(toWallClock(value));
+    const asWritten = calendar && offset ? 'urgency, the calendar and moried\'s alarms read it so' : 'urgency reads it so';
+    const misread = calendar && !offset ? 'the calendar, moried\'s alarms and the task editor read it' : 'the task editor reads it';
+    return `${key} "${value}" is in the year ${year}: ${asWritten}, while ${misread} as ${1900 + year}.`;
+}
+
 // What the older task model stored, which the task editor rewrites on its next save.
 const LEGACY_TASK_KEYS = ['urgency', 'progress', 'scheduled_dates', 'start_at'];
 
@@ -440,8 +460,17 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             for (const key of TASK_DATE_KEYS) {
                 const value = record[key];
                 // Whether a value is read does not depend on the zone, only the instant it names.
-                if (value !== undefined && value !== null && taskInstant(value, 'UTC') === undefined) {
+                if (value === undefined || value === null) {
+                    continue;
+                }
+                if (taskInstant(value, 'UTC') === undefined) {
                     unreadDates.push({ severity: 'error', message: `${key} "${describeValue(value)}" is not read.`, path: entry.path });
+                    continue;
+                }
+                // `taskInstant` reads only text.
+                const misread = centuryMisreadBy(key, value as string);
+                if (misread !== null) {
+                    unreadDates.push({ severity: 'error', message: misread, path: entry.path });
                 }
             }
         }
@@ -479,8 +508,8 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         },
         {
             id: 'task-date-values',
-            title: 'Task dates are ones urgency can read',
-            description: 'Each due_by, deadline and available_from is a bare date or a datetime, such as 2026-10-21 or 2026-10-21 09:00+09:00; one written without its offset is read in moried\'s zone. Urgency ignores any other value.',
+            title: 'Task dates are ones urgency reads as the rest do',
+            description: 'Each due_by, deadline and available_from is a bare date or a datetime, such as 2026-10-21 or 2026-10-21 09:00+09:00; one written without its offset is read in moried\'s zone. Urgency ignores any other value. One in the years 0 to 99 urgency reads as written, while the task editor reads it in the 1900s, and so do the calendar and moried\'s alarms where it carries no offset, which leaves the task due in one century and drawn and rung in another.',
             problems: unreadDates,
         },
         {

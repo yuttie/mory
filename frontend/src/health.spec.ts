@@ -282,6 +282,38 @@ describe('taskChecks', () => {
         ]);
     });
 
+    // Urgency reads the year as written; `Date`, and so `dayjs`, the calendar and moried's
+    // `make_date`, read one below 100 in the 1900s, the task editor's field whatever its offset.
+    it('reports a task date in the years 0 to 99, naming who reads it otherwise', () => {
+        const task = {
+            status: { kind: 'todo' },
+            due_by: '0050-03-01',
+            deadline: '0099-12-31 10:00+09:00',
+            available_from: '0001-01-01 09:00',
+        };
+        expect(problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task })]))['task-date-values']).toEqual([
+            {
+                path: `.tasks/${A}.md`,
+                message: 'due_by "0050-03-01" is in the year 50: urgency reads it so, while the calendar, moried\'s alarms and the task editor read it as 1950.',
+            },
+            {
+                path: `.tasks/${A}.md`,
+                message: 'deadline "0099-12-31 10:00+09:00" is in the year 99: urgency, the calendar and moried\'s alarms read it so, while the task editor reads it as 1999.',
+            },
+            {
+                path: `.tasks/${A}.md`,
+                message: 'available_from "0001-01-01 09:00" is in the year 1: urgency reads it so, while the task editor reads it as 1901.',
+            },
+        ]);
+        const later = { status: { kind: 'todo' }, due_by: '0100-03-01', deadline: '1950-03-01' };
+        expect(problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task: later })]))['task-date-values']).toEqual([]);
+        // The calendar draws a bare date in the years 100 to 999 nowhere, and says so itself.
+        const year = { from: '2026-01-01', to: '2026-12-31' };
+        expect(problemsOf(eventChecks([entry(`.tasks/${A}.md`, { task: later })], year))['task-dates']).toEqual([
+            { path: `.tasks/${A}.md`, message: `Invalid due_by "0100-03-01" of ".tasks/${A}.md"` },
+        ]);
+    });
+
     it('passes a datetime that carries its offset', () => {
         const task = { status: { kind: 'todo' }, due_by: '2026-10-01 10:00+09:00', deadline: null };
         expect(problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task })]))['task-date-values']).toEqual([]);
