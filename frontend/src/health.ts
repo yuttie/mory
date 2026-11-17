@@ -181,7 +181,7 @@ function schemaProblems(metadata: unknown): string[] {
 
 
 // The listing stands a mapping holding `error` alone in for frontmatter moried could not read
-// (`extract_metadata` in `backend/src/main.rs`).
+// (`extract_listing` in `backend/src/main.rs`).
 function unreadableReason(metadata: unknown): string | null {
     if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
         return null;

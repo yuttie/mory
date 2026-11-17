@@ -393,6 +393,7 @@ mod tests {
             title,
             time: "2026-11-01T00:00:00+00:00".parse().unwrap(),
             binary: false,
+            unread: Vec::new(),
         }
     }
 
