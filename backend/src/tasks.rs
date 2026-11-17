@@ -49,9 +49,15 @@ pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A UUIDv4 as the web app's `UUID_V4_RE` reads one: hyphenated, in either case, of version 4 and
+/// the RFC 4122 variant. `Uuid::parse_str` alone also takes the simple, braced and URN forms, and
+/// any variant, which would put in the tree here a task the web app leaves out of it.
 fn is_uuid_v4(value: &str) -> bool {
-    uuid::Uuid::parse_str(value)
-        .is_ok_and(|parsed| parsed.get_version() == Some(uuid::Version::Random))
+    value.len() == 36
+        && uuid::Uuid::parse_str(value).is_ok_and(|parsed| {
+            parsed.get_version() == Some(uuid::Version::Random)
+                && parsed.get_variant() == uuid::Variant::RFC4122
+        })
 }
 
 /// Every kind a task's `status` can take: the closed union `frontend/src/metadata-schema.json`
@@ -208,6 +214,12 @@ mod tests {
         assert!(!in_task_tree(".tasks/not-a-uuid.md"));
         assert!(!in_task_tree(&format!(".tasks/directory/{uuid}.md")));
         assert!(!in_task_tree(&format!(".tasks{uuid}.md")));
+        // As `UUID_V4_RE` reads one: in either case, but hyphenated and of the RFC 4122 variant.
+        assert!(in_task_tree(&format!(".tasks/{}.md", uuid.to_uppercase())));
+        assert!(!in_task_tree(".tasks/6f1d3c2e-8a4b-4c57-0d1e-2b7a5f0e9c31.md"));
+        assert!(!in_task_tree(&format!(".tasks/{}/{uuid}.md", parent.replace('-', ""))));
+        assert!(!in_task_tree(&format!(".tasks/{{{parent}}}/{uuid}.md")));
+        assert!(!in_task_tree(&format!(".tasks/urn:uuid:{parent}/{uuid}.md")));
     }
 
     #[test]
