@@ -534,7 +534,12 @@ impl Mory {
                        and every occurrence listed at that moment goes. Removing one and adding \
                        another in the same call replaces it in one commit; the new one has only \
                        the fields `add_instances` gives it, so repeat any of the old one's to \
-                       keep them. The other occurrences are left as the note wrote them.",
+                       keep them. The other occurrences are left as the note wrote them.\
+                       \n\nA rule's `overrides`, which change one occurrence it generates, can \
+                       be cleared here but not written. To move or change one occurrence of a \
+                       rule, exclude it -- `exclusions` is set whole, so send those it has too \
+                       -- and list what replaces it with `add_instances`, or write an override \
+                       with read_note and update_note.",
         annotations(title = "Update an event", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
