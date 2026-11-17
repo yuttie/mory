@@ -147,6 +147,30 @@ describe('eventChecks', () => {
         ]);
     });
 
+    // The calendar and moried read an event's times alike, `fixtures/calendar/` holding them to it,
+    // so what the calendar refuses is what moried never rings or lists either.
+    it('reports a start with a fraction of a second, which neither the calendar nor moried reads', () => {
+        const events = { standup: { start: '2026-10-01 10:00:00.000+09:00' }, lunch: { start: '2026-10-01 12:00 +09:00' } };
+        expect(problemsOf(eventChecks([entry('meetings.md', { events })], window, { categories: new Map() }))['event-times']).toEqual([
+            { path: 'meetings.md', message: 'Invalid start "2026-10-01 10:00:00.000+09:00" of "standup"' },
+        ]);
+    });
+
+    // Each spelling one set of readers takes and the other does not is reported by the check of the
+    // readers that refuse it.
+    it.each([
+        ['2026-10-01T10:00:00.000Z', ['task-dates']],
+        ['2026-10-01 10:00 +09:00', ['task-date-values']],
+        ['2026-10-01 10:00+0900', ['task-date-values']],
+        ['2026-12-1', ['task-date-values']],
+        ['2026/12/01', ['task-dates', 'task-date-values']],
+        ['2026-10-01T10:00:00Z', []],
+    ])('reports the task date %s where it is not read', (value, expected) => {
+        const entries = [entry(`.tasks/${A}.md`, { task: { status: { kind: 'todo' }, due_by: value } })];
+        const checks = [...eventChecks(entries, window, { categories: new Map() }), ...taskChecks(entries)];
+        expect(checks.filter((check) => check.problems.length > 0).map((check) => check.id)).toEqual(expected);
+    });
+
     it('reports a task date the calendar refuses under the task dates', () => {
         const problems = problemsOf(eventChecks([entry(`.tasks/${A}.md`, { tags: [], task: { status: { kind: 'todo' }, due_by: 'tomorrow' } })], window));
         expect(problems['task-dates'].map((problem) => problem.path)).toEqual([`.tasks/${A}.md`]);

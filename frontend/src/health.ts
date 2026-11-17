@@ -257,7 +257,7 @@ const EVENT_CHECKS: { id: string; title: string; description: string; properties
     {
         id: 'event-times',
         title: 'Every event has a start and end the calendar can read',
-        description: 'Each event names a start, a list of instances or both; a start is a date or a datetime, and an end is one too, or a time of day or a duration.',
+        description: 'Each event names a start, a list of instances or both; a start is a date or a datetime, and an end is one too, or a time of day or a duration. moried reads them as the calendar does, for alarms and its tools, so one the calendar refuses, such as a time with a fraction of a second, is drawn, rung and listed nowhere.',
         properties: ['start', 'end'],
     },
     {
@@ -287,7 +287,7 @@ const EVENT_CHECKS: { id: string; title: string; description: string; properties
     {
         id: 'task-dates',
         title: 'Task due dates and deadlines can be drawn',
-        description: 'Each due_by and deadline is a value the calendar reads as a moment, to draw it and ring its alarms. Whether urgency reads it too is a task check.',
+        description: 'Each due_by and deadline is a value the calendar reads as a moment, as moried does to ring its alarms and list it in the agenda. Urgency reads another set of spellings, which is a task check: a datetime with a fraction of a second is urgency\'s alone, and one such as 2026-10-01 10:00 +09:00 is the calendar\'s alone.',
         properties: ['due_by', 'deadline'],
     },
 ];
