@@ -9,7 +9,7 @@ use serde_yaml::Value;
 use super::frontmatter::{self, Change};
 use super::tools::{alarm_list, commit_edit, note_to_edit, safe_path, WriteOutput};
 use super::{json_result, tool_error};
-use crate::models::AppState;
+use crate::models::{AppState, ListEntry};
 use crate::note_time::now_local;
 use crate::tasks::{TaskField, STATUS_KINDS};
 
@@ -327,6 +327,49 @@ fn task_path(path: String) -> Result<String, String> {
     ))
 }
 
+/// Where `create_task` writes a new task: the path asked for, held to the rules for a destination
+/// and to the task tree, else a fresh one at the top of the tree. `writable_path` alone takes any
+/// safe path outside `.tasks/`, and a task there is one neither the web app nor `list_tasks` shows.
+fn new_task_path(path: Option<&str>) -> Result<String, String> {
+    let Some(path) = path else {
+        // UUIDv4, matching the frontend: the task tree takes no other version, and a task it
+        // cannot place is a task the app cannot show.
+        return Ok(format!(".tasks/{}.md", uuid::Uuid::new_v4()));
+    };
+    // `writable_path` has already held a path under `.tasks/` to the tree's naming, with advice
+    // of its own, so what is refused here is a path outside `.tasks/` altogether.
+    let path = super::tools::writable_path(path)?;
+    if !crate::tasks::in_task_tree(&path) {
+        return Err(format!(
+            "{path:?} is not in the task tree, so neither the web app nor list_tasks would show \
+             a task written there. Put it under `.tasks/`, named by a UUIDv4 -- \
+             `.tasks/<uuid>.md`, or a subtask in its parent's directory, \
+             `.tasks/<parent-uuid>/<uuid>.md` -- or leave `path` out.",
+        ));
+    }
+    // The tree takes any extension, but the listing reads no frontmatter from a file it takes for
+    // an image, and the plan tools, like the web app's health check, count only a `.md` file
+    // under `.tasks/` as a task: anything else there is an attachment.
+    if !path.ends_with(".md") {
+        return Err(format!(
+            "{path:?} is not a Markdown note, and a task is one: end its name with `.md`.",
+        ));
+    }
+    Ok(path)
+}
+
+/// The task already known by the UUID `path` ends with, if any. The web app's forest and
+/// `list_tasks` keep the first file listed for a UUID and drop the rest, so a new task sharing one
+/// would go unshown or hide the task that had it, and the day plans, which read a UUID alike in
+/// either case, could not tell the two apart.
+fn sharing_uuid<'a>(path: &str, entries: &'a [ListEntry]) -> Option<&'a ListEntry> {
+    let uuid = crate::tasks::uuid_of(path)?;
+    entries.iter().find(|entry| {
+        crate::tasks::uuid_of(&entry.path.to_string_lossy())
+            .is_some_and(|other| other.eq_ignore_ascii_case(uuid))
+    })
+}
+
 /// An `UpdateTaskArgs` with nothing set, so the wrappers above can name only what they mean.
 fn empty_update() -> UpdateTaskArgs {
     UpdateTaskArgs {
@@ -529,8 +572,10 @@ pub struct CreateTaskArgs {
     pub title: String,
     /// The commit message.
     pub message: String,
-    /// Where to put it. Omit for `.tasks/<uuid>.md`. A readable prefix is welcome, but the name
-    /// must still end with a UUIDv4.
+    /// Where to put it, under `.tasks/`. Omit for `.tasks/<uuid>.md`, a task at the top of the
+    /// tree; a subtask goes in the directory named by its parent's bare UUID, beside the parent's
+    /// file: `.tasks/<parent-uuid>/<uuid>.md`. A readable prefix is welcome, but the name must
+    /// still end with a UUIDv4 and `.md`. A path outside `.tasks/` is refused.
     #[serde(default)]
     pub path: Option<String>,
     /// Markdown to put under the heading.
@@ -624,17 +669,29 @@ pub async fn create_task(
             changes.push(Change::set(&["task", key], value.as_str()));
         }
     }
-    let path = match args.path {
-        Some(path) => match super::tools::writable_path(&path) {
-            Ok(path) => path,
-            Err(message) => return Ok(tool_error(message)),
-        },
-        // UUIDv4, matching the frontend: the task tree takes no other version, and a task it
-        // cannot place is a task the app cannot show.
-        None => format!(".tasks/{}.md", uuid::Uuid::new_v4()),
+    let path = match new_task_path(args.path.as_deref()) {
+        Ok(path) => path,
+        Err(message) => return Ok(tool_error(message)),
     };
     if crate::find_entry_blob(state, &path).await.is_some() {
         return Ok(tool_error(format!("{path:?} already exists.")));
+    }
+    let entries = match state.get_entries(Some(".tasks/*")).await {
+        Ok((_, entries)) => entries,
+        Err(e) => {
+            tracing::error!("MCP create_task could not read the listing: {:?}", e);
+            return Err(ErrorData::internal_error(
+                "the task listing could not be read".to_owned(),
+                None,
+            ));
+        },
+    };
+    if let Some(other) = sharing_uuid(&path, &entries) {
+        return Ok(tool_error(format!(
+            "{:?} already ends with the UUID {path:?} does, and the task tree shows only one of \
+             the files sharing a UUID. Name the new task by another UUIDv4, or leave `path` out.",
+            other.path,
+        )));
     }
 
     let body = match args.body.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
@@ -678,6 +735,51 @@ mod tests {
         assert!(!after.contains("start_at"));
         assert!(after.contains("available_from: 2026-10-16"));
     }
+
+    #[test]
+    fn a_new_task_is_written_only_inside_the_task_tree() {
+        let uuid = "6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60";
+        let parent = "0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2b";
+        assert_eq!(new_task_path(Some(&format!(".tasks/report-{uuid}.md"))), Ok(format!(".tasks/report-{uuid}.md")));
+        for inside in [format!(".tasks/{parent}/{uuid}.md"), format!(".tasks/{parent}/{parent}/report-{uuid}.md")] {
+            assert_eq!(new_task_path(Some(&inside)).as_ref(), Ok(&inside));
+        }
+        // Outside `.tasks/` the naming is no guide, so only the tree's own check catches these.
+        for outside in [format!("notes/{uuid}.md"), format!("{uuid}.md"), format!(".events/{uuid}.md"), format!(".tasks{uuid}.md")] {
+            assert!(new_task_path(Some(&outside)).unwrap_err().contains("not in the task tree"), "{outside}");
+        }
+        // Under it, the destination rules refuse a misnamed one first, saying what the name lacks.
+        assert!(new_task_path(Some(".tasks/report.md")).unwrap_err().contains("does not end with a UUIDv4"));
+        assert!(new_task_path(Some(&format!(".tasks/directory/{uuid}.md"))).unwrap_err().contains("\"directory\" is not a UUIDv4"));
+        assert!(crate::tasks::in_task_tree(&new_task_path(None).unwrap()));
+    }
+
+    #[test]
+    fn a_new_task_is_a_markdown_note() {
+        let uuid = "6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60";
+        for attachment in [format!(".tasks/{uuid}.png"), format!(".tasks/{uuid}.txt"), format!(".tasks/{uuid}"), format!(".tasks/{uuid}.MD")] {
+            assert!(new_task_path(Some(&attachment)).unwrap_err().contains("not a Markdown note"), "{attachment}");
+        }
+        assert!(new_task_path(None).unwrap().ends_with(".md"));
+    }
+
+    #[test]
+    fn a_new_task_takes_no_uuid_another_task_has() {
+        let uuid = "6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60";
+        let other = "0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2b";
+        let entries = [
+            ListEntry::note(&format!(".tasks/{other}/report-{uuid}.md"), "task: {status: {kind: todo}}"),
+            // Outside the tree a file names no task, whatever it is called.
+            ListEntry::note(&format!("notes/{other}.md"), "{}"),
+        ];
+        // Wherever in the tree, after whatever prefix and in either case.
+        for path in [format!(".tasks/{uuid}.md"), format!(".tasks/draft-{}.md", uuid.to_uppercase())] {
+            assert_eq!(sharing_uuid(&path, &entries).map(|entry| &entry.path), Some(&entries[0].path), "{path}");
+        }
+        // The directory a subtask is in names its parent, which is not the subtask's UUID.
+        assert!(sharing_uuid(&format!(".tasks/{other}.md"), &entries).is_none());
+    }
+
     #[test]
     fn task_dates_are_accepted_only_when_urgency_can_read_them() {
         for date in ["2026-02-30", "2026-13-01", "2026-10-15 12:00", ""] {

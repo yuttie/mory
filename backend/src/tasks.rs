@@ -23,6 +23,17 @@ pub(crate) fn in_task_tree(path: &str) -> bool {
     path.strip_prefix(TASKS_DIR).is_some_and(|rest| check_tree_naming(rest).is_ok())
 }
 
+/// The UUID a note in the task tree is known by: the one its file name ends with, after any
+/// readable prefix. `None` for a path outside the tree.
+pub(crate) fn uuid_of(path: &str) -> Option<&str> {
+    if !in_task_tree(path) {
+        return None;
+    }
+    let file = path.rsplit('/').next()?;
+    let stem = file.rsplit_once('.').map_or(file, |(stem, _)| stem);
+    stem.get(stem.len().checked_sub(36)?..)
+}
+
 /// The naming the task tree is derived from: every directory component a bare UUIDv4, and the
 /// file stem ending in one, optionally after a readable prefix.
 pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
@@ -49,9 +60,15 @@ pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A UUIDv4 as the web app's `UUID_V4_RE` reads one: hyphenated, in either case, of version 4 and
+/// the RFC 4122 variant. `Uuid::parse_str` alone also takes the simple, braced and URN forms, and
+/// any variant, which would put in the tree here a task the web app leaves out of it.
 fn is_uuid_v4(value: &str) -> bool {
-    uuid::Uuid::parse_str(value)
-        .is_ok_and(|parsed| parsed.get_version() == Some(uuid::Version::Random))
+    value.len() == 36
+        && uuid::Uuid::parse_str(value).is_ok_and(|parsed| {
+            parsed.get_version() == Some(uuid::Version::Random)
+                && parsed.get_variant() == uuid::Variant::RFC4122
+        })
 }
 
 /// Every kind a task's `status` can take: the closed union `frontend/src/metadata-schema.json`
@@ -208,6 +225,22 @@ mod tests {
         assert!(!in_task_tree(".tasks/not-a-uuid.md"));
         assert!(!in_task_tree(&format!(".tasks/directory/{uuid}.md")));
         assert!(!in_task_tree(&format!(".tasks{uuid}.md")));
+        // As `UUID_V4_RE` reads one: in either case, but hyphenated and of the RFC 4122 variant.
+        assert!(in_task_tree(&format!(".tasks/{}.md", uuid.to_uppercase())));
+        assert!(!in_task_tree(".tasks/6f1d3c2e-8a4b-4c57-0d1e-2b7a5f0e9c31.md"));
+        assert!(!in_task_tree(&format!(".tasks/{}/{uuid}.md", parent.replace('-', ""))));
+        assert!(!in_task_tree(&format!(".tasks/{{{parent}}}/{uuid}.md")));
+        assert!(!in_task_tree(&format!(".tasks/urn:uuid:{parent}/{uuid}.md")));
+    }
+
+    #[test]
+    fn a_task_is_known_by_the_uuid_its_file_name_ends_with() {
+        let uuid = "6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0e9c31";
+        let parent = "0d9a7e54-1c3b-4f6a-8b2d-5e4c7a1f9b60";
+        assert_eq!(uuid_of(&format!(".tasks/{parent}/readable-name-{uuid}.md")), Some(uuid));
+        assert_eq!(uuid_of(&format!(".tasks/{uuid}")), Some(uuid));
+        assert_eq!(uuid_of(&format!("notes/{uuid}.md")), None);
+        assert_eq!(uuid_of(&format!(".tasks/{uuid}/not-a-task.md")), None);
     }
 
     #[test]
