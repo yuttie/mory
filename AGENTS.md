@@ -223,6 +223,13 @@ rewrite all of it. `tests::frontmatter_edits_a_real_corpus` measures the in-plac
 one-off figures for re-serializing aside, and is ignored by default; point `MORY_CORPUS` at a real
 repository and run it whenever that module changes.
 
+A note is edited only between fences that are lines exactly `---`. One whose frontmatter the
+listing reads after a byte-order mark, or behind a fence with white space after it, is refused
+(`frontmatter::check_fences`): an edit would put a second block above it and turn the note's own
+keys into text. YAML's `...` closes nothing, as the listing takes no such line for a fence. Neither
+spelling is taught to the editor, which would only spread it; the refusal says to fix the note
+with `update_note` or by hand.
+
 A path under `.tasks/` must keep the UUIDv4 naming the web app derives the task tree from
 (`taskUuidOf` in `frontend/src/task-forest.ts`), which leaves a task named otherwise out of it,
 and `.mory/tasks-v1.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases

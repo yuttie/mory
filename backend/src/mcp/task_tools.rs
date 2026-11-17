@@ -242,6 +242,10 @@ pub async fn update_task(
             "No note at {path:?}. Use list_tasks or search_notes to find one.",
         )));
     };
+    // Before reading the status, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&note.0) {
+        return Ok(tool_error(error.to_string()));
+    }
 
     let mut changes = match measure_changes(&args) {
         Ok(changes) => changes,
@@ -574,6 +578,10 @@ pub async fn set_task_dates(
     let Some(note) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before reading the alarms to clear, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&note.0) {
+        return Ok(tool_error(error.to_string()));
+    }
 
     let changes = match date_changes(&args, &note.0) {
         Ok(changes) => changes,

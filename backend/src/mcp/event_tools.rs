@@ -790,6 +790,10 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
     let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before looking for the event, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&text) {
+        return Ok(tool_error(error.to_string()));
+    }
     if has_event(&text, &args.name) {
         return Ok(tool_error(format!(
             "{:?} already declares an event named {:?}. Use update_event to change it.",
@@ -814,6 +818,10 @@ pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolR
     let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before looking for the event, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&text) {
+        return Ok(tool_error(error.to_string()));
+    }
     if !has_event(&text, &args.name) {
         return Ok(tool_error(format!(
             "{:?} declares no event named {:?}. Use list_events to see what it has, or add_event \
@@ -892,6 +900,10 @@ pub async fn remove_event(
     let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before looking for the event, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&text) {
+        return Ok(tool_error(error.to_string()));
+    }
     if !has_event(&text, &args.name) {
         return Ok(tool_error(format!(
             "{:?} declares no event named {:?}.",

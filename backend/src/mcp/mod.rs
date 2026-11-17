@@ -279,9 +279,9 @@ impl Mory {
                        derived from the paths. Fails rather than overwriting an existing file.\
                        \n\nA Markdown note without `created_at` in its frontmatter is given one \
                        of now, as the web app gives a new note, and one whose frontmatter does \
-                       not read as a YAML mapping is refused. So is a `.mory/calendars.yaml` \
-                       holding a value moried or the web app would leave out, as update_note \
-                       says.",
+                       not read as a YAML mapping is refused, as is one whose fences are not \
+                       lines that are exactly `---`. So is a `.mory/calendars.yaml` holding a \
+                       value moried or the web app would leave out, as update_note says.",
         annotations(title = "Create a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -313,7 +313,8 @@ impl Mory {
                        \n\nTo change a task or an event, use the task and event tools instead: \
                        they edit its frontmatter in place, in one step, and check what they \
                        write, where this checks only that the frontmatter it is sent reads as a \
-                       YAML mapping.",
+                       YAML mapping between fences that are lines exactly `---`. Those tools \
+                       refuse a note whose fences are not, so this is the tool that fixes one.",
         annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
