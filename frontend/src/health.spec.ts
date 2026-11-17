@@ -32,20 +32,49 @@ describe('frontmatterChecks', () => {
         expect(problemsOf(frontmatterChecks([
             entry('plain.md', null),
             entry('tagged.md', { tags: ['a'] }),
-        ]))).toEqual({ 'frontmatter-yaml': [], 'frontmatter-schema': [] });
+        ]))).toEqual({ 'frontmatter-yaml': [], 'frontmatter-schema': [], 'frontmatter-notes': [] });
     });
 
     it('reports frontmatter moried could not read under its own check', () => {
         expect(problemsOf(frontmatterChecks([entry('broken.md', { error: 'did not find expected key' })]))).toEqual({
             'frontmatter-yaml': [{ path: 'broken.md', message: 'did not find expected key' }],
             'frontmatter-schema': [],
+            'frontmatter-notes': [],
         });
+    });
+
+    it('reports tags in a file search does not read', () => {
+        const files = [
+            { ...entry('meeting.md.template', { tags: ['meeting'] }), mime_type: 'application/octet-stream' },
+            { ...entry('.mory/notes.md', { tags: ['x'] }) },
+            { ...entry('README', { tags: ['x'] }), mime_type: 'text/markdown' },
+            { ...entry('plain.template', { tags: [] }), mime_type: 'application/octet-stream' },
+            { ...entry('Notes.MARKDOWN', { tags: ['x'] }), mime_type: 'text/plain' },
+        ];
+        expect(problemsOf(frontmatterChecks(files))['frontmatter-notes'].map((problem) => problem.path)).toEqual([
+            'meeting.md.template',
+            '.mory/notes.md',
+        ]);
+    });
+
+    it('reports what moried says some reader does not take, with frontmatter or without', () => {
+        const files = [
+            { ...entry('dotted.md', null), unread: ['The frontmatter ends with `...`.'] },
+            { ...entry('keyed.md', { tags: [] }), unread: ['The listing leaves out a null key in `events`.'] },
+        ];
+        expect(problemsOf(frontmatterChecks(files))['frontmatter-yaml']).toEqual([
+            { path: 'dotted.md', message: 'The frontmatter ends with `...`.' },
+            { path: 'keyed.md', message: 'The listing leaves out a null key in `events`.' },
+        ]);
     });
 
     // Each says what is wrong in one line, where Ajv reports how the value fails every shape it
     // might have taken.
     it.each([
         ['a value of no shape allowed', { tags: 'a' }, ['/tags: must be array']],
+        ['a tag that is not text', { tags: [2024, 'a'] }, ['/tags/0: must be string']],
+        ['a nested tag', { tags: [['a']] }, ['/tags/0: must be string']],
+        ['tags as a mapping', { tags: { a: 1 } }, ['/tags: must be array']],
         ['a value no alternative fits', { events: { standup: { start: '2026-10-01', alarms: 5 } } }, ['/events/standup/alarms: must be string or array']],
         ['an alarm', { events: { standup: { start: '2026-10-01', alarms: ['10m'] } } }, ['/events/standup/alarms/0: is not in the form it should be: "10m"']],
         ['an event naming no occurrence', { events: { e: { end: '2026-01-01' } } }, ['/events/e: must have one of start, instances, times']],
@@ -66,6 +95,16 @@ describe('frontmatterChecks', () => {
             '/created_at: is not in the form it should be: "x"',
             '/events/e/start: must be string',
             '/tags: must be array',
+        ]);
+    });
+
+    // An empty value is YAML null, which every reader takes as the key's absence.
+    it('passes an event field left empty', () => {
+        const empty = { color: null, location: null, url: null, note: null, name: null };
+        const events = { standup: { start: '2026-10-01', category: null, ...empty, repeat: { freq: 'daily' }, overrides: [{ at: '2026-10-02', ...empty }] } };
+        expect(problemsOf(frontmatterChecks([entry('note.md', { events })]))['frontmatter-schema']).toEqual([]);
+        expect(problemsOf(frontmatterChecks([entry('note.md', { events: { standup: { start: '2026-10-01', color: 5 } } })]))['frontmatter-schema']).toEqual([
+            { path: 'note.md', message: '/events/standup/color: must be string' },
         ]);
     });
 
@@ -119,6 +158,30 @@ describe('eventChecks', () => {
         ]);
     });
 
+    // The calendar and moried read an event's times alike, `fixtures/calendar/` holding them to it,
+    // so what the calendar refuses is what moried never rings or lists either.
+    it('reports a start with a fraction of a second, which neither the calendar nor moried reads', () => {
+        const events = { standup: { start: '2026-10-01 10:00:00.000+09:00' }, lunch: { start: '2026-10-01 12:00 +09:00' } };
+        expect(problemsOf(eventChecks([entry('meetings.md', { events })], window, { categories: new Map() }))['event-times']).toEqual([
+            { path: 'meetings.md', message: 'Invalid start "2026-10-01 10:00:00.000+09:00" of "standup"' },
+        ]);
+    });
+
+    // Each spelling one set of readers takes and the other does not is reported by the check of the
+    // readers that refuse it.
+    it.each([
+        ['2026-10-01T10:00:00.000Z', ['task-dates']],
+        ['2026-10-01 10:00 +09:00', ['task-date-values']],
+        ['2026-10-01 10:00+0900', ['task-date-values']],
+        ['2026-12-1', ['task-date-values']],
+        ['2026/12/01', ['task-dates', 'task-date-values']],
+        ['2026-10-01T10:00:00Z', []],
+    ])('reports the task date %s where it is not read', (value, expected) => {
+        const entries = [entry(`.tasks/${A}.md`, { task: { status: { kind: 'todo' }, due_by: value } })];
+        const checks = [...eventChecks(entries, window, { categories: new Map() }), ...taskChecks(entries)];
+        expect(checks.filter((check) => check.problems.length > 0).map((check) => check.id)).toEqual(expected);
+    });
+
     it('reports a task date the calendar refuses under the task dates', () => {
         const problems = problemsOf(eventChecks([entry(`.tasks/${A}.md`, { tags: [], task: { status: { kind: 'todo' }, due_by: 'tomorrow' } })], window));
         expect(problems['task-dates'].map((problem) => problem.path)).toEqual([`.tasks/${A}.md`]);
@@ -142,11 +205,29 @@ describe('taskChecks', () => {
         expect(taskChecks([{ ...entry('.tasks/photo.png', null), mime_type: 'image/png' }]).flatMap((check) => check.problems)).toEqual([]);
     });
 
+    it('reports a file the tree takes for a task that is not a note', () => {
+        const problems = problemsOf(taskChecks([
+            { ...entry(`.tasks/${A}.png`, null), mime_type: 'image/png' },
+            { ...entry(`.tasks/report-${B}.template`, { task: { status: { kind: 'todo' }, due_by: '2026-10-01' } }), mime_type: 'application/octet-stream' },
+        ]))['task-files'];
+        expect(problems.map((problem) => problem.path)).toEqual([`.tasks/${A}.png`, `.tasks/report-${B}.template`]);
+        expect(problems[1].message).toContain('list_tasks take it for a task');
+    });
+
     it('reports every file of a UUID that names more than one', () => {
         const paths = [`.tasks/${A}.md`, `.tasks/old-${A}.md`, `.tasks/${B}/${A}.md`];
         const problems = problemsOf(taskChecks([...paths, `.tasks/${B}.md`].map((path) => entry(path, null))))['task-ids'];
         expect(problems.map((problem) => problem.path)).toEqual(paths);
         expect(problems[0].message).toBe(`Shares its UUID with .tasks/old-${A}.md, .tasks/${B}/${A}.md; the task tree shows only one of them.`);
+    });
+
+    it('reports a UUID written in another case as the same one', () => {
+        const lower = 'abcdef01-0000-4000-8000-000000000000';
+        const paths = [`.tasks/${lower}.md`, `.tasks/${lower.toUpperCase()}.md`];
+        expect(problemsOf(taskChecks(paths.map((path) => entry(path, null))))['task-ids']).toEqual([
+            { path: paths[0], message: `Shares its UUID with ${paths[1]}; day plans and moried's tools take them for one task.` },
+            { path: paths[1], message: `Shares its UUID with ${paths[0]}; day plans and moried's tools take them for one task.` },
+        ]);
     });
 
     it('reports a subtask whose parent is missing', () => {

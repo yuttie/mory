@@ -7,7 +7,7 @@ vi.mock('@/stores/files', async () => {
     const { reactive } = await import('vue');
     return { useFilesStore: () => reactive(files) };
 });
-import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { untextTagKeys, useTaskSettingsStore } from '@/stores/taskSettings';
 
 let pinia: ReturnType<typeof createPinia>;
 beforeEach(() => {
@@ -116,4 +116,24 @@ describe('status colours', () => {
         expect(files.writeChecked).not.toHaveBeenCalled();
     });
 
+});
+
+describe('untextTagKeys', () => {
+    it('reports a key of lead_time_by_tag that is not text, and passes one quoted', () => {
+        expect(untextTagKeys('lead_time_by_tag:\n    2024: 3d\n    "2025": 3d\n    true: 1w\n    work: 2d\n')).toEqual([
+            'Tag 2024 in lead_time_by_tag is not text, so moried\'s list_tasks ignores its lead time; quote it, as "2024".',
+            'Tag true in lead_time_by_tag is not text, so moried\'s list_tasks ignores its lead time; quote it, as "true".',
+        ]);
+        expect(untextTagKeys('default_lead_time: 7d\n')).toEqual([]);
+        expect(untextTagKeys('lead_time_by_tag: 3\n')).toEqual([]);
+    });
+});
+
+describe('task settings problems', () => {
+    it('include a tag key moried does not take', async () => {
+        files.read.mockResolvedValue('lead_time_by_tag:\n    2024: 3d\n');
+        const store = useTaskSettingsStore();
+        await store.load();
+        expect(store.problems).toEqual(['Tag 2024 in lead_time_by_tag is not text, so moried\'s list_tasks ignores its lead time; quote it, as "2024".']);
+    });
 });

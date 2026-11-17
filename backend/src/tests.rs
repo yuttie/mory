@@ -1069,6 +1069,79 @@ async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
     );
 }
 
+#[test]
+fn a_fence_the_readers_find_in_different_places_is_unread() {
+    let unread = |text: &str| crate::extract_listing(text.as_bytes(), "text/markdown").2;
+    let one = |text: &str| {
+        let found = unread(text);
+        assert_eq!(found.len(), 1, "{text:?}: {found:?}");
+        found[0].clone()
+    };
+    // Each reads the same to every reader.
+    for text in [
+        "---\ntags: [a]\n---\n# T\n",
+        "---\r\ntags: [a]\r\n---\r\n# T\n",
+        "# No frontmatter\n",
+        "\u{feff}# A mark, but no frontmatter\n",
+        "---\nan unclosed fence\n",
+        // Nor does the listing find frontmatter where it finds no close.
+        "\u{feff}---\nan unclosed fence after a mark\n",
+        "--- \nan unclosed fence\n",
+        "",
+    ] {
+        assert_eq!(unread(text), Vec::<String>::new(), "{text:?}");
+    }
+    // The listing reads the tags of each, and moried's tools find no frontmatter or read on.
+    for text in ["\u{feff}---\ntags: [a]\n---\n", "--- \ntags: [a]\n---\n", "---\ntags: [a]\n---\t\n"] {
+        let (metadata, _, _) = crate::extract_listing(text.as_bytes(), "text/markdown");
+        assert_eq!(metadata.and_then(|metadata| metadata["tags"][0].as_str().map(str::to_owned)).as_deref(), Some("a"), "{text:?}");
+    }
+    assert!(one("\u{feff}---\ntags: [a]\n---\n").contains("byte order mark"));
+    assert!(one("--- \ntags: [a]\n---\n").contains("opening `---`"));
+    assert!(one("---\ntags: [a]\n---\t\n").contains("closing `---`"));
+    assert!(one("---\ntags: [a]\n--- \n# T\n\n---\n").contains("closing `---`"));
+    // Whether the listing then reads nothing or reads on, the tools end the block elsewhere.
+    assert!(one("---\ntags: [a]\n...\n# T\n").contains("`...`"));
+    assert!(unread("---\ntags: [a]\n...\nmore\n---\n")[0].contains("`...`"));
+}
+
+#[test]
+fn a_key_the_listing_leaves_out_is_unread() {
+    // The event every reader of the listing misses, and the note's own text still holds.
+    let (metadata, _, unread) = crate::extract_listing(b"---\nevents:\n    ~:\n        start: 2026-01-01\n---\n", "text/markdown");
+    assert_eq!(serde_json::to_string(&metadata).unwrap(), r#"{"events":{}}"#);
+    assert_eq!(unread.len(), 1);
+    assert!(unread[0].contains("a null key in `events`"), "{unread:?}");
+}
+
+#[tokio::test]
+async fn the_listing_carries_what_is_unread_only_where_there_is_some() {
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_bytes_at(
+        "refs/heads/main",
+        &[],
+        &[
+            ("dotted.md", Some(&b"---\ntags: [a]\n...\n"[..])),
+            ("plain.md", Some(&b"---\ntags: [a]\n---\n"[..])),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    let listed = sqlx::query("SELECT * FROM entry ORDER BY path;")
+        .map(crate::models::row_to_list_entry)
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(listed[0].unread.len(), 1);
+    assert_eq!(serde_json::to_value(&listed[0]).unwrap()["unread"].as_array().map(Vec::len), Some(1));
+    assert_eq!(serde_json::to_value(&listed[1]).unwrap().get("unread"), None);
+}
+
 #[tokio::test]
 async fn a_file_that_is_not_utf8_text_is_listed_as_binary() {
     // By what it holds, as its name cannot say: a file with no extension may be either, and
@@ -1107,7 +1180,7 @@ async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
     // As a moried that wrote keys named alike as they came left the row.
     let mut conn = test_cache_db().await;
     for (path, metadata) in [("duplicate-key.md", r#"{"1":"a","1":"b"}"#), ("fine.md", r#"{"tags":["x"]}"#)] {
-        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0, 0, 0);")
+        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0, 0, 0, '[]');")
             .bind(path)
             .bind(Oid::ZERO_SHA1.to_string())
             .bind(metadata)
@@ -1403,7 +1476,7 @@ async fn a_cold_sync_drops_rows_that_are_no_longer_in_head() {
 
     // A row for a path that HEAD does not contain, as a force-push to an older state would leave.
     sqlx::query(
-        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0, 0, 0);",
+        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0, 0, 0, '[]');",
     )
     .execute(&mut conn)
     .await
@@ -3049,6 +3122,7 @@ fn listed_note(path: impl Into<std::path::PathBuf>, blob: &[u8]) -> crate::model
         title,
         time: "2024-05-01T00:00:00+00:00".parse().expect("a valid time"),
         binary: false,
+        unread: Vec::new(),
     }
 }
 

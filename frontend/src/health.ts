@@ -14,6 +14,7 @@ import { eventsFromEntries, taskDatesFromEntries } from '@/events';
 import type { EventCategories, EventError, EventWindow } from '@/events';
 import metadataSchema from '@/metadata-schema.json';
 import { planMonthOf } from '@/plans';
+import { tagsOf } from '@/tags';
 import { isTaskPath, taskDirectoryOf, taskUuidOf } from '@/task-forest';
 import { taskInstant } from '@/urgency';
 
@@ -52,7 +53,9 @@ function describeValue(value: unknown): string {
 const ajv = new Ajv({ verbose: true, allErrors: true });
 const validateMetadata = ajv.compile(metadataSchema);
 
-const definitions = metadataSchema.definitions as Record<string, { oneOf?: { $ref: string }[]; properties?: { kind?: { const?: string } } }>;
+// Only `task-status` has its alternatives read, and those are each a `$ref`; others, such as
+// `event-text`, are alternatives of type.
+const definitions = metadataSchema.definitions as unknown as Record<string, { oneOf?: { $ref: string }[]; properties?: { kind?: { const?: string } } }>;
 
 // Each status kind's own schema. A status is one of eight alternatives, told apart by `kind`, and
 // Ajv reports how the value fails every one of them: a `done` missing `completed_at` came out as
@@ -179,7 +182,7 @@ function schemaProblems(metadata: unknown): string[] {
 
 
 // The listing stands a mapping holding `error` alone in for frontmatter moried could not read
-// (`extract_metadata` in `backend/src/main.rs`).
+// (`extract_listing` in `backend/src/main.rs`).
 function unreadableReason(metadata: unknown): string | null {
     if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
         return null;
@@ -194,7 +197,13 @@ function unreadableReason(metadata: unknown): string | null {
 export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[] {
     const unreadable: HealthProblem[] = [];
     const invalid: HealthProblem[] = [];
+    const unsearched: HealthProblem[] = [];
     for (const entry of entries) {
+        // Said by moried, which reads the file itself, and so also of a file the listing reads no
+        // frontmatter from.
+        for (const message of Array.isArray(entry.unread) ? entry.unread : []) {
+            unreadable.push({ severity: 'error', message: String(message), path: entry.path });
+        }
         if (entry.metadata === null) {
             continue;
         }
@@ -206,21 +215,45 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
         for (const message of schemaProblems(entry.metadata)) {
             invalid.push({ severity: 'error', message, path: entry.path });
         }
+        if (tagsOf(entry.metadata).length > 0 && !isSearchedNote(entry)) {
+            unsearched.push({
+                severity: 'warning',
+                message: entry.path.startsWith('.mory/')
+                    ? 'Its tags are in the tag tree and moried\'s tools, but text and semantic search leave .mory/ out.'
+                    : 'Not a Markdown note, yet moried lists its frontmatter: its tags are in the tag tree, the Files view and moried\'s tools, but text and semantic search index only Markdown notes and leave it out. Any events it declares are drawn and ring.',
+                path: entry.path,
+            });
+        }
     }
     return [
         {
             id: 'frontmatter-yaml',
             title: 'Frontmatter can be read',
-            description: 'moried reads each note\'s frontmatter as YAML and lists it. A note whose frontmatter it cannot parse, or cannot list, has no tags, events or task as far as the app can tell.',
+            description: 'moried reads each note\'s frontmatter as YAML and lists it. A note whose frontmatter it cannot parse, or cannot list, has no tags, events or task as far as the app can tell. Its fences are ones every reader finds in the same place, without a byte order mark before them, blanks after a ---, or a closing ..., and every key is one the listing keeps.',
             problems: unreadable,
         },
         {
             id: 'frontmatter-schema',
             title: 'Frontmatter follows metadata-schema.json',
-            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note.',
+            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note. tags is a list of text: the tag tree, the other views and moried\'s tools leave out any other value and any item that is not text, while search indexes a lone text whole.',
             problems: invalid,
         },
+        {
+            id: 'frontmatter-notes',
+            title: 'Tags are only in the notes search reads',
+            description: 'moried lists the frontmatter of any text file, a template or a YAML file as well as a note, and the tag tree and moried\'s tools take the tags of each. Text and semantic search, in the Search view and moried\'s search_notes, read only Markdown notes outside .mory/, so a tag elsewhere finds the file in the tag tree and not in those searches.',
+            problems: unsearched,
+        },
     ];
+}
+
+// Whether text and semantic search index a file, and so its tags: a Markdown note outside `.mory/`,
+// as `build_inputs` and `is_markdown` in `backend/src/search/mod.rs` decide. Grep reads every file.
+function isSearchedNote(entry: ListEntry2): boolean {
+    if (entry.path.startsWith('.mory/')) {
+        return false;
+    }
+    return /^text\/markdown\s*(?:;|$)/i.test(entry.mime_type) || /\.(?:md|markdown)$/i.test(entry.path);
 }
 
 // Which check an error from the event derivations belongs to, by the property it names. A task's
@@ -229,7 +262,7 @@ const EVENT_CHECKS: { id: string; title: string; description: string; properties
     {
         id: 'event-times',
         title: 'Every event has a start and end the calendar can read',
-        description: 'Each event names a start, a list of instances or both; a start is a date or a datetime, and an end is one too, or a time of day or a duration.',
+        description: 'Each event names a start, a list of instances or both; a start is a date or a datetime, and an end is one too, or a time of day or a duration. moried reads them as the calendar does, for alarms and its tools, so one the calendar refuses, such as a time with a fraction of a second, is drawn, rung and listed nowhere.',
         properties: ['start', 'end'],
     },
     {
@@ -259,7 +292,7 @@ const EVENT_CHECKS: { id: string; title: string; description: string; properties
     {
         id: 'task-dates',
         title: 'Task due dates and deadlines can be drawn',
-        description: 'Each due_by and deadline is a value the calendar reads as a moment, to draw it and ring its alarms. Whether urgency reads it too is a task check.',
+        description: 'Each due_by and deadline is a value the calendar reads as a moment, as moried does to ring its alarms and list it in the agenda. Urgency reads another set of spellings, which is a task check: a datetime with a fraction of a second is urgency\'s alone, and one such as 2026-10-01 10:00 +09:00 is the calendar\'s alone.',
         properties: ['due_by', 'deadline'],
     },
 ];
@@ -329,22 +362,46 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         if (directory !== null) {
             covered.add(directory);
         }
-        const id = taskUuidOf(entry.path);
-        if (id !== null) {
+        // In any case: a day plan and moried's tools name a task by its UUID in lower case.
+        const id = taskUuidOf(entry.path)?.toLowerCase();
+        if (id !== undefined) {
             pathsOf.set(id, [...(pathsOf.get(id) ?? []), entry.path]);
         }
     }
     // The tree keeps the first file it meets for an id and drops the rest, saying so only in the
-    // console: a copied task file, or one renamed beside its original, goes missing silently.
+    // console: a copied task file, or one renamed beside its original, goes missing silently. Two
+    // that differ only in case are both in the tree, which tells ids apart as written, but a plan
+    // or a tool finds only one of them.
     const shared: HealthProblem[] = [];
     for (const paths of pathsOf.values()) {
         for (const path of paths.length > 1 ? paths : []) {
             const others = paths.filter((other) => other !== path);
-            shared.push({ severity: 'error', message: `Shares its UUID with ${others.join(', ')}; the task tree shows only one of them.`, path });
+            const id = taskUuidOf(path);
+            const consequence = others.some((other) => taskUuidOf(other) === id)
+                ? 'the task tree shows only one of them'
+                : 'day plans and moried\'s tools take them for one task';
+            shared.push({ severity: 'error', message: `Shares its UUID with ${others.join(', ')}; ${consequence}.`, path });
         }
     }
+    // The tree and moried's `task_of` take any file whose name ends with a UUID, whatever its
+    // extension, while the plan tools, creating a task and the checks below take only a `.md` one.
+    const notNotes: HealthProblem[] = [];
     for (const entry of entries) {
-        // Only notes: an attachment beside a task is not meant to be one.
+        if (!isTaskPath(entry.path) || entry.path.endsWith('.md') || taskUuidOf(entry.path) === null) {
+            continue;
+        }
+        const task = entry.metadata?.task;
+        notNotes.push({
+            severity: 'warning',
+            message: typeof task === 'object' && task !== null && !Array.isArray(task)
+                ? 'Not a Markdown note, yet the task tree and moried\'s list_tasks take it for a task, and the calendar draws its dates and rings them; day plans in moried\'s tools and the checks here take only a .md file. Rename it to end with .md.'
+                : 'Not a Markdown note, yet the task tree shows it as a task, its name ending with a UUID; day plans in moried\'s tools take only a .md file. Rename it to end with .md, or so that its name does not end with a UUID.',
+            path: entry.path,
+        });
+    }
+    for (const entry of entries) {
+        // Only notes: an attachment beside a task is not meant to be one, and is reported above
+        // where its name makes it one anyway.
         if (!isTaskPath(entry.path) || !entry.path.endsWith('.md')) {
             continue;
         }
@@ -387,9 +444,15 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             problems: misnamed,
         },
         {
+            id: 'task-files',
+            title: 'Every file the task tree takes is a Markdown note',
+            description: 'Each file under .tasks/ whose name ends with a UUIDv4 ends with .md. The task tree and moried\'s list_tasks take one that does not for a task, and the calendar its dates, while day plans in moried\'s tools and creating a task take only a note.',
+            problems: notNotes,
+        },
+        {
             id: 'task-ids',
             title: 'Each task\'s UUID names one file',
-            description: 'No two files under .tasks/ end with the same UUIDv4, wherever they are and whatever name precedes it. A task is known by its UUID, and the tree keeps only one file of a pair.',
+            description: 'No two files under .tasks/ end with the same UUIDv4, in either case, wherever they are and whatever name precedes it. A task is known by its UUID: the tree keeps only one file of a pair, and day plans and moried\'s tools read a UUID in any case.',
             problems: shared,
         },
         {
@@ -448,7 +511,7 @@ export function settingsChecks(reports: {
         {
             id: 'tasks-settings',
             title: `${reports.tasksPath} reads cleanly`,
-            description: 'default_lead_time, lead_time_by_tag and status_colors are each what they should be, and the file holds no legacy task data.',
+            description: 'default_lead_time, lead_time_by_tag and status_colors are each what they should be, each tag under lead_time_by_tag is text, as moried matches only text, and the file holds no legacy task data.',
             problems: reports.taskSettingsProblems.map((message) => ({ severity: 'error', message, path: reports.tasksPath })),
         },
         {

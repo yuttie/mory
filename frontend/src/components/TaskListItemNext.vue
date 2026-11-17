@@ -72,6 +72,7 @@ import { usePlansStore } from '@/stores/plans';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { statusColor, statusGround } from '@/status-color';
 import { statusIcon } from '@/status-icon';
+import { tagsOf } from '@/tags';
 
 import TaskDateCues from '@/components/TaskDateCues.vue';
 
@@ -105,7 +106,7 @@ const ancestorTitles = computed<string[]>(() => {
 });
 
 const tags = computed<string[]>(() => {
-    return props.value.metadata?.tags ?? [];
+    return tagsOf(props.value.metadata);
 });
 
 const kind = computed(() => props.status ?? props.value.metadata?.task?.status?.kind);

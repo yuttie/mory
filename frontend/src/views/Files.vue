@@ -218,6 +218,7 @@ import {
 } from '@mdi/js';
 
 import { compareTags } from '@/api';
+import { tagsOf } from '@/tags';
 
 import { useFilesStore } from '@/stores/files';
 import { useTasksStore } from '@/stores/tasks';
@@ -353,12 +354,8 @@ function kindColumns(): DataTableHeader<FileRow>[] {
 const tags = computed(() => {
     const tags = new Set();
     for (const entry of kindEntries.value) {
-        if (entry.metadata !== null) {
-            if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-                for (const tag of entry.metadata.tags.map(String)) {
-                    tags.add(tag);
-                }
-            }
+        for (const tag of tagsOf(entry.metadata)) {
+            tags.add(tag);
         }
     }
     return Array.from(tags).sort(compareTags as (a: any, b: any) => number) as string[];

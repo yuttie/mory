@@ -16,6 +16,7 @@ import dayjs from 'dayjs';
 
 import { compareTags } from '@/api';
 import type { ListEntry2 } from '@/api';
+import { tagsOf } from '@/tags';
 
 import { useFilesStore } from '@/stores/files';
 import { useTasksStore } from '@/stores/tasks';
@@ -157,11 +158,9 @@ export function fileQueryMatcher(query: FileQuery, searchesTags: boolean): (row:
     };
 }
 
-// Tags given as anything but a list are none, as the tag list has them: frontmatter is whatever the
-// file says.
-function tagsOf(entry: ListEntry2): string[] {
-    const tags: unknown = entry.metadata?.tags;
-    return Array.isArray(tags) ? tags.map(String).sort(compareTags) : [];
+// The tags a row shows and is searched by, in the order the tag list has them.
+function sortedTagsOf(entry: ListEntry2): string[] {
+    return tagsOf(entry.metadata).sort(compareTags);
 }
 
 // A task whose note gives no status is in the backlog, as the task view files it. One whose status
@@ -258,7 +257,7 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
             path: entry.path,
             size: entry.size,
             mimeType: entry.mime_type,
-            tags: tagsOf(entry),
+            tags: sortedTagsOf(entry),
             title: titleOf(entry),
             time: dayjs(entry.time),
             ...(() => {

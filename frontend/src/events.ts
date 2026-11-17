@@ -478,9 +478,9 @@ function buildOccurrence(
         end: drawnEnd,
         finished: time.finished,
         color: time.color || parent.color || category?.defaults?.color || DEFAULT_EVENT_COLOR,
-        note: time.note || parent.note,
-        location: time.location || parent.location,
-        url: time.url || parent.url,
+        note: time.note || parent.note || undefined,
+        location: time.location || parent.location || undefined,
+        url: time.url || parent.url || undefined,
         source: 'note',
         notePath: entry.path,
         // Only a mapping is provenance: `ical:` with nothing after it is null, and read as one

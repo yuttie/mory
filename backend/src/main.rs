@@ -291,8 +291,9 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
 /// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
 /// hold were left out of the listing one by one, 4 added whether a file is text, and 5 dated the
 /// rows again once `attribute_times` passed over bulk commits and moves, since a blob it had dated
-/// by one keeps that time otherwise, and 6 recorded whether only bulk commits wrote a file.
-const ENTRY_SCHEMA_VERSION: i64 = 6;
+/// by one keeps that time otherwise, 6 recorded whether only bulk commits wrote a file, and 7
+/// recorded what some reader does not take of a file's frontmatter (`unread`).
+const ENTRY_SCHEMA_VERSION: i64 = 7;
 
 async fn init_cache_database(
     conn: &mut SqliteConnection,
@@ -446,7 +447,8 @@ async fn init_cache_database(
                 time       INTEGER NOT NULL,
                 tz_offset  INTEGER NOT NULL,
                 binary     INTEGER NOT NULL,
-                bulk_only  INTEGER NOT NULL
+                bulk_only  INTEGER NOT NULL,
+                unread     TEXT NOT NULL
             ) STRICT;
         ")
         .execute(&mut *conn)
@@ -1095,14 +1097,14 @@ async fn sync_cache_to(
     let mut rows = Vec::with_capacity(delta.changed.len());
     for (path, blob_id) in &delta.changed {
         let mime_type = guess_mime_from_path(path);
-        let (size, metadata, title, binary) = {
+        let (size, metadata, title, binary, unread) = {
             let repo = repo.lock().unwrap();
             let blob = repo.find_blob(*blob_id)?;
             let size = blob.size();
-            // Names the note in what `extract_metadata` warns about it, which it cannot itself.
+            // Names the note in what `extract_listing` warns about it, which it cannot itself.
             let _entry = tracing::warn_span!("entry", path = %path.display()).entered();
-            let (metadata, title) = extract_metadata(blob.content(), &mime_type);
-            (size, metadata, title, std::str::from_utf8(blob.content()).is_err())
+            let (metadata, title, unread) = extract_listing(blob.content(), &mime_type);
+            (size, metadata, title, std::str::from_utf8(blob.content()).is_err(), unread)
         };
         // Every changed path should have been attributed; fall back to HEAD's own time rather
         // than dropping the entry from the listing if some path was not.
@@ -1110,7 +1112,7 @@ async fn sync_cache_to(
             tracing::warn!("No commit attributed {:?}; using HEAD's time.", path);
             FileTime { time: head_time, bulk_only: false }
         });
-        rows.push((path.clone(), *blob_id, size, mime_type, metadata, title, when, binary));
+        rows.push((path.clone(), *blob_id, size, mime_type, metadata, title, when, binary, unread));
     }
 
     let mut tx = conn.begin().await?;
@@ -1121,9 +1123,9 @@ async fn sync_cache_to(
             .await
             .context("Failed to delete an entry")?;
     }
-    for (path, blob_id, size, mime_type, metadata, title, when, binary) in rows {
+    for (path, blob_id, size, mime_type, metadata, title, when, binary, unread) in rows {
         sqlx::query("
-                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(path) DO UPDATE SET
                         blob_id = excluded.blob_id,
                         size = excluded.size,
@@ -1133,18 +1135,20 @@ async fn sync_cache_to(
                         time = excluded.time,
                         tz_offset = excluded.tz_offset,
                         binary = excluded.binary,
-                        bulk_only = excluded.bulk_only;
+                        bulk_only = excluded.bulk_only,
+                        unread = excluded.unread;
             ")
             .bind(path.to_str())
             .bind(blob_id.to_string())
             .bind(size as i64)
             .bind(mime_type)
-            .bind(serde_json::to_string(&metadata).expect("extract_metadata keeps only what JSON can hold"))
+            .bind(serde_json::to_string(&metadata).expect("extract_listing keeps only what JSON can hold"))
             .bind(title)
             .bind(when.time.seconds())
             .bind(when.time.offset_minutes() * 60)
             .bind(binary)
             .bind(when.bulk_only)
+            .bind(serde_json::to_string(&unread).expect("a list of strings is JSON"))
             .execute(&mut *tx)
             .await
             .context("Failed to upsert an entry")?;
@@ -1609,11 +1613,6 @@ fn install_panic_hook() {
 /// the end of its closing fence, found as markdown-rs finds one: the three `-` or `+` the opening
 /// fence has, then only spaces or tabs to the end of the line. The title stays with the body.
 fn frontmatter_tree(text: &str) -> Option<markdown::mdast::Node> {
-    let is_fence = |line: &str, marker: &str| {
-        line.trim_end_matches(['\n', '\r'])
-            .strip_prefix(marker)
-            .is_some_and(|rest| rest.trim_end_matches([' ', '\t']).is_empty())
-    };
     let mut lines = text.split_inclusive('\n');
     let opening = lines.next()?;
     let marker = ["---", "+++"].into_iter().find(|marker| is_fence(opening, marker))?;
@@ -1627,18 +1626,106 @@ fn frontmatter_tree(text: &str) -> Option<markdown::mdast::Node> {
     None
 }
 
+/// Whether `line` is a frontmatter fence of `marker` as markdown-rs reads one: the marker, then
+/// only spaces or tabs to the end of the line.
+pub(crate) fn is_fence(line: &str, marker: &str) -> bool {
+    line.trim_end_matches(['\n', '\r'])
+        .strip_prefix(marker)
+        .is_some_and(|rest| rest.trim_end_matches([' ', '\t']).is_empty())
+}
+
 /// Extract YAML frontmatter and the first top-level `#` heading from a blob.
+#[cfg(test)]
+fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>, Option<String>) {
+    let (metadata, title, _) = extract_listing(blob, mime_type);
+    (metadata, title)
+}
+
+/// How the fences around a note's frontmatter are read differently by the listing, which reads
+/// them as markdown-rs does, and by the other readers of the note's own text: moried's tools
+/// (`mcp::frontmatter::Note::parse`) open and close only on a line that is `---` alone, and refuse
+/// to edit a note the listing reads otherwise (`mcp::frontmatter::check_fences`), and the web app's editors (`editFrontmatter`) open on `---` alone and
+/// close on `---` with trailing blanks allowed. Each reader is left as it is; a note they part ways
+/// on is reported, for its author to write the fence every one of them reads.
+///
+/// A closing `...` is reported whatever the tools make of it, since neither the listing nor the web
+/// app ever takes it for the end. A fence the listing never closes is not: then no reader finds
+/// frontmatter there, and they agree.
+fn fence_problems(text: &str) -> Vec<String> {
+    let unmarked = text.strip_prefix('\u{feff}');
+    let mut lines = unmarked.unwrap_or(text).split_inclusive('\n');
+    let Some(opening) = lines.next().filter(|line| is_fence(line, "---")) else {
+        return Vec::new();
+    };
+    let opening = opening.strip_suffix('\n').unwrap_or(opening);
+    // The tools close on the first line that is `---` or `...`, which may come before the
+    // listing's close or where it finds none.
+    let mut dotted = false;
+    let mut closing = None;
+    for line in lines {
+        let line = line.strip_suffix('\n').unwrap_or(line);
+        if is_fence(line, "---") {
+            closing = Some(line);
+            break;
+        }
+        dotted |= line == "...";
+    }
+    if unmarked.is_some() {
+        return match closing {
+            Some(_) => vec![
+                "The frontmatter follows a byte order mark, which the listing passes over and \
+                 moried's tools do not: they find no frontmatter. Remove the mark."
+                    .to_owned(),
+            ],
+            None => Vec::new(),
+        };
+    }
+    if opening.trim_end_matches('\r') != "---" {
+        return match closing {
+            Some(_) => vec![
+                "The opening `---` has blanks after it, which the listing allows and moried's tools \
+                 and the web app's editors do not: they find no frontmatter. Remove them."
+                    .to_owned(),
+            ],
+            None => Vec::new(),
+        };
+    }
+    // The tools refuse a note opened in CRLF in so many words: only blanks before its line ending,
+    // above, would go unsaid.
+    if opening.ends_with('\r') {
+        return Vec::new();
+    }
+    if dotted {
+        return vec![
+            "The frontmatter ends with `...`, which the listing and the web app do not take for its \
+             end: they read no frontmatter, or read on to a later `---`. End it with `---`."
+                .to_owned(),
+        ];
+    }
+    match closing {
+        Some(line) if line != "---" && !line.ends_with('\r') => vec![
+            "The closing `---` has blanks after it, which the listing and the web app allow and \
+             moried's tools do not: they read on past it. Remove them."
+                .to_owned(),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+/// Extract YAML frontmatter, the first top-level `#` heading, and what some reader does not take
+/// of the frontmatter as the listing gives it, from a blob.
 ///
 /// `mime_type` gates the markdown parse. Images are skipped even when their bytes are valid
 /// UTF-8, which SVG's are: parsing a multi-megabyte SVG as GFM markdown costs seconds and can
 /// never yield frontmatter or a heading. On the real repository this is the difference between
 /// 5.85 s and 0.77 s of a cold rebuild, and all 385 image entries are unaffected — none carried
 /// a title or metadata before.
-fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>, Option<String>) {
+fn extract_listing(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>, Option<String>, Vec<String>) {
     if mime_type.starts_with("image/") {
-        return (None, None);
+        return (None, None, Vec::new());
     }
     if let Ok(text) = std::str::from_utf8(blob) {
+        let mut unread = fence_problems(text);
         if let Some(node) = markdown_tree(text).or_else(|| frontmatter_tree(text)) {
             let error_metadata = |message: String| {
                 let mut mapping = serde_yaml::Mapping::new();
@@ -1651,9 +1738,12 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
                         tracing::debug!("parsed YAML metadata: {:?}", &doc);
                         let mut left_out = Vec::new();
                         let doc = listable(doc, None, &mut left_out);
-                        for warning in left_out {
+                        for warning in &left_out {
                             tracing::warn!("{}", warning);
                         }
+                        // What the listing leaves out, every reader of it misses without a word
+                        // anywhere but this log.
+                        unread.extend(left_out);
                         // Read back as the listing reads it, so whatever the sync stores the
                         // listing can read: YAML nested 127 deep is within serde_yaml's limit
                         // but past serde_json's, and every read of a row it could not read
@@ -1674,14 +1764,14 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
                 None
             };
             let title = get_first_toplevel_rank1_heading(&node).map(|heading_node| heading_node.to_string());
-            (metadata, title)
+            (metadata, title, unread)
         }
         else {
-            (None, None)
+            (None, None, unread)
         }
     }
     else {
-        (None, None)
+        (None, None, Vec::new())
     }
 }
 
@@ -3007,6 +3097,11 @@ mod models {
         /// out for text, the most of the listing.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         pub binary: bool,
+        /// What some reader does not take of the file's frontmatter, one sentence each, for the
+        /// health page: fences the readers find in different places, and keys the listing leaves
+        /// out. Left out when there is nothing, as it is for nearly every file.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        pub unread: Vec<String>,
     }
 
     #[cfg(test)]
@@ -3022,6 +3117,7 @@ mod models {
                 title: None,
                 time: "2024-01-01T00:00:00+00:00".parse().expect("a valid time"),
                 binary: false,
+                unread: Vec::new(),
             }
         }
     }
@@ -3279,6 +3375,8 @@ mod models {
             title: row.get("title"),
             time: time,
             binary: row.get("binary"),
+            // Only this moried writes the column, and a row it cannot read has nothing to say.
+            unread: serde_json::from_str(&row.get::<String, _>("unread")).unwrap_or_default(),
         }
     }
 
