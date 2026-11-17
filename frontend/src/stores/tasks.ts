@@ -31,6 +31,7 @@ import {
 import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
+import { tagsOf } from '@/tags';
 
 // The task forest, derived from the file listing rather than fetched.
 //
@@ -67,11 +68,8 @@ export function isUntaggedGroupId(id: string): boolean {
 }
 
 function firstTagOf(node: TaskNode): string {
-    const tags = node.metadata?.tags;
-    if (Array.isArray(tags) && tags.length > 0 && tags[0]) {
-        return String(tags[0]);
-    }
-    return UNTAGGED;
+    const [first] = tagsOf(node.metadata);
+    return first || UNTAGGED;
 }
 
 // Alphabetical, with the catch-all last: it is where a task lands by omission, not by choice.
@@ -469,7 +467,7 @@ export const useTasksStore = defineStore('tasks', () => {
     const knownTags = computed<[string, number][]>(() => {
         const tagCounts = new Map<string, number>();
         for (const node of allTasks.value) {
-            for (const tag of node.metadata?.tags ?? []) {
+            for (const tag of tagsOf(node.metadata)) {
                 tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
             }
         }

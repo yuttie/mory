@@ -325,6 +325,7 @@ import {
     useCalendarsStore,
 } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
+import { tagsOf } from '@/tags';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
 import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
@@ -418,18 +419,14 @@ const categorizedEntries = computed(() => {
     // Categorize entries
     const categorized: Map<string, ListEntry2[]> = new Map();
     for (const entry of files.entries) {
-        if (entry.metadata !== null) {
-            if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-                for (const tag of entry.metadata.tags.map(String)) {
-                    const match = tag.match(/^home:(.+)$/);
-                    if (match) {
-                        const category = match[1];
-                        if (!categorized.has(category)) {
-                            categorized.set(category, []);
-                        }
-                        categorized.get(category)!.push(entry);
-                    }
+        for (const tag of tagsOf(entry.metadata)) {
+            const match = tag.match(/^home:(.+)$/);
+            if (match) {
+                const category = match[1];
+                if (!categorized.has(category)) {
+                    categorized.set(category, []);
                 }
+                categorized.get(category)!.push(entry);
             }
         }
     }

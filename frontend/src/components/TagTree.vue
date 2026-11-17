@@ -37,6 +37,7 @@ import { computed, ref } from 'vue';
 import { mdiFileDocumentOutline, mdiFolder, mdiFolderOpen } from '@mdi/js';
 
 import { useFilesStore } from '@/stores/files';
+import { tagsOf } from '@/tags';
 
 interface TreeNode {
     name: string;
@@ -71,10 +72,7 @@ async function populateTagChildren(item: TreeNode) {
 
     const tags: Map<string, number> = new Map();
     for (const entry of entries) {
-        const entryTags = entry.metadata?.tags;
-        if (!entryTags) {
-            continue;
-        }
+        const entryTags = tagsOf(entry.metadata);
         if (item.context.every((t) => entryTags.includes(t))) {
             for (const tag of entryTags) {
                 tags.set(tag, (tags.get(tag) || 0) + 1);

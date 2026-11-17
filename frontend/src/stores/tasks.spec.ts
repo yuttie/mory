@@ -226,6 +226,17 @@ describe('known tags and contacts', () => {
         expect(store.knownTags).toEqual([['work', 4], ['home', 1]]);
     });
 
+    // Each of these the schema check reports, and the counting must not throw on any of them.
+    it('counts only the text items of a list of tags', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, tags: 5 as never },
+            { path: `.tasks/${uuid(2)}.md`, tags: { work: 1 } as never },
+            { path: `.tasks/${uuid(3)}.md`, tags: 'work' as never },
+            { path: `.tasks/${uuid(4)}.md`, tags: [2024, 'home', null] as never },
+        ]);
+        expect(store.knownTags).toEqual([['home', 1]]);
+    });
+
     it('counts only the contacts of tasks still waiting, and none left blank', async () => {
         const { store } = await storeWith([
             { path: `.tasks/${uuid(1)}.md`, status: 'waiting', contact: 'Alice' },
@@ -256,6 +267,18 @@ describe('tag grouping', () => {
             { path: `.tasks/${uuid(3)}.md`, title: 'a', tags: ['apple'] },
         ]);
         expect(store.treeWithTagGroups.map((i) => i.title)).toEqual(['apple', 'zebra', 'Untagged']);
+    });
+
+    it('groups by the first text tag, and a task with none under Untagged', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, title: 'number', tags: [2024, 'home'] as never },
+            { path: `.tasks/${uuid(2)}.md`, title: 'string', tags: 'work' as never },
+            { path: `.tasks/${uuid(3)}.md`, title: 'mapping', tags: { work: 1 } as never },
+        ]);
+        expect(titles(store.treeWithTagGroups)).toEqual([
+            { home: ['number'] },
+            { Untagged: ['string', 'mapping'] },
+        ]);
     });
 
     it('groups by the first tag only', async () => {

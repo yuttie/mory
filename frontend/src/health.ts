@@ -14,6 +14,7 @@ import { eventsFromEntries, taskDatesFromEntries } from '@/events';
 import type { EventCategories, EventError, EventWindow } from '@/events';
 import metadataSchema from '@/metadata-schema.json';
 import { planMonthOf } from '@/plans';
+import { tagsOf } from '@/tags';
 import { isTaskPath, taskDirectoryOf, taskUuidOf } from '@/task-forest';
 import { taskInstant } from '@/urgency';
 
@@ -214,8 +215,7 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
         for (const message of schemaProblems(entry.metadata)) {
             invalid.push({ severity: 'error', message, path: entry.path });
         }
-        const tags: unknown = (entry.metadata as Record<string, unknown>).tags;
-        if (Array.isArray(tags) && tags.length > 0 && !isSearchedNote(entry)) {
+        if (tagsOf(entry.metadata).length > 0 && !isSearchedNote(entry)) {
             unsearched.push({
                 severity: 'warning',
                 message: entry.path.startsWith('.mory/')
@@ -235,7 +235,7 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
         {
             id: 'frontmatter-schema',
             title: 'Frontmatter follows metadata-schema.json',
-            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note. tags is a list of text: the readers part ways on anything else, the tag tree taking a string letter by letter and moried\'s tools taking no tags from it.',
+            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note. tags is a list of text: the tag tree, the other views and moried\'s tools leave out any other value and any item that is not text, while search indexes a lone text whole.',
             problems: invalid,
         },
         {
