@@ -419,8 +419,8 @@ impl Mory {
         description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
                        the status to done with a completed_at of now unless one is given. A \
                        task already done keeps its completed_at and completion_note unless new \
-                       ones are given, so completing it again changes nothing. A parent's \
-                       progress follows from it.",
+                       ones are given, so completing it again with nothing new is refused, and \
+                       nothing is committed. A parent's progress follows from it.",
         annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
