@@ -138,3 +138,24 @@ test('says why it will not open a task whose status it would replace', async ({ 
     await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
     expect(repository.writes).toEqual([]);
 });
+
+test('keeps a value it does not read as written, and will not save a change to its field', async ({ context, page }) => {
+    const id = uuid(14);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntags: foo\ntask:\n    status: {kind: todo}\n    lead_time: 7\n---\n\n# Odd values\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toHaveValue('Odd values');
+    await expect(page.getByText('Kept as written, since the editor does not read them: tags "foo", lead_time 7.')).toBeVisible();
+    const leadTime = page.getByRole('textbox', { name: 'Lead time', exact: true });
+    await leadTime.fill('2w');
+    await expect(page.getByText(/^lead_time cannot be saved from here/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await leadTime.fill('');
+    await title.fill('Odd values, revised');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    const metadata = YAML.parse(repository.writes[0].content.split('---\n')[1]);
+    expect(metadata).toMatchObject({ tags: 'foo', task: { status: { kind: 'todo' }, lead_time: 7 } });
+});

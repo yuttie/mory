@@ -1,9 +1,9 @@
 import YAML from 'yaml';
 import { nowLocal } from '@/time';
-import type { Importance } from '@/urgency';
+import { type Importance, readImportance } from '@/urgency';
 
 import { stringifyWithFlowAlarms } from '@/frontmatter';
-import type { TaskAlarms } from '@/alarms';
+import { type TaskAlarms, alarmValueProblems } from '@/alarms';
 import type { UUID } from '@/api';
 import {
     columnOf,
@@ -141,6 +141,55 @@ export function readStatus(metadata: unknown): StatusReading {
     return { status: status as unknown as Status };
 }
 
+// The keys the task editor has a field for and rewrites on a save, as a note names them.
+// `start_at` is the older spelling of `available_from`, read where that is unset.
+export const EDITOR_KEYS = ['tags', 'importance', 'lead_time', 'available_from', 'start_at', 'due_by', 'deadline', 'alarms'] as const;
+export type EditorKey = typeof EDITOR_KEYS[number];
+
+const ALARM_KEYS = new Set(['due_by', 'deadline']);
+
+// The keys of a note's frontmatter whose value the task editor does not read, each with the value
+// as written. Its field would show such a key as empty and the save would write that empty back,
+// so the editor shows the field empty, keeps the value as written (`render`), and refuses a save
+// that changes the field. `tags` is at the top level, the rest under `task:`. A numeric
+// `importance` is the older task model's, read as low, medium or high or as unrated, and dropped
+// on purpose, so it is not among them.
+export function unreadEditorKeys(metadata: unknown): Partial<Record<EditorKey, string>> {
+    const unread: Partial<Record<EditorKey, string>> = {};
+    if (!isMapping(metadata)) {
+        return unread;
+    }
+    const set = (value: unknown) => value !== undefined && value !== null;
+    const tags = metadata.tags;
+    if (set(tags) && !(Array.isArray(tags) && tags.every((tag) => typeof tag === 'string'))) {
+        unread.tags = JSON.stringify(tags);
+    }
+    const task = isMapping(metadata.task) ? metadata.task : {};
+    if (set(task.importance) && typeof task.importance !== 'number' && readImportance(task.importance) === undefined) {
+        unread.importance = JSON.stringify(task.importance);
+    }
+    if (set(task.lead_time) && typeof task.lead_time !== 'string') {
+        unread.lead_time = JSON.stringify(task.lead_time);
+    }
+    // A date is the editor's as a string, which the date field shows as written, empty or not as
+    // a date included; an empty one is read as unset, and saved as unset.
+    for (const key of ['available_from', 'due_by', 'deadline'] as const) {
+        if (set(task[key]) && typeof task[key] !== 'string') {
+            unread[key] = JSON.stringify(task[key]);
+        }
+    }
+    if (!set(task.available_from) && set(task.start_at) && typeof task.start_at !== 'string') {
+        unread.start_at = JSON.stringify(task.start_at);
+    }
+    const alarms = task.alarms;
+    if (set(alarms) && (!isMapping(alarms)
+        || Object.keys(alarms).some((key) => !ALARM_KEYS.has(key))
+        || [...ALARM_KEYS].some((key) => alarmValueProblems(alarms[key]).length > 0))) {
+        unread.alarms = JSON.stringify(alarms);
+    }
+    return unread;
+}
+
 export interface Task {
     created_at?: string;
     uuid: UUID;
@@ -164,6 +213,9 @@ export interface Task {
     // What the note holds between its frontmatter and its title, which the editor does not show:
     // `render` writes the title first and then the note, so without this a save would drop it.
     beforeTitle?: string;
+    // The keys the note holds in a shape the editor does not read (`unreadEditorKeys`): `render`
+    // writes each as the source had it, whatever the task says.
+    unread?: Partial<Record<EditorKey, string>>;
     note: string;
 }
 
@@ -260,8 +312,23 @@ export function render(task: Task): string {
                     delete nextTask[key];
                 }
             }
-            doc.set('created_at', task.created_at ?? original.created_at ?? metadata.created_at);
-            doc.set('tags', task.tags);
+            // What the editor did not read it writes as it was, rather than as the empty field
+            // that stood in for it.
+            const unread = new Set(Object.keys(task.unread ?? {}));
+            for (const key of unread) {
+                if (key !== 'tags' && key in originalTask) {
+                    nextTask[key] = originalTask[key];
+                }
+            }
+            const createdAt = task.created_at ?? original.created_at ?? metadata.created_at;
+            const tags = unread.has('tags') ? original.tags : task.tags;
+            // Set only where it changes, so a value kept keeps its spelling: `[work]` stays flow.
+            if (!sameValue(original.created_at, createdAt)) {
+                doc.set('created_at', createdAt);
+            }
+            if (!sameValue(original.tags, tags)) {
+                doc.set('tags', tags);
+            }
             // Editing known fields keeps other frontmatter and YAML comments available to the editor.
             for (const key of Object.keys(originalTask)) {
                 if (!(key in nextTask)) {
@@ -274,8 +341,10 @@ export function render(task: Task): string {
                 }
             }
             quoteIndentedText(doc);
-            frontmatter = doc.toString({ indent: 4, lineWidth: 0 });
-            const expected = { ...original, created_at: task.created_at ?? original.created_at ?? metadata.created_at, tags: task.tags, task: nextTask };
+            // The whole document is written again, so every flow collection takes one spacing: the
+            // one a new task is written with (`stringifyWithFlowAlarms`), so `[work]` stays `[work]`.
+            frontmatter = doc.toString({ indent: 4, lineWidth: 0, flowCollectionPadding: false });
+            const expected = { ...original, created_at: createdAt, tags, task: nextTask };
             if (!parsesTo(frontmatter, expected)) {
                 throw new Error('Saving the task would change other frontmatter.');
             }

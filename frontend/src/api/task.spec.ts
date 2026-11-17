@@ -31,6 +31,11 @@ describe('a task read and saved unchanged', () => {
         expect(await resaved(markdown)).toBe(markdown);
     });
 
+    it('keeps flow collections as written', async () => {
+        const markdown = '---\ncreated_at: 2026-11-01 09:00:00+09:00\ntask:\n    status: {kind: todo}\n    due_by: 2026-11-20\n    alarms: {due_by: [-1d]}\ntags: [work]\nother: {x: [1, 2]}\n---\n\n# Title\n\nBody\n';
+        expect(await resaved(markdown)).toBe(markdown);
+    });
+
     it('keeps an empty heading, which is no title', async () => {
         const markdown = `${FRONTMATTER}\nIntro\n\n#\n\n# Second\n\nBody\n`;
         expect(await resaved(markdown)).toBe(markdown);
@@ -107,5 +112,37 @@ describe('a note in the task tree without a status', () => {
     ])('refuses one with %s, saying why', async (_, markdown, why) => {
         client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
         await expect(getTask(PATH)).rejects.toThrow(why);
+    });
+});
+
+// A value the editor has no reading of reaches its field as unset; the save must not write that.
+describe('a task holding values the editor does not read', () => {
+    it.each([
+        ['tags that are not a list', 'tags: foo\n', 'tags'],
+        ['tags that are not strings', 'tags: [a, {b: 1}]\n', 'tags'],
+        ['an importance of no level', 'task:\n    status: {kind: todo}\n    importance: urgent\n', 'importance'],
+        ['a lead time that is not text', 'task:\n    status: {kind: todo}\n    lead_time: 7\n', 'lead_time'],
+        ['a date that is not text', 'task:\n    status: {kind: todo}\n    due_by: [2026-11-20]\n', 'due_by'],
+        ['an older start that is not text', 'task:\n    status: {kind: todo}\n    start_at: {at: 2026-11-20}\n', 'start_at'],
+        ['alarms that are not a mapping', 'task:\n    status: {kind: todo}\n    deadline: 2026-11-20\n    alarms: -1d\n', 'alarms'],
+        ['an alarm that is not one', 'task:\n    status: {kind: todo}\n    deadline: 2026-11-20\n    alarms:\n        deadline: [-1d, soon]\n', 'alarms'],
+        ['alarms for something else', 'task:\n    status: {kind: todo}\n    alarms:\n        start: [-1d]\n', 'alarms'],
+    ])('keeps %s as written', async (_, yaml, key) => {
+        const markdown = `---\n${yaml.includes('task:') ? '' : 'task:\n    status: {kind: todo}\n'}${yaml}---\n\n# Title\n\nBody\n`;
+        client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
+        const [, task] = await getTask(PATH);
+        expect(Object.keys(task?.unread ?? {})).toEqual([key]);
+        const written = render({ ...task!, title: 'Title, revised', status: { kind: 'in_progress' } });
+        const before = YAML.parse(markdown.split(/^---$/m)[1]);
+        const after = YAML.parse(written.split(/^---$/m)[1]);
+        expect(after).toEqual({ ...before, created_at: after.created_at, tags: before.tags ?? [], task: { ...before.task, status: { kind: 'in_progress' } } });
+    });
+
+    it('reads every value it can as it did', async () => {
+        const markdown = '---\ntags: [work]\ntask:\n    status: {kind: todo}\n    importance: 4\n    lead_time: 2w\n    due_by: 2026-11-20\n    alarms:\n        due_by: -1d\n---\n\n# Title\n';
+        client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
+        const [, task] = await getTask(PATH);
+        expect(task?.unread).toBeUndefined();
+        expect(task).toMatchObject({ tags: ['work'], importance: 'medium', lead_time: '2w', due_by: '2026-11-20', alarms: { due_by: ['-1d'] } });
     });
 });

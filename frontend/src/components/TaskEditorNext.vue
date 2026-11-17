@@ -140,7 +140,7 @@
                              where a move put it: the form is counted against no task meanwhile, and
                              a save would write it as a new one, over whatever else the note holds. -->
                         <v-btn
-                            v-bind:disabled="writing || loading || !hasChanges || !!statusGateError || alarmsInvalid || !uiValid"
+                            v-bind:disabled="writing || loading || !hasChanges || !!statusGateError || !!unreadChanged || alarmsInvalid || !uiValid"
                             type="submit"
                             color="primary"
                             v-bind:aria-label="isEdit ? 'Save' : 'Create'"
@@ -318,7 +318,15 @@
                 {{ String(error) }}
             </v-alert>
             <v-alert
-                v-else-if="statusMissing"
+                v-if="!error && unreadSummary"
+                v-bind:type="unreadChanged ? 'error' : 'warning'"
+                variant="outlined"
+                class="mx-4"
+            >
+                {{ unreadChanged ?? `Kept as written, since the editor does not read them: ${unreadSummary}. Change them in the note.` }}
+            </v-alert>
+            <v-alert
+                v-if="!error && statusMissing"
                 type="info"
                 variant="outlined"
                 class="mx-4"
@@ -572,7 +580,7 @@ import { alarmProblems, sameTaskAlarms, taskAlarmsToWrite } from '@/alarms';
 import EditableViewer from '@/components/EditableViewer.vue';
 import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import { extractFileUuid } from '@/api/task';
-import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
+import type { EditorKey, UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBlanks } from '@/task';
 import type { TaskNode } from '@/task-forest';
 import { useFetchTask } from '@/composables/fetchTask';
@@ -834,6 +842,34 @@ const isModified = computed<boolean>(() => differs(form, initialForm.value));
 const statusMissing = computed<boolean>(() => !!task.value && task.value.status === undefined);
 const hasChanges = computed<boolean>(() => statusMissing.value || isModified.value);
 
+// The keys the note holds in a shape the editor does not read (`unreadEditorKeys`). Their fields
+// start empty and the save keeps them as written, so a change to one of those fields could not be
+// saved without losing what the note says there: it is refused rather than dropped.
+const UNREAD_FIELDS: Record<EditorKey, (form: EditableTask) => unknown> = {
+    tags: (f) => f.tags,
+    importance: (f) => f.importance,
+    lead_time: (f) => f.lead_time,
+    available_from: (f) => f.available_from,
+    start_at: (f) => f.available_from,
+    due_by: (f) => f.due_by,
+    deadline: (f) => f.deadline,
+    alarms: (f) => [f.due_by_alarms, f.deadline_alarms],
+};
+
+const unreadKeys = computed<EditorKey[]>(() => Object.keys(task.value?.unread ?? {}) as EditorKey[]);
+
+const unreadSummary = computed<string>(() => unreadKeys.value
+    .map((key) => `${key} ${task.value?.unread?.[key]}`)
+    .join(', '));
+
+const unreadChanged = computed<string | undefined>(() => {
+    const changed = unreadKeys.value.filter((key) =>
+        JSON.stringify(UNREAD_FIELDS[key](form)) !== JSON.stringify(UNREAD_FIELDS[key](initialForm.value)));
+    return changed.length === 0
+        ? undefined
+        : `${changed.join(', ')} cannot be saved from here: the note writes ${changed.map((key) => `${key} ${task.value?.unread?.[key]}`).join(', ')}, which the editor does not read, and saving would replace it. Undo the change, or fix it in the note.`;
+});
+
 // Watchers
 watch(
     task,
@@ -1025,7 +1061,7 @@ async function commitTyping(): Promise<void> {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (props.writing || loading.value || !hasChanges.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
+    if (props.writing || loading.value || !hasChanges.value || !result?.valid || statusGateError.value || unreadChanged.value || alarmsInvalid.value) {
         return;
     }
     emitted = { task: taskOf(task.value), unlocked: !statusOptionRestricted.value };
@@ -1052,6 +1088,7 @@ function taskOf(base: Task | null | undefined): Task {
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
         ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
         ...(base?.beforeTitle ? { beforeTitle: base.beforeTitle } : {}),
+        ...(base?.unread ? { unread: base.unread } : {}),
         note: form.note,
     };
 }

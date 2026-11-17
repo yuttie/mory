@@ -4,7 +4,7 @@ import { readTaskAlarms } from '@/alarms';
 import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
 import { type UUID, versionOf } from '@/api';
-import { type Task, readStatus } from '@/task';
+import { type Task, readStatus, unreadEditorKeys } from '@/task';
 import type { TaskMetadata } from '@/task-forest';
 import { readImportance } from '@/urgency';
 
@@ -42,14 +42,17 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             throw new Error(`${taskPath} cannot be edited as a task: ${reading.unread} Open it as a note to fix it.`);
         }
         const meta = (metadata ?? {}) as TaskMetadata;
-        const block = meta.task ?? {};
+        // A key the editor does not read reaches its field as unset, and `render` keeps it as
+        // written.
+        const unread = unreadEditorKeys(metadata);
+        const block = Object.fromEntries(Object.entries(meta.task ?? {}).filter(([key]) => !(key in unread))) as NonNullable<TaskMetadata['task']>;
         const uuid = extractFileUuid(taskPath);
         const alarms = readTaskAlarms(block.alarms);
         const task = {
             created_at: meta.created_at,
             uuid: uuid,
             title: title,
-            tags: Array.isArray(meta.tags) ? meta.tags : [],
+            tags: Array.isArray(meta.tags) && !('tags' in unread) ? meta.tags : [],
             ...('status' in reading ? { status: reading.status } : {}),
             source: md,
             etag: versionOf(res.headers.etag),
@@ -59,6 +62,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             ...(block.due_by ? { due_by: block.due_by } : {}),
             ...(block.deadline ? { deadline: block.deadline } : {}),
             ...(alarms === undefined ? {} : { alarms }),
+            ...(Object.keys(unread).length > 0 ? { unread } : {}),
             ...(before ? { beforeTitle: before } : {}),
             note: rest,
         };
