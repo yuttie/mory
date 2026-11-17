@@ -4,7 +4,8 @@
 // reader leaves out the other must leave out alike, and neither may leave a value out unannounced:
 // it would look set and do nothing. Every such value is said, by where it is, and the health page
 // and the Calendar list them. `backend/src/main.rs` leaves out the same subscriptions moried cannot
-// read, and `fixtures/calendar/configurations.yaml` lists what each case leaves out.
+// read, `backend/src/calendar_config.rs` finds the same values unread, and
+// `fixtures/calendar/configurations.yaml` holds the two to each other.
 //
 // What happens to a value left out on the next save depends on what it is. A subscription is kept
 // as written, wherever it stood: it holds a feed's address and the id converted notes name it by,

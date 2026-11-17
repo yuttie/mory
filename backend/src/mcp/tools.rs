@@ -185,6 +185,29 @@ fn is_cut_short(len: usize) -> bool {
     len > MAX_NOTE_BYTES
 }
 
+/// Refuses calendar settings that moried or the web app would not read whole.
+///
+/// A value either leaves out does nothing where it is, so a commit that writes one would report a
+/// setting made that is not: a subscription moried skips is never fetched, an alarm that is not
+/// one never rings, and a key the web app does not know is gone on its next save.
+fn check_settings(path: &str, content: &str) -> Result<(), String> {
+    if path != crate::v2::CALENDARS_PATH {
+        return Ok(());
+    }
+    let unread = crate::calendar_config::unread(content)
+        .map_err(|reason| format!("{path:?} would not be read: {reason}."))?;
+    if unread.is_empty() {
+        return Ok(());
+    }
+    let lines: Vec<_> = unread.iter().map(|unread| format!("- {}: {}", unread.at, unread.message)).collect();
+    Err(format!(
+        "{path:?} would hold values moried or the web app does not read, so nothing was written:\n{}\n\
+         A subscription has a text id and url, a text name and color if any, and enabled true or \
+         false; alarms follow the alarm grammar; colours and names are text.",
+        lines.join("\n"),
+    ))
+}
+
 /// Refuses to replace a file that `read_note` does not return whole.
 ///
 /// update_note takes the whole file back, and read_note hands over no more than `MAX_NOTE_BYTES`
@@ -1228,6 +1251,9 @@ pub async fn create_note(
         )));
     }
 
+    if let Err(message) = check_settings(&path, &args.content) {
+        return Ok(tool_error(message));
+    }
     if path.ends_with(".md") {
         args.content = match frontmatter::with_created_at(&args.content, None) {
             Ok(content) => content,
@@ -1279,6 +1305,9 @@ pub async fn update_note(
         )));
     };
     if let Err(message) = check_read_whole(&path, &current) {
+        return Ok(tool_error(message));
+    }
+    if let Err(message) = check_settings(&path, &args.content) {
         return Ok(tool_error(message));
     }
 
@@ -1387,6 +1416,14 @@ pub async fn rename_note(
     if crate::find_entry_blob(state, &to).await.is_some() {
         return Ok(tool_error(format!("{to:?} already exists.")));
     }
+    // Moved there, a file is the calendar settings as surely as one update_note writes there.
+    if to == crate::v2::CALENDARS_PATH {
+        if let Some(text) = note_text(state, &from).await? {
+            if let Err(message) = check_settings(&to, &text) {
+                return Ok(tool_error(message));
+            }
+        }
+    }
 
     let message = args
         .message
@@ -1436,6 +1473,22 @@ mod tests {
         assert_eq!(unreadable.0, json("{}"));
         assert_eq!(unreadable.1, json("{}"));
         assert!(unreadable.2.as_deref().is_some_and(|reason| reason.contains("not valid YAML")), "{unreadable:?}");
+    }
+
+    /// A write of the calendar settings is refused when it holds a value a reader leaves out,
+    /// naming where, and a file read whole is written; any other path is not looked at.
+    #[test]
+    fn calendar_settings_are_written_only_as_they_are_read() {
+        let path = ".mory/calendars.yaml";
+        assert!(check_settings(path, "calendars:\n    - id: work\n      url: https://example.invalid/w.ics\n").is_ok());
+        assert!(check_settings(path, "").is_ok());
+        let refused = check_settings(path, "calendars:\n    - id: work\n      url: https://example.invalid/w.ics\n      enabled: off\n")
+            .expect_err("enabled: off is not a flag");
+        assert!(refused.contains("- calendars[0]: work: "), "{refused}");
+        let refused = check_settings(path, "alarms: { timed: [soon] }\n").expect_err("not an alarm");
+        assert!(refused.contains("- alarms.timed: "), "{refused}");
+        assert!(check_settings(path, "- id: work\n").is_err());
+        assert!(check_settings("notes/calendars.yaml", "- id: work\n").is_ok());
     }
 
     /// `list_imported_events` is the endpoint's response, `series` only on request, and everything

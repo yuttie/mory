@@ -18,7 +18,8 @@ interface Case {
     unread: string[];
 }
 
-// Each case names every value the file holds that moried or the web app leaves out.
+// Shared with `backend/src/calendar_config.rs`, which must find the same values unread: one reader
+// leaving out what the other takes is a setting that does something only half the time.
 const cases: Case[] = YAML.parse(fixture);
 
 describe('readCalendarConfiguration', () => {

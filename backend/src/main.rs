@@ -67,6 +67,7 @@ use models::*;
 
 mod agenda;
 mod alarms;
+mod calendar_config;
 mod ical;
 mod mcp;
 mod note_events;
@@ -2234,7 +2235,9 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         }
 
         /// The subscriptions moried can read, in the file's order, and one line for each it cannot,
-        /// which is left out on its own.
+        /// which is left out on its own. `calendarSubscriptionOf` in
+        /// `frontend/src/calendar-configuration.ts` takes and leaves out the same ones, and
+        /// `fixtures/calendar/configurations.yaml` holds the two to each other.
         pub(crate) fn subscriptions(&self) -> (Vec<CalendarSubscription>, Vec<String>) {
             let mut problems = Vec::new();
             let entries = match &self.calendars {
@@ -2355,7 +2358,7 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
     }
 
     /// Where the subscription list lives, alongside the app's other repository-held config.
-    const CALENDARS_PATH: &str = ".mory/calendars.yaml";
+    pub(crate) const CALENDARS_PATH: &str = ".mory/calendars.yaml";
 
     /// How long a fetched feed is served from the cache before it is revalidated.
     fn ical_cache_seconds() -> i64 {

@@ -1,6 +1,8 @@
 # `.mory/calendars.yaml` as it may be written by hand, and where each value is that moried or the
-# web app does not read. `frontend/src/calendar-configuration.spec.ts` requires exactly these to be
-# reported: a reader leaving one out unannounced is a setting that looks made and does nothing.
+# web app does not read. `backend/src/calendar_config.rs` and
+# `frontend/src/calendar-configuration.spec.ts` both require exactly these to be reported: one
+# reader leaving out a value the other takes, or either leaving one out unannounced, is a setting
+# that looks made and does nothing.
 #
 # Each case is `name`, the file's `text`, and `unread`, the places at fault in any order.
 

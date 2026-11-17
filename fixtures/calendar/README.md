@@ -94,3 +94,13 @@ From the repository's root, in this order, since each step reads what the one be
     (cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test calendar_fixtures)
     (cd frontend && pnpm exec vitest run -u src/differential.spec.ts)
     (cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test note_fixtures)
+
+## Configuration
+
+`.mory/calendars.yaml` is read by both components too, and a value one of them leaves out does
+nothing where it stands: a subscription moried skips is never fetched, and whatever the settings
+do not read is gone on their next save. `configurations.yaml` holds files written by hand, each
+with the places in it a reader leaves a value out, such as `calendars[2]` or
+`categories.meeting.alarms`. `backend/src/calendar_config.rs` and
+`frontend/src/calendar-configuration.spec.ts` must both find exactly those, in any order. Nothing
+is generated: a case is written, with what it should find, by hand.
