@@ -146,3 +146,18 @@ describe('a task holding values the editor does not read', () => {
         expect(task).toMatchObject({ tags: ['work'], importance: 'medium', lead_time: '2w', due_by: '2026-11-20', alarms: { due_by: ['-1d'] } });
     });
 });
+
+// The task tree takes any file named for it, an image too; saving a form over one would replace it
+// with a note.
+describe('a file in the task tree that is not text', () => {
+    it('is refused, saying why', async () => {
+        client.get.mockResolvedValue({ status: 200, data: '\u0089PNG\r\n', headers: { etag: '"v1"', 'content-type': 'image/png' } });
+        await expect(getTask('.tasks/00000000-0000-4000-8000-000000000001.png')).rejects.toThrow('is image/png, not text');
+    });
+
+    it('reads one served as text of any kind', async () => {
+        client.get.mockResolvedValue({ status: 200, data: '# Title\n', headers: { etag: '"v1"', 'content-type': 'text/plain; charset=utf-8' } });
+        const [, task] = await getTask('.tasks/00000000-0000-4000-8000-000000000001.txt');
+        expect(task?.title).toBe('Title');
+    });
+});

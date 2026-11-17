@@ -23,6 +23,12 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         return [versionOf(res.headers.etag), null];
     }
     else {
+        // The task tree takes any file named for it, an image or a JSON file too, and a save
+        // writes the form as a note over the file it was read from. Only text can be one.
+        const type = String(res.headers['content-type'] ?? '');
+        if (type !== '' && !type.startsWith('text/')) {
+            throw new Error(`${taskPath} cannot be edited as a task: it is ${type.split(';')[0]}, not text. A task is a note.`);
+        }
         const { extractFrontmatterH1AndRest } = await import('@/markdown-utils');
         const md = res.data as string;
         const { frontmatter, heading: title, before, rest } = extractFrontmatterH1AndRest(md);
