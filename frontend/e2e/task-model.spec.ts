@@ -103,6 +103,7 @@ test('keeps what a task holds before its title when it is saved', async ({ conte
     await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
     const title = page.getByRole('textbox', { name: 'Title', exact: true });
     await expect(title).toHaveValue('Real title');
+    await expect(page.getByText('This note holds text before its title, which the editor does not show.')).toBeVisible();
     await title.fill('Real title, revised');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => repository.writes.length).toBe(1);

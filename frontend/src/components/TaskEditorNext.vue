@@ -333,6 +333,16 @@
             >
                 This note has no task status yet. The task tree draws it as Backlog; saving writes the status chosen here.
             </v-alert>
+            <!-- The editor holds a task as its title and then its note, so what comes first has no
+                 field: without a word here it would be text the note holds and the editor hides. -->
+            <v-alert
+                v-if="!error && task?.beforeTitle"
+                type="info"
+                variant="outlined"
+                class="mx-4"
+            >
+                This note holds text before its title, which the editor does not show. Saving keeps it as it is; open it as a note to see or change it.
+            </v-alert>
             <v-card-text
                 class="controls"
                 style="flex: 1 1 0; min-height: 0;"
