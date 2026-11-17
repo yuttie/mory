@@ -531,6 +531,24 @@
             }
         },
         {
+            "name": "a year before 100 read as written",
+            "task": {
+                "deadline": "0050-10-04 10:00",
+                "available_from": "0050-10-01"
+            },
+            "now": "0050-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "UTC",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.05952380952380953,
+                "reference": "0050-10-04T10:00:00.000Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
             "name": "an impossible clock or date without an offset is ignored",
             "task": {
                 "deadline": "2026-10-04 24:00",
