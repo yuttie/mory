@@ -292,11 +292,12 @@ so change one, change the other and run both halves. A task's dates, and an even
 `until`, `exclusions` and the `start` of an occurrence it lists, are refused unless
 `urgency::is_written` takes them: a bare date or a datetime carrying its offset, the convention
 below, spelt as every reader of one takes it -- no fraction of a second, which the calendar and the
-alarms draw nowhere, no year before 100, which they or the task editor's date field read in the
-1900s, and no white space around it, which hides a bare date from the calendar or makes it midnight
-in that field; the task editor holds a date changed in it to its twin, `isWrittenTaskDate`, the
-same way. `urgency::instant`, which urgency is worked out with, reads one written without an offset
-too, in moried's zone, as `taskInstant` does, and those other spellings as well.
+alarms draw nowhere, no year before 1000, since they or the task editor's date field read one before
+100 in the 1900s and the calendar draws a bare date in the rest nowhere, and no white space around
+it, which hides a bare date from the calendar or makes it midnight in that field; the task editor
+holds a date changed in it to its twin, `isWrittenTaskDate`, the same way. `urgency::instant`,
+which urgency is worked out with, reads one written without an offset too, in moried's zone, as
+`taskInstant` does, and those other spellings as well.
 An event's `end` may also be a time of day or a duration, as `normalizeEndTime` reads one. An
 occurrence to remove is matched by instant (`note_events::instant_of`, the twin of `instantOf`), so
 the many older starts written without an offset are read in moried's zone, and by whether it is a
