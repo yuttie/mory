@@ -362,6 +362,11 @@ events:
             freq: monthly
             bymonthday: [1, -1]
             count: 4
+    An until on its start's day:
+        start: 2024-05-21 09:00
+        repeat:
+            freq: daily
+            until: 2024-05-21
 ---
 
 # Rules

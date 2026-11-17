@@ -2922,6 +2922,7 @@
         "2024-05-09 11:30  Moved and renamed  +0m",
         "2024-05-10 09:00  Daily with count  +0m",
         "2024-05-15 12:00  Third Wednesday  +0m",
+        "2024-05-21 09:00  An until on its start's day  +0m",
         "2024-05-31 08:00  Last day of the month  +0m",
         "2024-05-31 08:00  The 31st  +0m",
         "2024-05-31 09:00  The fifth Friday of a month  +0m",
@@ -3041,6 +3042,7 @@
         "2024-05-09 11:30  Moved and renamed  -5m",
         "2024-05-10 09:00  Daily with count  -5m",
         "2024-05-15 12:00  Third Wednesday  -5m",
+        "2024-05-21 09:00  An until on its start's day  -5m",
         "2024-05-31 08:00  Last day of the month  -5m",
         "2024-05-31 08:00  The 31st  -5m",
         "2024-05-31 09:00  The fifth Friday of a month  -5m",
@@ -3160,6 +3162,7 @@
         "2024-05-09 11:30  Moved and renamed",
         "2024-05-10 09:00  Daily with count",
         "2024-05-15 12:00  Third Wednesday",
+        "2024-05-21 09:00  An until on its start's day",
         "2024-05-31 08:00  Last day of the month",
         "2024-05-31 08:00  The 31st",
         "2024-05-31 09:00  The fifth Friday of a month",
@@ -3279,6 +3282,7 @@
         "2024-05-09 11:30  Moved and renamed  none",
         "2024-05-10 09:00  Daily with count  none",
         "2024-05-15 12:00  Third Wednesday  none",
+        "2024-05-21 09:00  An until on its start's day  none",
         "2024-05-31 08:00  Last day of the month  none",
         "2024-05-31 08:00  The 31st  none",
         "2024-05-31 09:00  The fifth Friday of a month  none",
@@ -3661,6 +3665,13 @@
               "freq": "monthly"
             },
             "start": "2024-10-14 09:00"
+          },
+          "An until on its start's day": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-21"
+            },
+            "start": "2024-05-21 09:00"
           },
           "Daily with count": {
             "exclusions": [
