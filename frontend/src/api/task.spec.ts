@@ -5,8 +5,9 @@ const client = vi.hoisted(() => ({ get: vi.fn() }));
 
 vi.mock('@/axios', () => ({ getAxios: () => client }));
 
+import { taskAlarmsToWrite } from '@/alarms';
 import { getTask } from '@/api/task';
-import { render } from '@/task';
+import { type Task, render } from '@/task';
 
 const PATH = '.tasks/00000000-0000-4000-8000-000000000001.md';
 const FRONTMATTER = '---\ncreated_at: 2026-11-01 09:00:00+09:00\ntask:\n    status:\n        kind: todo\ntags: []\n---\n';
@@ -144,6 +145,40 @@ describe('a task holding values the editor does not read', () => {
         const [, task] = await getTask(PATH);
         expect(task?.unread).toBeUndefined();
         expect(task).toMatchObject({ tags: ['work'], importance: 'medium', lead_time: '2w', due_by: '2026-11-20', alarms: { due_by: ['-1d'] } });
+    });
+});
+
+// The editor writes a date's alarms only with the date (`taskAlarmsToWrite`), as it holds them.
+function alarmsTheEditorWrites(task: Task): Task['alarms'] {
+    return taskAlarmsToWrite({
+        due_by: task.due_by ?? '',
+        deadline: task.deadline ?? '',
+        due_by_alarms: task.alarms?.due_by ?? null,
+        deadline_alarms: task.alarms?.deadline ?? null,
+    });
+}
+
+describe('the alarms of a date a task does not have', () => {
+    it.each([
+        ['no date', '    deadline: 2026-11-20\n    alarms:\n        due_by: [-1d]\n        deadline: [-2d]\n'],
+        ['a date the editor does not read', '    due_by: [2026-11-20]\n    alarms:\n        due_by: [-1d]\n'],
+    ])('are kept as written by a save that leaves it %s', async (_, lines) => {
+        const markdown = `---\ntask:\n    status: {kind: todo}\n${lines}---\n\n# Title\n`;
+        client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
+        const [, task] = await getTask(PATH);
+        const written = render({ ...task!, alarms: alarmsTheEditorWrites(task!), status: { kind: 'in_progress' } });
+        expect(written).toContain(lines.slice(lines.indexOf('    alarms:')));
+        const before = YAML.parse(markdown.split(/^---$/m)[1]);
+        expect(YAML.parse(written.split(/^---$/m)[1]).task).toEqual({ ...before.task, status: { kind: 'in_progress' } });
+    });
+
+    it('go with the date the editor clears', async () => {
+        const markdown = '---\ntask:\n    status: {kind: todo}\n    due_by: 2026-11-20\n    alarms:\n        due_by: [-1d]\n---\n\n# Title\n';
+        client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
+        const [, task] = await getTask(PATH);
+        const cleared = { ...task!, due_by: undefined };
+        const written = render({ ...cleared, alarms: alarmsTheEditorWrites(cleared) });
+        expect(YAML.parse(written.split(/^---$/m)[1]).task).toEqual({ status: { kind: 'todo' } });
     });
 });
 

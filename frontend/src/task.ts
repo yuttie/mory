@@ -320,6 +320,22 @@ export function render(task: Task): string {
                     nextTask[key] = originalTask[key];
                 }
             }
+            // The editor writes a date's alarms only with the date, so clearing one takes its
+            // alarms with it. Those of a date the note never gave it, or gave in a shape it does not
+            // read, ring at nothing yet and have no box there, but they are the note's: a save that
+            // leaves that date unset leaves them as written.
+            const alarms = originalTask.alarms;
+            if (!unread.has('alarms') && isMapping(alarms)) {
+                const kept = new Set<string>(['due_by', 'deadline'].filter((field) => alarms[field] !== undefined
+                    && (unread.has(field) || !originalTask[field]) && !(field in metadata.task)));
+                if (kept.size > 0) {
+                    const written: Record<string, unknown> = isMapping(nextTask.alarms) ? nextTask.alarms : {};
+                    // In the note's order, so that one kept as it was is written as it was.
+                    nextTask.alarms = Object.fromEntries(Object.keys({ ...alarms, ...written })
+                        .filter((field) => kept.has(field) || field in written)
+                        .map((field) => [field, kept.has(field) ? alarms[field] : written[field]]));
+                }
+            }
             const createdAt = task.created_at ?? original.created_at ?? metadata.created_at;
             const tags = unread.has('tags') ? original.tags : task.tags;
             // Set only where it changes, so a value kept keeps its spelling: `[work]` stays flow.
