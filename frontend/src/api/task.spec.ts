@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import YAML from 'yaml';
 
 const client = vi.hoisted(() => ({ get: vi.fn() }));
 
@@ -59,5 +60,52 @@ describe('a task read and saved unchanged', () => {
         const [, task] = await getTask(PATH);
         expect(task?.title).toBe('Title');
         expect(await resaved(`${FRONTMATTER}\n${body}`)).toContain('```\n# not a heading\n```');
+    });
+});
+
+// A note in the task tree is a task by its path, whatever it holds; the editor fills in a status
+// for one that holds none, and refuses one whose status it would have to replace.
+describe('a note in the task tree without a status', () => {
+    async function read(markdown: string) {
+        client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
+        const [, task] = await getTask(PATH);
+        if (task === null) {
+            throw new Error('The task should have been read.');
+        }
+        return task;
+    }
+
+    it.each([
+        ['no frontmatter', '# Title\n\nBody\n'],
+        ['empty frontmatter', '---\n---\n\n# Title\n\nBody\n'],
+        ['frontmatter holding only a comment', '---\n# kept\n---\n\n# Title\n\nBody\n'],
+        ['no task: block', '---\ntags: [work]\n# kept\nother: 1\n---\n\n# Title\n\nBody\n'],
+        ['an empty task: block', '---\ntask:\ntags: [work]\n---\n\n# Title\n\nBody\n'],
+        ['a task: block without a status', '---\ntask:\n    due_by: 2026-11-20\n---\n\n# Title\n\nBody\n'],
+    ])('opens one with %s, and writes it a status and nothing less', async (_, markdown) => {
+        const task = await read(markdown);
+        expect(task.status).toBeUndefined();
+        expect(task.title).toBe('Title');
+        expect(() => render(task)).toThrow();
+        const written = render({ ...task, status: { kind: 'backlog' } });
+        const [, frontmatter, body] = written.split(/^---$/m);
+        const metadata = YAML.parse(frontmatter);
+        const before = YAML.parse(markdown.startsWith('---') ? markdown.split(/^---$/m)[1] : '') ?? {};
+        expect(metadata).toMatchObject({ ...before, task: { ...(before.task ?? {}), status: { kind: 'backlog' } } });
+        expect(body).toBe('\n\n# Title\n\nBody\n');
+        if (markdown.includes('# kept')) {
+            expect(frontmatter).toContain('# kept');
+        }
+    });
+
+    it.each([
+        ['a task: that is not a mapping', '---\ntask: soon\n---\n\n# Title\n', 'not a mapping'],
+        ['a status that is not a mapping', '---\ntask:\n    status: todo\n---\n\n# Title\n', 'has no kind'],
+        ['a status of no known kind', '---\ntask:\n    status: {kind: started}\n---\n\n# Title\n', 'has no kind'],
+        ['frontmatter that is not a mapping', '---\n- a\n---\n\n# Title\n', 'not a mapping'],
+        ['frontmatter that is not YAML', '---\ntask: [\n---\n\n# Title\n', 'not YAML'],
+    ])('refuses one with %s, saying why', async (_, markdown, why) => {
+        client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
+        await expect(getTask(PATH)).rejects.toThrow(why);
     });
 });

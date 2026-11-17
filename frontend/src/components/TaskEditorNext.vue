@@ -140,7 +140,7 @@
                              where a move put it: the form is counted against no task meanwhile, and
                              a save would write it as a new one, over whatever else the note holds. -->
                         <v-btn
-                            v-bind:disabled="writing || loading || !isModified || !!statusGateError || alarmsInvalid || !uiValid"
+                            v-bind:disabled="writing || loading || !hasChanges || !!statusGateError || alarmsInvalid || !uiValid"
                             type="submit"
                             color="primary"
                             v-bind:aria-label="isEdit ? 'Save' : 'Create'"
@@ -316,6 +316,14 @@
                 class="mx-4"
             >
                 {{ String(error) }}
+            </v-alert>
+            <v-alert
+                v-else-if="statusMissing"
+                type="info"
+                variant="outlined"
+                class="mx-4"
+            >
+                This note has no task status yet. The task tree draws it as Backlog; saving writes the status chosen here.
             </v-alert>
             <v-card-text
                 class="controls"
@@ -820,6 +828,12 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
 
 const isModified = computed<boolean>(() => differs(form, initialForm.value));
 
+// A task read without a status (`readStatus`) is shown as Backlog, which the note does not say: it
+// has that to save even before anything is changed. Not a draft, though: closing the editor on it
+// loses nothing typed.
+const statusMissing = computed<boolean>(() => !!task.value && task.value.status === undefined);
+const hasChanges = computed<boolean>(() => statusMissing.value || isModified.value);
+
 // Watchers
 watch(
     task,
@@ -1011,7 +1025,7 @@ async function commitTyping(): Promise<void> {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (props.writing || loading.value || !isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
+    if (props.writing || loading.value || !hasChanges.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
     emitted = { task: taskOf(task.value), unlocked: !statusOptionRestricted.value };

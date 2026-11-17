@@ -102,12 +102,53 @@ export const STATUS_TRANSITION = {
     canceled: [],
 } as const satisfies Record<StatusKind, readonly StatusKind[]>;
 
+// A task's status as every reader takes it: a mapping whose `kind` is one of `STATUS_KINDS`. A
+// note in the task tree is a task by its path alone -- the tree, `TaskHierarchy` and the plans all
+// count it -- so one without a status is still a task, only one none of them knows the status of:
+// `missing` when nothing is written, which the editor can fill in, and `unread` with why when
+// something is written that no reader takes, which a save would replace. The web app draws a task
+// without one as Backlog, and `list_tasks` lists it without one.
+export type StatusReading =
+    | { status: Status }
+    | { missing: string }
+    | { unread: string };
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function readStatus(metadata: unknown): StatusReading {
+    if (metadata === null || metadata === undefined) {
+        return { missing: 'Has no frontmatter, so no task: block.' };
+    }
+    if (!isMapping(metadata)) {
+        return { unread: 'Its frontmatter is not a mapping.' };
+    }
+    const task = metadata.task;
+    if (task === null || task === undefined) {
+        return { missing: 'Has no task: block.' };
+    }
+    if (!isMapping(task)) {
+        return { unread: `Its task: is ${JSON.stringify(task)}, not a mapping.` };
+    }
+    const status = task.status;
+    if (status === null || status === undefined) {
+        return { missing: 'Its task: block has no status.' };
+    }
+    if (!isMapping(status) || !(STATUS_KINDS as unknown[]).includes(status.kind)) {
+        return { unread: `Its status ${JSON.stringify(status)} has no kind among ${STATUS_KINDS.join(', ')}.` };
+    }
+    return { status: status as unknown as Status };
+}
+
 export interface Task {
     created_at?: string;
     uuid: UUID;
     title: string;
     tags: string[];
-    status: Status;
+    // Absent only for a note in the task tree that holds none yet (`readStatus`), which `render`
+    // refuses to write until one is chosen.
+    status?: Status;
     importance?: Importance;
     available_from?: string;
     lead_time?: string;
@@ -167,6 +208,9 @@ export function canTransition(from: StatusKind, to: StatusKind): boolean {
 }
 
 export function render(task: Task): string {
+    if (task.status === undefined) {
+        throw new Error('A task is written with a status.');
+    }
     const metadata = {
         created_at: task.created_at ?? nowLocal(),
         task: {
@@ -181,16 +225,34 @@ export function render(task: Task): string {
         tags: task.tags,
     };
     let frontmatter = stringifyWithFlowAlarms(metadata, { indent: 4 });
-    if (task.source) {
+    // A note without frontmatter, or with an empty one, has nothing in it to keep, and is written
+    // the frontmatter above. A note in the task tree can be either before it is given a status.
+    if (task.source && /^---\r?\n/.test(task.source)) {
         editFrontmatter(task.source, (source) => {
             const doc = YAML.parseDocument(source);
+            // Nothing but comments, if anything: they are kept, above the frontmatter written.
+            if (doc.errors.length === 0 && doc.contents === null) {
+                if (source.trim() !== '') {
+                    const written = source.trimEnd() + '\n' + frontmatter;
+                    if (!parsesTo(written, YAML.parse(frontmatter))) {
+                        throw new Error('Saving the task would change other frontmatter.');
+                    }
+                    frontmatter = written;
+                }
+                return source;
+            }
             if (doc.errors.length > 0 || !YAML.isMap(doc.contents)) {
                 throw new Error('The original frontmatter must be a valid mapping.');
             }
             const original = doc.toJS();
-            const originalTask = original.task;
-            if (!originalTask || typeof originalTask !== 'object' || Array.isArray(originalTask)) {
+            // A note without a `task:` block, or with an empty one, is given the whole block.
+            const blockless = original.task === undefined || original.task === null;
+            const originalTask = blockless ? {} : original.task;
+            if (typeof originalTask !== 'object' || Array.isArray(originalTask)) {
                 throw new Error('The original task must be a mapping.');
+            }
+            if (blockless) {
+                doc.set('task', doc.createNode({}));
             }
             const nextTask = { ...originalTask, ...metadata.task };
             for (const key of ['urgency', 'progress', 'scheduled_dates', 'start_at', 'importance', 'available_from', 'lead_time', 'due_by', 'deadline', 'alarms']) {

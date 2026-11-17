@@ -108,3 +108,33 @@ test('keeps what a task holds before its title when it is saved', async ({ conte
     await expect.poll(() => repository.writes.length).toBe(1);
     expect(repository.writes[0].content.split('---\n')[2]).toBe('\nIntro paragraph.\n\n> # Quoted\n\n# Real title, revised\n\nBody\n');
 });
+
+// A note in the task tree is a task by its path; the editor writes the status it has none of.
+test('opens a task without a status and saves it one, keeping the rest', async ({ context, page }) => {
+    const id = uuid(12);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntags: [work]\n---\n\n# No status\n\nBody\n',
+    });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('No status');
+    await expect(page.getByText('This note has no task status yet.')).toBeVisible();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    const [, frontmatter, body] = repository.writes[0].content.split('---\n');
+    expect(YAML.parse(frontmatter)).toMatchObject({ tags: ['work'], task: { status: { kind: 'backlog' } } });
+    expect(body).toBe('\n# No status\n\nBody\n');
+    expect(errors).toEqual([]);
+});
+
+test('says why it will not open a task whose status it would replace', async ({ context, page }) => {
+    const id = uuid(13);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntask:\n    status: {kind: started}\n---\n\n# Odd status\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    await expect(page.getByText(/cannot be edited as a task: Its status .* has no kind among/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
+    expect(repository.writes).toEqual([]);
+});
