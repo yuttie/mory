@@ -82,6 +82,17 @@ import {
     mdiEarth,
 } from '@mdi/js';
 
+import { useZoneStore } from '@/stores/zone';
+import { withOffset } from '@/urgency';
+
+const zones = useZoneStore();
+
+// The offset moried's zone has at a time on `date`: a time written without one is in that zone, as
+// a note's is read, wherever the reader is.
+const offsetIn = (date: string, time: string | null): string => {
+    return withOffset(`${date} ${time ?? '00:00'}`, zones.zone).slice(-6);
+};
+
 // Get local timezone in ISO8601 format
 const getLocalTimezone = (): string => {
     const offsetMinutes = new Date().getTimezoneOffset();
@@ -238,7 +249,7 @@ const dateValue = computed<string | null>({
         return date;
     },
     set: (v) => {
-        updateValue(v, timeValue.value, timezoneValue.value);
+        updateValue(v, timeValue.value, writtenTimezone.value);
     },
 });
 
@@ -254,16 +265,20 @@ const timeValue = computed<string | null>({
         return time;
     },
     set: (v) => {
-        updateValue(dateValue.value, v, timezoneValue.value);
+        updateValue(dateValue.value, v, writtenTimezone.value);
     },
 });
+
+// The offset the value is written with, or `null` for one written without, which is left to
+// `updateValue` to work out for the time it is given.
+const writtenTimezone = computed<string | null>(() => parseDateTime(props.modelValue).timezone);
 
 // Computed property for timezone value extracted from the value prop
 const timezoneValue = computed<string | null>({
     get: () => {
         if (!timeEnabled.value) return null;
-        const { timezone } = parseDateTime(props.modelValue);
-        return timezone || getLocalTimezone();
+        const { date, time, timezone } = parseDateTime(props.modelValue);
+        return timezone ?? (date === null ? null : offsetIn(date, time));
     },
     set: (v) => {
         updateValue(dateValue.value, timeValue.value, v);
@@ -278,7 +293,7 @@ const displayValue = computed({
         if (timeEnabled.value) {
             const { date, time } = parseDateTime(props.modelValue);
             if (date && time) {
-                const currentTz = timezoneValue.value || getLocalTimezone();
+                const currentTz = timezoneValue.value ?? offsetIn(date, time);
                 return `${date} ${time}${currentTz}`;
             } else if (date) {
                 return date;
@@ -331,7 +346,7 @@ const updateValue = (date: string | null, time: string | null, timezone: string 
     if (timeEnabled.value && time) {
         let value = `${date} ${time}`;
         // Always include timezone when time is enabled
-        const tz = timezone || getLocalTimezone();
+        const tz = timezone || offsetIn(date, time);
         value += tz;
         emit('update:modelValue', value);
     } else {
@@ -341,11 +356,11 @@ const updateValue = (date: string | null, time: string | null, timezone: string 
 
 // Methods
 function onDatePick(date: unknown) {
-    updateValue(dayjs(date as Date).format('YYYY-MM-DD'), timeValue.value, timezoneValue.value);
+    updateValue(dayjs(date as Date).format('YYYY-MM-DD'), timeValue.value, writtenTimezone.value);
 }
 
 function onTimePick(time: string | null) {
-    updateValue(dateValue.value, time, timezoneValue.value);
+    updateValue(dateValue.value, time, writtenTimezone.value);
 }
 
 function onTimezonePick(timezone: string | null) {
@@ -356,12 +371,12 @@ function onTimeToggle() {
     if (!timeEnabled.value) {
         // If time is disabled, update value to date-only format
         if (dateValue.value) {
-            updateValue(dateValue.value, timeValue.value, timezoneValue.value);
+            updateValue(dateValue.value, timeValue.value, writtenTimezone.value);
         }
     } else {
         // If time is enabled and we have a date, set default time if none exists
         if (dateValue.value && !timeValue.value) {
-            updateValue(dateValue.value, '12:00', timezoneValue.value);
+            updateValue(dateValue.value, '12:00', writtenTimezone.value);
         }
     }
 }

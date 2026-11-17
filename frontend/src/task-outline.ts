@@ -12,18 +12,16 @@
 // - an importance: `low`, `medium` or `high`;
 // - a lead time: `3w`, `2d`, `10 days`;
 // - `>=DATE` available from, `<=DATE` due by, `!<=DATE` the deadline, where DATE is
-//   `YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` with an offset or in the reader's zone;
+//   `YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` with an offset or in moried's zone;
 // - `#tag`, as many as wanted;
 // - a quoted string, the note's body, with JSON's escapes.
 //
 // Nothing here writes. The outline is read into tasks, a preview can show them, and `writesOf`
 // renders them as notes, parents first, for the tasks store to write.
 
-import dayjs from 'dayjs';
-
 import { childTaskPath } from '@/task-forest';
 import { type StatusKind, type Task, type UUID, STATUS_KINDS, STATUS_LABEL, hasFields, makeDefaultStatus, render } from '@/task';
-import { type Importance, leadTimeDays, readImportance, taskInstant } from '@/urgency';
+import { type Importance, leadTimeDays, readImportance, taskInstant, withOffset } from '@/urgency';
 
 const LIST_MARKER = /^(?:[-*+]|[0-9]+[.)])(?:\s+|$)/;
 // A task list's box, which the editor continues on Enter as it does a marker.
@@ -61,7 +59,8 @@ export interface Outline {
     problems: OutlineProblem[];
 }
 
-export function parseOutline(text: string): Outline {
+// `zone` is the one a time typed without an offset is in, moried's, as `useZoneStore` gives it.
+export function parseOutline(text: string, zone: string): Outline {
     const tasks: OutlineTask[] = [];
     const problems: OutlineProblem[] = [];
     // The lines a following one may nest under, outermost first.
@@ -91,7 +90,7 @@ export function parseOutline(text: string): Outline {
         // A ticked box is the status Done, given as the list would give it, so that one there too
         // is reported as given twice.
         const ticked: Item[] = box !== null && box[1] !== ' ' ? [{ quoted: false, text: 'done' }] : [];
-        const own = readItems([...ticked, ...items], report);
+        const own = readItems([...ticked, ...items], zone, report);
         if (title === '') {
             report('The task has no title.');
         }
@@ -264,7 +263,7 @@ function statusNamed(word: string): StatusKind | undefined {
     return kind ?? (word === 'cancelled' ? 'canceled' : undefined);
 }
 
-function readItems(items: Item[], report: (message: string) => void): { fields: OutlineFields; notes: string[] } {
+function readItems(items: Item[], zone: string, report: (message: string) => void): { fields: OutlineFields; notes: string[] } {
     const fields: OutlineFields = { tags: [] };
     const notes: string[] = [];
     // Words that are not fields, reported once the rest is read: a list none of whose items is a
@@ -280,7 +279,7 @@ function readItems(items: Item[], report: (message: string) => void): { fields: 
     }
 
     function setDate(key: 'available_from' | 'due_by' | 'deadline', text: string): void {
-        const value = readDate(text);
+        const value = readDate(text, zone);
         if (value === undefined) {
             report(`"${text}" is not a date; write YYYY-MM-DD, or YYYY-MM-DD HH:MM.`);
             return;
@@ -351,7 +350,7 @@ function readItems(items: Item[], report: (message: string) => void): { fields: 
 }
 
 // A due date as a task holds it: a bare date, or a time with its offset.
-function readDate(text: string): string | undefined {
+function readDate(text: string, zone: string): string | undefined {
     const match = /^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:[ T]([0-9]{2}:[0-9]{2}(?::[0-9]{2})?) *(Z|[+-][0-9]{2}:[0-9]{2})?)?$/.exec(text.trim());
     if (match === null) {
         return undefined;
@@ -366,8 +365,6 @@ function readDate(text: string): string | undefined {
     if (time === undefined || offset !== undefined) {
         return value;
     }
-    // A time typed without an offset is in the reader's zone. One the zone skips moves forward, as
-    // `taskInstant` reads it, rather than keeping the typed clock beside an offset that, paired
-    // with it, names an hour earlier.
-    return dayjs(`${date}T${time}`).format(time.length > 5 ? 'YYYY-MM-DD HH:mm:ssZ' : 'YYYY-MM-DD HH:mmZ');
+    // A time typed without an offset is in moried's zone, as one written in a note is read.
+    return withOffset(`${date} ${time}`, zone);
 }

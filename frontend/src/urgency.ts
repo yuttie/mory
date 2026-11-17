@@ -107,6 +107,21 @@ export function localInstant(wall: string, zone: string): number {
     return instantOfWallClock(dayjs.utc(wall).valueOf(), zone);
 }
 
+// A wall clock in the zone, `YYYY-MM-DD HH:mm` or `YYYY-MM-DD HH:mm:ss`, written with the offset
+// the zone has then, as a datetime is written in a note. One the zone skips moves forward, as
+// `localInstant` reads it, rather than keep the typed clock beside an offset that, paired with it,
+// names an hour earlier.
+export function withOffset(wall: string, zone: string): string {
+    const instant = localInstant(wall, zone);
+    const clock = wallClockOf(instant, zone);
+    const minutes = Math.round((clock - instant) / 60_000);
+    const iso = new Date(clock).toISOString();
+    const time = iso.slice(11, wall.length > 16 ? 19 : 16);
+    const sign = minutes < 0 ? '-' : '+';
+    const hours = String(Math.floor(Math.abs(minutes) / 60)).padStart(2, '0');
+    return `${iso.slice(0, 10)} ${time}${sign}${hours}:${String(Math.abs(minutes) % 60).padStart(2, '0')}`;
+}
+
 // The instant a wall clock, given as `wallClockOf` gives it, reads in the zone.
 function instantOfWallClock(local: number, zone: string): number {
     const offsets = [...new Set([-2, 0, 2].map((days) => zoneOffset(local + days * DAY, zone)))];
