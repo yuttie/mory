@@ -300,8 +300,116 @@ describe('subscriptions', () => {
 
         expect(store.subscriptions.map((subscription) => subscription.description))
             .toEqual([undefined, undefined, undefined]);
-        expect(store.errors).toEqual(['.mory/calendars.yaml: calendars: the description of team is '
-            + 'not text. It is ignored, and saving the settings removes it.']);
+        expect(store.errors).toEqual(['.mory/calendars.yaml: calendars[0].description: is not text. '
+            + 'It is ignored, and saving the settings removes it.']);
+    });
+
+    // moried leaves out a subscription it cannot read, and the settings must not read it otherwise:
+    // `enabled: off` taken for enabled was written back as `enabled: true`.
+    it('leaves out a subscription it cannot read, and keeps it as written through a save', async () => {
+        const store = await storeWith(`calendars:
+    - id: paused
+      url: https://example.invalid/paused.ics
+      enabled: off
+    - id: work
+      url: https://example.invalid/work.ics
+    - url: https://example.invalid/nameless.ics
+    - id: home
+      url: https://example.invalid/home.ics
+`);
+        await store.loadConfiguration();
+
+        expect(store.subscriptions.map((subscription) => subscription.id)).toEqual(['work', 'home']);
+        expect(store.errors).toEqual([
+            '.mory/calendars.yaml: calendars[0]: paused: has an enabled that is not true or false, so the '
+            + 'calendar is left out. Neither moried nor the web app reads it, and saving the settings '
+            + 'keeps it as written.',
+            '.mory/calendars.yaml: calendars[2]: has no id that is text, so the calendar is left out. '
+            + 'Neither moried nor the web app reads it, and saving the settings keeps it as written.',
+        ]);
+
+        // Switched off and on here, the readable ones are written as ever, and the others where
+        // they stood, as they were.
+        await store.saveSubscriptions([
+            { ...store.subscriptions[0], enabled: false },
+            store.subscriptions[1],
+        ]);
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(YAML.parse(content).calendars).toEqual([
+            { id: 'paused', url: 'https://example.invalid/paused.ics', enabled: 'off' },
+            { id: 'work', name: 'work', url: 'https://example.invalid/work.ics', enabled: false },
+            { url: 'https://example.invalid/nameless.ics' },
+            { id: 'home', name: 'home', url: 'https://example.invalid/home.ics', enabled: true },
+        ]);
+        expect(content).toContain('enabled: off');
+        // Still there, so still said.
+        expect(store.errors).toHaveLength(2);
+    });
+
+    it('keeps one it cannot read where it stood when a subscription before it is removed', async () => {
+        const store = await storeWith(`calendars:
+    - id: work
+      url: https://example.invalid/work.ics
+    - id: paused
+      url: https://example.invalid/paused.ics
+      enabled: off
+    - id: home
+      url: https://example.invalid/home.ics
+`);
+        await store.loadConfiguration();
+        const written = (call: number) => YAML.parse(apiMocks.addNote.mock.calls[call][1]).calendars
+            .map((entry: { id: string }) => entry.id);
+
+        await store.saveSubscriptions([store.subscriptions[1]]);
+        expect(written(0)).toEqual(['paused', 'home']);
+        // Said where it now stands, and kept there by the next save too.
+        expect(store.errors[0]).toMatch(/^\.mory\/calendars\.yaml: calendars\[0\]: paused: /);
+        await store.saveSubscriptions([{ ...store.subscriptions[0], enabled: false }]);
+        expect(written(1)).toEqual(['paused', 'home']);
+        // An id one added must not take.
+        expect(store.heldIds()).toEqual(['paused']);
+    });
+
+    // A name the settings were given, written plain, would reach moried as the number 5, and the
+    // subscription would be left out; an id moried reads as text is read as text here too.
+    it('reads and writes a scalar as moried does', async () => {
+        const store = await storeWith(`calendars:
+    - id: 017
+      url: https://example.invalid/zero.ics
+`);
+        await store.loadConfiguration();
+        expect(store.subscriptions.map((subscription) => subscription.id)).toEqual(['017']);
+        expect(store.errors).toEqual([]);
+
+        await store.saveSubscriptions([
+            ...store.subscriptions,
+            { id: 'binary', name: '0b101', url: 'https://example.invalid/binary.ics', enabled: true },
+        ]);
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(content).toContain('    - id: 017\n');
+        expect(content).toContain('      name: "0b101"\n');
+    });
+
+    it('keeps subscriptions that are not a list, and saves no list over them', async () => {
+        const store = await storeWith(`calendars:
+    work:
+        url: https://example.invalid/work.ics
+`);
+        await store.loadConfiguration();
+        expect(store.subscriptions).toEqual([]);
+        expect(store.errors).toHaveLength(1);
+
+        await expect(store.saveSubscriptions([
+            { id: 'home', name: 'Home', url: 'https://example.invalid/home.ics', enabled: true },
+        ])).rejects.toThrow('calendars: as something other than a list');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(YAML.parse(content)).toEqual({
+            calendars: { work: { url: 'https://example.invalid/work.ics' } },
+            task_dates: { deadline: '#b71c1c' },
+        });
     });
 
     it('writes the list back and drops what was loaded for the old one', async () => {
@@ -342,6 +450,15 @@ describe('a configuration not read', () => {
         await expect(store.loadConfiguration()).rejects.toThrow('Server Error');
 
         await expect(store.saveTaskDateColors({ deadline: '#b71c1c' })).rejects.toThrow('could not be read');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    // moried refuses it whole too: nothing in it can be told from anything else.
+    it('is not written over when it is not a mapping', async () => {
+        const store = await storeWith('- id: work\n  url: https://example.invalid/work.ics\n');
+
+        await expect(store.loadConfiguration()).rejects.toThrow('not a mapping');
+        await expect(store.saveTaskDateColors({ deadline: '#b71c1c' })).rejects.toThrow();
         expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
 

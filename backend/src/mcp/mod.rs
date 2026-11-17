@@ -279,7 +279,9 @@ impl Mory {
                        derived from the paths. Fails rather than overwriting an existing file.\
                        \n\nA Markdown note without `created_at` in its frontmatter is given one \
                        of now, as the web app gives a new note, and one whose frontmatter does \
-                       not read as a YAML mapping is refused.",
+                       not read as a YAML mapping is refused. So is a `.mory/calendars.yaml` \
+                       holding a value moried or the web app would leave out, as update_note \
+                       says.",
         annotations(title = "Create a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -303,7 +305,11 @@ impl Mory {
                        file read_note does not return whole -- one longer than it returns, an \
                        image, or text not in UTF-8 -- is refused, since it cannot have been \
                        read whole. A Markdown note sent without `created_at` keeps the one it \
-                       had, or is given one of now.\
+                       had, or is given one of now. `.mory/calendars.yaml` is refused while it \
+                       holds a value moried or the web app would leave out -- a subscription \
+                       without a text `id` and `url`, an `enabled` other than true or false, an \
+                       alarm outside the grammar, a key neither reads -- and the refusal names \
+                       each.\
                        \n\nTo change a task or an event, use the task and event tools instead: \
                        they edit its frontmatter in place, in one step, and check what they \
                        write, where this checks only that the frontmatter it is sent reads as a \
@@ -328,7 +334,8 @@ impl Mory {
                        scope.\n\nA task keeps the UUIDv4 its file name ends with, since the \
                        day plans name it by that UUID and its subtasks live in the directory it \
                        names: renaming one means changing only the readable prefix in front of \
-                       it. Fails rather than overwriting an existing file.",
+                       it. Fails rather than overwriting an existing file, and refuses to move \
+                       onto `.mory/calendars.yaml` a file update_note would refuse to write there.",
         annotations(title = "Rename a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]

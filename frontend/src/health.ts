@@ -436,7 +436,7 @@ export function settingsChecks(reports: {
         {
             id: 'calendars-settings',
             title: `${reports.calendarsPath} reads cleanly`,
-            description: 'The alarms it sets, under alarms: and on each category, follow the alarm grammar. One that does not is ignored, and saving the calendar settings removes it. The rest of the file is not checked here.',
+            description: 'Everything in it is read by moried and the web app alike. Each subscription has an id and a url that are text, a name and a color that are text if set, and an enabled that is true or false; a subscription that does not is left out by both, and saving the calendar settings keeps it as written. Alarms, under alarms: and on each category, follow the alarm grammar, colours and names are text, and every key is one they read; anything else is ignored, and saving the calendar settings removes it.',
             problems: calendars,
         },
         {

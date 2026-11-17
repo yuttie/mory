@@ -9,17 +9,21 @@
 // Results are memoised per window because the calendar re-derives on every navigation, and a month
 // stepped back and forth would otherwise refetch each time.
 
-import { computed, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, toRaw } from 'vue';
 import { defineStore } from 'pinia';
-import YAML from 'yaml';
 import axios from 'axios';
 
 import type { AlarmDefaults } from '@/alarms';
+import { withBuiltInAlarms } from '@/alarms';
+import type { CalendarSubscription, HeldSubscription, UnreadValue } from '@/calendar-configuration';
 import {
-    readAlarmDefaults,
-    withBuiltInAlarms,
-    writeAlarmDefaults,
-} from '@/alarms';
+    calendarConfigurationText,
+    heldAfterSave,
+    heldIdOf,
+    parseCalendarConfiguration,
+    readCalendarConfiguration,
+    writeCalendarConfiguration,
+} from '@/calendar-configuration';
 import type {
     ImportedCalendarReport,
     ImportedOccurrence,
@@ -27,8 +31,7 @@ import type {
 } from '@/api';
 import { getImportedEvents } from '@/api';
 import type { ConfiguredCategory, EventCategories, TaskDateColors } from '@/events';
-import { stringifyWithFlowAlarms } from '@/frontmatter';
-import { categoryMapOf, readCategories } from '@/events';
+import { categoryMapOf } from '@/events';
 import { useFilesStore } from '@/stores/files';
 import { keepEqual } from '@/keep';
 
@@ -42,17 +45,7 @@ export const HIDDEN_CALENDARS_STORAGE_KEY = 'hidden-imported-calendars';
 /// way. Hiding a category hides the categories nested under it too.
 export const HIDDEN_CATEGORIES_STORAGE_KEY = 'hidden-event-categories';
 
-export interface CalendarSubscription {
-    id: string;
-    name: string;
-    url: string;
-    color?: string;
-    enabled: boolean;
-    /// What the calendar holds, in the user's words: whose events they are, and which of them are
-    /// the user's own. The web app only keeps it; the MCP tools hand it to the model, which has
-    /// only the calendar's id and name to go on otherwise.
-    description?: string;
-}
+export type { CalendarSubscription } from '@/calendar-configuration';
 
 // The colours a task's due date and deadline are drawn in live beside the subscriptions rather
 // than in this browser's storage because they are the same kind of thing as a calendar's colour:
@@ -98,9 +91,13 @@ export const useCalendarsStore = defineStore('calendars', () => {
     // `null` until the file has been read, and again when reading it fails: with no configuration
     // to hand, every category a note names would look unknown and be reported as a typo.
     const categories = ref<ConfiguredCategory[] | null>(null);
-    // What the file says that is dropped on reading, as lines to show. Dropped is lost: saving
-    // anything rewrites the file from what was kept, so the author is told before it is.
-    const configurationProblems = ref<string[]>([]);
+    // What the file says that is not read, for lines to show. Most of it is lost on the next save,
+    // which rewrites the file from what was read, so the author is told before it is.
+    const unread = ref<UnreadValue[]>([]);
+    // What the next save writes back as it was: the entries of `calendars:` that are not
+    // subscriptions, or the whole of a `calendars:` that is not a list.
+    let held: HeldSubscription[] = [];
+    let heldCalendars: unknown;
     const hasLoadedConfiguration = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
@@ -178,10 +175,17 @@ export const useCalendarsStore = defineStore('calendars', () => {
             }));
     });
 
-    /// One line per calendar that failed, and per alarm in the configuration that is not one, for the
-    /// view's existing error alert.
+    /// One line per value in the file that is not read, for the settings to show before a save.
+    const configurationErrors = computed(() => unread.value.map(({ at, message, kept }) =>
+        `${CALENDARS_PATH}: ${at}: ${message}. `
+        + (kept
+            ? 'Neither moried nor the web app reads it, and saving the settings keeps it as written.'
+            : 'It is ignored, and saving the settings removes it.')));
+
+    /// One line per value in the configuration that is not read, and per calendar that failed, for
+    /// the view's existing error alert.
     const errors = computed(() => [
-        ...configurationProblems.value,
+        ...configurationErrors.value,
         ...loaded.value.calendars
             .filter((calendar) => calendar.error !== null)
             .map((calendar) => `${calendar.name}: ${calendar.error}`),
@@ -199,25 +203,17 @@ export const useCalendarsStore = defineStore('calendars', () => {
     async function readConfiguration(): Promise<CalendarSubscription[]> {
         try {
             const { content: text, etag } = await files.readVersion(CALENDARS_PATH);
-            const parsed = YAML.parse(text ?? '');
-            const list = Array.isArray(parsed?.calendars) ? parsed.calendars : [];
-            const problems: string[] = [];
+            const read = readCalendarConfiguration(parseCalendarConfiguration(text ?? ''));
             // Every view that shows the file asks for it again as it opens, and nearly always finds
             // it as it was: kept, what it holds draws nothing anew, Home's and the Calendar's
             // events among it.
-            keepEqual(subscriptions, list.map((entry: Record<string, unknown>) => ({
-                id: String(entry.id ?? ''),
-                name: String(entry.name ?? entry.id ?? ''),
-                url: String(entry.url ?? ''),
-                color: entry.color === undefined ? undefined : String(entry.color),
-                enabled: entry.enabled !== false,
-                description: readDescription(entry, problems),
-            })));
-            keepEqual(taskDateColors, readTaskDateColors(parsed?.task_dates));
-            keepEqual(alarmDefaults, readAlarmDefaults(parsed?.alarms, problems));
-            keepEqual(categories, readCategories(parsed?.categories, problems));
-            keepEqual(configurationProblems, problems.map((problem) =>
-                `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`));
+            keepEqual(subscriptions, read.subscriptions);
+            keepEqual(taskDateColors, read.taskDateColors);
+            keepEqual(alarmDefaults, read.alarmDefaults);
+            keepEqual(categories, read.categories);
+            keepEqual(unread, read.unread);
+            held = read.held;
+            heldCalendars = read.heldCalendars;
             unreadable = null;
             version = etag;
         }
@@ -227,7 +223,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
             keepEqual(subscriptions, []);
             keepEqual(taskDateColors, {});
             keepEqual(alarmDefaults, {});
-            keepEqual(configurationProblems, []);
+            keepEqual(unread, []);
+            held = [];
+            heldCalendars = undefined;
             keepEqual(categories, isMissing(error) ? [] : null);
             if (!isMissing(error)) {
                 unreadable = error;
@@ -260,6 +258,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
         if (!hasLoadedConfiguration.value) {
             await loadConfiguration();
         }
+    }
+
+    /// The ids of the subscriptions kept as written, which one added or renamed must not take.
+    function heldIds(): string[] {
+        return held.flatMap((entry) => heldIdOf(entry) ?? []);
     }
 
     async function saveSubscriptions(next: CalendarSubscription[]): Promise<void> {
@@ -312,44 +315,27 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 + 'again once it can be read.',
             );
         }
+        if (change.subscriptions !== undefined && heldCalendars !== undefined) {
+            throw new Error(
+                `${CALENDARS_PATH} holds calendars: as something other than a list, which saving `
+                + 'these would replace. Make it a list of subscriptions first.',
+            );
+        }
         const next = {
             subscriptions: change.subscriptions ?? subscriptions.value,
             taskDateColors: change.taskDateColors ?? taskDateColors.value,
             alarmDefaults: change.alarmDefaults ?? alarmDefaults.value,
             categories: change.categories ?? categories.value,
         };
-        const document = {
-            calendars: next.subscriptions.map((subscription) => ({
-                id: subscription.id,
-                name: subscription.name,
-                url: subscription.url,
-                ...(subscription.color ? { color: subscription.color } : {}),
-                enabled: subscription.enabled,
-                ...(subscription.description ? { description: subscription.description } : {}),
-            })),
-            ...(Object.keys(next.taskDateColors).length > 0
-                ? { task_dates: { ...next.taskDateColors } }
-                : {}),
-            ...(Object.keys(next.alarmDefaults).length > 0
-                ? { alarms: writeAlarmDefaults(next.alarmDefaults) }
-                : {}),
-            ...(next.categories !== null && next.categories.length > 0
-                ? {
-                    categories: Object.fromEntries(next.categories.map(
-                        ({ id, ...defaults }) => [id, defaults])),
-                }
-                : {}),
-        };
+        // Each subscription not read stays where it stood among the rest, one removed before it too.
+        const nextHeld = change.subscriptions === undefined
+            ? held
+            : heldAfterSave(held, subscriptions.value.map(toRaw), change.subscriptions.map(toRaw));
+        const document = writeCalendarConfiguration({ ...next, held: nextHeld, heldCalendars });
         // Only over the file as it was read: changed since, on another device or in the note view,
         // it would be replaced whole by a switch flipped here.
         try {
-            version = await files.writeChecked(
-                CALENDARS_PATH,
-                // Lines as long as they were written: folded at 80 columns, a description written
-                // by hand as a `|` block would come back from the first save as a `>` one.
-                stringifyWithFlowAlarms(document, { indent: 4, lineWidth: 0 }),
-                version,
-            ) ?? null;
+            version = await files.writeChecked(CALENDARS_PATH, calendarConfigurationText(document), version) ?? null;
         }
         catch (error) {
             if (axios.isAxiosError(error) && error.response?.status === 412) {
@@ -365,8 +351,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
         taskDateColors.value = next.taskDateColors;
         alarmDefaults.value = next.alarmDefaults;
         categories.value = next.categories;
-        // What was dropped on reading is now gone from the file, which is what was warned of.
-        configurationProblems.value = [];
+        // What was dropped on reading is now gone from the file, which is what was warned of; what
+        // was kept is still there, and said by where it now stands.
+        const written = readCalendarConfiguration(document);
+        held = written.held;
+        keepEqual(unread, written.unread);
     }
 
     /// How each subscribed feed fares now, for a check rather than a view: what is loaded for a view
@@ -459,12 +448,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
         events,
         series,
         errors,
+        configurationErrors,
         truncated,
         colorOf,
         nameOf,
         isLoading,
         loadConfiguration,
         ensureLoaded,
+        heldIds,
         saveSubscriptions,
         saveTaskDateColors,
         saveAlarmDefaults,
@@ -474,36 +465,6 @@ export const useCalendarsStore = defineStore('calendars', () => {
         feedReports,
     };
 });
-
-// Hand-edited YAML, so every value is checked rather than trusted: a colour that is not a string
-// is dropped in favour of the default, which is what an absent one means anyway.
-function readTaskDateColors(value: unknown): TaskDateColors {
-    if (typeof value !== 'object' || value === null) {
-        return {};
-    }
-    const colors: TaskDateColors = {};
-    for (const field of ['due_by', 'deadline'] as const) {
-        const color = (value as Record<string, unknown>)[field];
-        if (typeof color === 'string' && color.trim() !== '') {
-            colors[field] = color.trim();
-        }
-    }
-    return colors;
-}
-
-// Text as it was written, a block's closing newline and all, so a save of anything else writes it
-// back unchanged. Anything else describes nothing, as moried reads it, and is said in `problems`:
-// the next save drops it with the rest of what was not read.
-function readDescription(entry: Record<string, unknown>, problems: string[]): string | undefined {
-    const value = entry.description;
-    if (typeof value === 'string') {
-        return value.trim() === '' ? undefined : value;
-    }
-    if (value !== undefined && value !== null) {
-        problems.push(`calendars: the description of ${String(entry.id ?? '')} is not text`);
-    }
-    return undefined;
-}
 
 function isMissing(error: unknown): boolean {
     const status = (error as { response?: { status?: number } })?.response?.status;

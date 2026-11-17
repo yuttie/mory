@@ -72,16 +72,27 @@ export interface ConfiguredCategory extends EventCategory {
     id: string;
 }
 
+// What a category may set. Any other key is read by nothing, and a save of the settings, which
+// writes each category from what was read, drops it.
+const CATEGORY_KEYS = ['color', 'name', 'alarms'];
+
+/// What a key no reader of `.mory/calendars.yaml` knows is said to be.
+export const UNKNOWN_KEY = 'is read by neither moried nor the web app';
+
 /// The `categories:` block of the calendar configuration, which is hand-written, as a list in the
 /// file's order. A category with nothing after its id is one that sets nothing of its own
 /// and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
 /// naming it are then reported rather than drawn with half a category. `backend/src/alarms.rs`
 /// reads the same rule for the alarms a category sets.
 ///
-/// Each entry dropped from an `alarms:` list is said in `problems`, if given, as
-/// `categories.<id>.alarms: <what is wrong>`.
+/// Everything left out is said in `problems`, if given, as `<where>: <what is wrong>`, such as
+/// `categories.<id>.alarms: ...` for each entry dropped from an `alarms:` list: a block or an entry
+/// that is not a mapping, a colour or a name that is not text, and a key no reader knows.
 export function readCategories(value: unknown, problems?: string[]): ConfiguredCategory[] {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        if (value !== undefined && value !== null) {
+            problems?.push('categories: is not a mapping of category ids');
+        }
         return [];
     }
     const categories: ConfiguredCategory[] = [];
@@ -91,6 +102,7 @@ export function readCategories(value: unknown, problems?: string[]): ConfiguredC
             continue;
         }
         if (typeof entry !== 'object' || Array.isArray(entry)) {
+            problems?.push(`categories.${id}: is not a mapping, so the category is not configured`);
             continue;
         }
         const category: ConfiguredCategory = { id };
@@ -98,6 +110,14 @@ export function readCategories(value: unknown, problems?: string[]): ConfiguredC
             const text = (entry as Record<string, unknown>)[field];
             if (typeof text === 'string' && text.trim() !== '') {
                 category[field] = text.trim();
+            }
+            else if (text !== undefined && text !== null && typeof text !== 'string') {
+                problems?.push(`categories.${id}.${field}: is not text`);
+            }
+        }
+        for (const key of Object.keys(entry)) {
+            if (!CATEGORY_KEYS.includes(key)) {
+                problems?.push(`categories.${id}.${key}: ${UNKNOWN_KEY}`);
             }
         }
         // Set, even to nothing: an empty list silences the category's events, where an empty

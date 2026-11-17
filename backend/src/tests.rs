@@ -4333,6 +4333,53 @@ calendars:
     assert!(report.get("description").is_none(), "{report}");
 }
 
+/// A subscription written by hand that moried cannot read is left out and said, and costs nothing
+/// else: the other calendars, and the alarms and categories set beside them, are read as ever. A key
+/// that is not text, in a subscription or beside the blocks, names nothing and costs nothing.
+#[test]
+fn an_unreadable_subscription_costs_only_itself() {
+    let config = crate::v2::parse_calendar_config("\
+calendars:
+    - id: work
+      url: https://example.invalid/work.ics
+      2024: a key that is not text, which names nothing
+    - id: paused
+      url: https://example.invalid/paused.ics
+      enabled: off
+    - [listed, Listed, https://example.invalid/listed.ics]
+    - id: home
+      url: https://example.invalid/home.ics
+alarms:
+    deadline: [-1d 18:00]
+categories:
+    meeting:
+        alarms: [-10m]
+true: nor does a key here
+")
+    .expect("one subscription does not fail the file");
+
+    let (_, problems) = config.subscriptions();
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems[0].starts_with("calendars[1]: paused: ") && problems[0].contains("boolean"), "{problems:?}");
+    assert!(problems[1].starts_with("calendars[2]: "), "{problems:?}");
+    assert_eq!(config.category_ids(), ["meeting"]);
+    assert_ne!(config.alarm_defaults(), crate::alarms::Defaults::default());
+    let ids: Vec<_> = config.reports().into_iter().map(|report| report.id).collect();
+    assert_eq!(ids, ["work", "home"]);
+
+    // Subscriptions that are not a list are none, said once, and the rest still stands.
+    let config = crate::v2::parse_calendar_config("calendars: { work: {} }\nalarms: { timed: [-5m] }\n")
+        .expect("the alarms still read");
+    let (subscriptions, problems) = config.subscriptions();
+    assert!(subscriptions.is_empty());
+    assert_eq!(problems, ["calendars: is not a list of subscriptions"]);
+    assert_ne!(config.alarm_defaults(), crate::alarms::Defaults::default());
+
+    // Only a file that is not a mapping has nothing to read.
+    assert!(crate::v2::parse_calendar_config("- id: work\n").is_err());
+    assert!(crate::v2::parse_calendar_config("~\n").is_ok());
+}
+
 #[test]
 fn a_calendar_configuration_without_categories_has_none() {
     let config = crate::v2::parse_calendar_config("calendars: []\n").expect("valid");

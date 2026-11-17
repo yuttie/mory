@@ -11,6 +11,22 @@
             are read-only until converted to a note.
         </p>
 
+        <v-alert
+            v-if="calendars.configurationErrors.length > 0"
+            class="mb-4"
+            type="warning"
+            variant="tonal"
+        >
+            <ul class="pl-4">
+                <li
+                    v-for="message of calendars.configurationErrors"
+                    v-bind:key="message"
+                >
+                    {{ message }}
+                </li>
+            </ul>
+        </v-alert>
+
         <v-list
             v-if="calendars.subscriptions.length > 0"
         >
@@ -416,6 +432,12 @@ async function save() {
         .some((subscription, index) => subscription.id === id && index !== editingIndex.value);
     if (clash) {
         draftError.value = `Another calendar already uses the identifier "${id}".`;
+        return;
+    }
+    // Only an id that is new here: one a subscription already had is not taken from anything.
+    const renamed = editingIndex.value === null || calendars.subscriptions[editingIndex.value].id !== id;
+    if (renamed && calendars.heldIds().includes(id)) {
+        draftError.value = `A calendar the settings cannot read already uses the identifier "${id}".`;
         return;
     }
 
