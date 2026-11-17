@@ -776,6 +776,45 @@ mod result_tests {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// Whether a property's schema admits `null`: as a type of its own, or as one alternative.
+    fn admits_null(schema: &serde_json::Value) -> bool {
+        let names_null = |value: &serde_json::Value| match value {
+            serde_json::Value::String(name) => name == "null",
+            serde_json::Value::Array(names) => names.iter().any(|name| name == "null"),
+            _ => false,
+        };
+        schema.get("type").is_some_and(names_null)
+            || ["anyOf", "oneOf"].iter().any(|key| {
+                schema.get(*key).and_then(serde_json::Value::as_array).is_some_and(|options| options.iter().any(admits_null))
+            })
+    }
+
+    // Some clients send `null` for each argument the model left out, as one that writes a tool for
+    // OpenAI's strict mode does, which lists every field as required. Taken as left out, it does
+    // what leaving the argument out does, rather than fail the call.
+    #[test]
+    fn every_optional_argument_takes_null() {
+        let mut refused = Vec::new();
+        for tool in Mory::tool_router().list_all() {
+            let schema = serde_json::Value::Object((*tool.input_schema).clone());
+            let required: Vec<&str> = schema["required"].as_array().map_or_else(Vec::new, |names| names.iter().filter_map(serde_json::Value::as_str).collect());
+            for (name, property) in schema["properties"].as_object().into_iter().flatten() {
+                if !required.contains(&name.as_str()) && !admits_null(property) {
+                    refused.push(format!("{}.{}", tool.name, name));
+                }
+            }
+        }
+        assert_eq!(refused, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_flag_sent_as_null_is_left_unset() {
+        let args: crate::mcp::task_tools::UpdateTaskArgs = serde_json::from_value(serde_json::json!({
+            "path": "a.md", "message": "m", "clear_importance": null, "clear_lead_time": true,
+        })).unwrap();
+        assert_eq!((args.clear_importance, args.clear_lead_time), (None, Some(true)));
+    }
     #[test]
     fn obsolete_task_arguments_name_the_replacements() {
         for (key, replacement) in [("start_at", "available_from"), ("scheduled_dates", "plan_task"), ("urgency", "lead_time"), ("progress", "status")] {

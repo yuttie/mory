@@ -64,12 +64,12 @@ pub struct UpdateTaskArgs {
     #[serde(default)]
     pub importance: Option<Importance>,
     #[serde(default)]
-    pub clear_importance: bool,
+    pub clear_importance: Option<bool>,
     /// Whole calendar days or weeks, such as 14d or 2w.
     #[serde(default)]
     pub lead_time: Option<String>,
     #[serde(default)]
-    pub clear_lead_time: bool,
+    pub clear_lead_time: Option<bool>,
 }
 
 /// The `status:` mapping a kind and its companions make, or why they do not make one.
@@ -185,13 +185,13 @@ impl Importance {
 
 fn measure_changes(args: &UpdateTaskArgs) -> Result<Vec<Change>, String> {
     let mut changes = Vec::new();
-    if args.clear_importance {
+    if args.clear_importance.unwrap_or(false) {
         changes.push(Change::remove(&["task", "importance"]));
     }
     if let Some(importance) = &args.importance {
         changes.push(Change::set(&["task", "importance"], importance.text()));
     }
-    if args.clear_lead_time {
+    if args.clear_lead_time.unwrap_or(false) {
         changes.push(Change::remove(&["task", "lead_time"]));
     }
     if let Some(lead) = &args.lead_time {
@@ -334,9 +334,9 @@ fn empty_update() -> UpdateTaskArgs {
         canceled_at: None,
         cancel_reason: None,
         importance: None,
-        clear_importance: false,
+        clear_importance: None,
         lead_time: None,
-        clear_lead_time: false,
+        clear_lead_time: None,
     }
 }
 

@@ -807,7 +807,7 @@ pub struct ImportedEventsArgs {
     /// rule, exclusions and overrides -- which writing a note that claims the series needs. Off
     /// unless asked for.
     #[serde(default)]
-    pub include_series: bool,
+    pub include_series: Option<bool>,
 }
 
 /// What `list_imported_events` returns: the endpoint's response, with `series` only on request.
@@ -844,7 +844,7 @@ pub async fn list_imported_events(
     };
 
     match crate::v2::imported_events(state, from, to).await {
-        Ok(response) => json_result(&ImportedEventsOutput::of(&response, args.include_series)),
+        Ok(response) => json_result(&ImportedEventsOutput::of(&response, args.include_series.unwrap_or(false))),
         Err(e) => {
             tracing::error!("MCP list_imported_events failed: {:?}", e);
             Ok(tool_error(format!(
@@ -870,7 +870,7 @@ pub struct AgendaArgs {
     /// `uid` and `recurrence_id`. Off unless asked for: the descriptions are mostly meeting
     /// invitations, often in HTML.
     #[serde(default)]
-    pub details: bool,
+    pub details: Option<bool>,
 }
 
 /// The longest window one call covers, which bounds what a call can make moried expand.
@@ -1000,12 +1000,13 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
                     finished: *finished,
                 },
                 crate::agenda::Source::Imported { calendar, uid, recurrence_id, note, url } => {
-                    let detail = |value: &Option<String>| value.clone().filter(|_| args.details);
+                    let details = args.details.unwrap_or(false);
+                    let detail = |value: &Option<String>| value.clone().filter(|_| details);
                     AgendaSource::Imported {
                         calendar: calendar.clone(),
                         calendar_name: names.get(calendar.as_str()).map(|name| (*name).to_owned()),
-                        uid: args.details.then(|| uid.clone()),
-                        recurrence_id: args.details.then(|| recurrence_id.clone()),
+                        uid: details.then(|| uid.clone()),
+                        recurrence_id: details.then(|| recurrence_id.clone()),
                         note: detail(note),
                         url: detail(url),
                     }
