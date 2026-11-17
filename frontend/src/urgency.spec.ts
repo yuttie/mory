@@ -104,11 +104,19 @@ describe('local wall clocks', () => {
     });
 
     it('holds what is written to a bare date or a datetime carrying its offset', () => {
-        for (const value of ['2026-10-04', '2026-10-04 10:00+09:00', '2026-10-04T10:00:00.5Z']) {
+        for (const value of ['2026-10-04', '2026-10-04 10:00+09:00', '2026-10-04T10:00:00Z', '0100-01-01']) {
             expect(isWrittenTaskDate(value), value).toBe(true);
         }
         for (const value of ['2026-10-04 10:00', '2026-10-04T10:00:00.5', '2026-02-30', '2026-10-04 24:00+09:00', '', 7]) {
             expect(isWrittenTaskDate(value), String(value)).toBe(false);
+        }
+        // Read by urgency, but not drawn or edited as written: the calendar reads no fraction of a
+        // second and no white space before a bare date, and an early year as a later one, and the
+        // editor's date field reads white space after a bare date as midnight, and an early year
+        // in a datetime as a later one too.
+        for (const value of ['2026-10-04T10:00:00.5Z', ' 2026-12-01', '2026-12-01 ', '0050-01-01', '0050-01-01 10:00+09:00']) {
+            expect(isWrittenTaskDate(value), value).toBe(false);
+            expect(taskInstant(value, 'UTC'), value).toBeDefined();
         }
     });
 

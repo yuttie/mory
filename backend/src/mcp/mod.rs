@@ -279,9 +279,9 @@ impl Mory {
                        derived from the paths. Fails rather than overwriting an existing file.\
                        \n\nA Markdown note without `created_at` in its frontmatter is given one \
                        of now, as the web app gives a new note, and one whose frontmatter does \
-                       not read as a YAML mapping is refused. So is a `.mory/calendars.yaml` \
-                       holding a value moried or the web app would leave out, as update_note \
-                       says.",
+                       not read as a YAML mapping is refused, as is one whose fences are not \
+                       lines that are exactly `---`. So is a `.mory/calendars.yaml` holding a \
+                       value moried or the web app would leave out, as update_note says.",
         annotations(title = "Create a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -313,7 +313,8 @@ impl Mory {
                        \n\nTo change a task or an event, use the task and event tools instead: \
                        they edit its frontmatter in place, in one step, and check what they \
                        write, where this checks only that the frontmatter it is sent reads as a \
-                       YAML mapping.",
+                       YAML mapping between fences that are lines exactly `---`. Those tools \
+                       refuse a note whose fences are not, so this is the tool that fixes one.",
         annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -373,8 +374,9 @@ impl Mory {
     #[tool(
         name = "create_task",
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
-                       is an ordinary note under `.tasks/` carrying a `task:` block. Only its \
-                       status is required, and it defaults to backlog. importance is low, \
+                       is an ordinary note under `.tasks/` carrying a `task:` block. It needs \
+                       a title that is not blank, and a status, which defaults to backlog. \
+                       importance is low, \
                        medium or high, or left out for an unrated task. lead_time is how long \
                        the work needs before its date, in whole days or weeks (`14d`, `2w`); \
                        left out, it is the longest `.mory/tasks.yaml` sets for one of its tags, \
@@ -404,7 +406,9 @@ impl Mory {
                        note is untouched, comments and hand-formatting included. Changing \
                        status replaces the whole status block, so the keys the new one requires \
                        must come with it: `waiting` needs waiting_for, `blocked` needs \
-                       blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason. \
+                       blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason, \
+                       and none of them may be blank, as the web app's task editor will not \
+                       save one. \
                        `done` and `canceled` default their timestamp to now. Setting the status \
                        a task already has changes only the keys given and keeps the rest.",
         annotations(title = "Update a task", read_only_hint = false, destructive_hint = true,
@@ -467,7 +471,8 @@ impl Mory {
                        last two ring. Requires the notes:write scope.\n\nThe dates say when the \
                        task can start and when it is due; which day it is worked on is a day \
                        plan's, set with plan_task. They are bare dates (`2026-03-15`) \
-                       or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
+                       or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`), with \
+                       no fraction of a second: the calendar draws no such date. due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
                        events as well as fields: list_agenda lists them with the rest of what is \
                        on, and list_events under `task_dates`. \
@@ -504,7 +509,10 @@ impl Mory {
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
                        never an offset. A rule recurs from the event's `start`, so it needs one, \
                        and `exclusions` take occurrences out of a rule, so they need a \
-                       `repeat`.\n\n`category` names an event category configured in \
+                       `repeat`. A rule the calendar would expand nothing of is refused: an \
+                       ordinal past what its period counts (`-6fri`), `bymonthday` under \
+                       `freq: weekly`, months that have none of its days, or an `until` before \
+                       the `start`.\n\n`category` names an event category configured in \
                        `.mory/calendars.yaml`, which list_events lists; one that is not \
                        configured is refused rather than invented.\n\n`alarms` says when it \
                        rings, as offsets from the start (`-10m`, `+1h`) or times on its day \
@@ -530,8 +538,9 @@ impl Mory {
                        are changed; name keys in `clear` to remove them. The rest of the note, \
                        comments and hand-formatting included, is untouched. The same spelling \
                        rules as add_event apply: three-letter weekdays with an optional \
-                       ordinal, an IANA zone name for `tz`, offsets on datetimes and none on \
-                       dates, a `category` that is already configured, and `alarms` as offsets \
+                       ordinal, a rule the calendar can expand, an IANA zone name for `tz`, \
+                       offsets on datetimes and none on dates, a `category` that is already \
+                       configured, and `alarms` as offsets \
                        or times on the day, with `clear: [\"alarms\"]` to go back to the \
                        category's and the config's.\n\nMany events list their occurrences one \
                        by one, under `instances` or the older `times`, rather than by a rule. \
@@ -747,8 +756,8 @@ which tasks are worked on which day is kept apart from the tasks, in one file a 
 changed with the plan tools rather than update_note.
 
 Two things are easy to get wrong and expensive to fix:
-- Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \
-(2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name. Many older notes \
+- Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00), to the second at most; plain \
+dates are bare (2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name. Many older notes \
 write a time without an offset (2025-10-06 13:00): the tools read it in moried's own zone, \
 whatever `tz` a call asks for, and list_agenda called without `tz` names that zone in its `tz`. \
 Write new ones with the offset.

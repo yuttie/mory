@@ -32,7 +32,7 @@ pub struct UpdateTaskArgs {
     /// and only for the status it names; any other is not written.
     #[serde(default)]
     pub status: Option<String>,
-    /// Required by `waiting`: what is being waited for.
+    /// Required by `waiting`, and not blank: what is being waited for.
     #[serde(default)]
     pub waiting_for: Option<String>,
     /// With `waiting`: when what is waited for should arrive. A date, or a datetime carrying its
@@ -45,10 +45,10 @@ pub struct UpdateTaskArgs {
     /// With `waiting`: when to chase it, written as `expected_by` is.
     #[serde(default)]
     pub follow_up_at: Option<String>,
-    /// Required by `blocked`: what is blocking it.
+    /// Required by `blocked`, and not blank: what is blocking it.
     #[serde(default)]
     pub blocked_by: Option<String>,
-    /// Required by `on_hold`: why.
+    /// Required by `on_hold`, and not blank: why.
     #[serde(default)]
     pub hold_reason: Option<String>,
     /// With `on_hold`: when to look at it again. A date, or a datetime carrying its offset.
@@ -64,7 +64,7 @@ pub struct UpdateTaskArgs {
     /// Required by `canceled`, along with `cancel_reason`. Defaults to now.
     #[serde(default)]
     pub canceled_at: Option<String>,
-    /// Required by `canceled`: why.
+    /// Required by `canceled`, and not blank: why.
     #[serde(default)]
     pub cancel_reason: Option<String>,
 
@@ -119,7 +119,22 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str, current: Option<&serde_yaml
     if let Some(current) = current.filter(|current| current.get("kind").and_then(Value::as_str) == Some(kind)) {
         status.extend(current.iter().map(|(key, value)| (key.clone(), value.clone())));
     }
-    let has = |status: &serde_yaml::Mapping, key: &str| status.get(key).is_some_and(|value| !value.is_null());
+    // The web app's task editor refuses to save a status whose required field is blank
+    // (`required` in `frontend/src/rules.ts`), so a blank one is no more there than a missing one,
+    // whether it is given here or kept from the note.
+    let has = |status: &serde_yaml::Mapping, key: &str| {
+        status.get(key).is_some_and(|value| !value.is_null() && value.as_str().is_none_or(|text| !text.trim().is_empty()))
+    };
+    for (key, value) in [
+        ("waiting_for", &args.waiting_for),
+        ("blocked_by", &args.blocked_by),
+        ("hold_reason", &args.hold_reason),
+        ("cancel_reason", &args.cancel_reason),
+    ] {
+        if value.as_deref().is_some_and(|text| text.trim().is_empty()) {
+            return Err(format!("{key} cannot be blank: the web app's task editor will not save a task without it."));
+        }
+    }
     let optional = |status: &mut serde_yaml::Mapping, pairs: &[(&str, &Option<String>)]| {
         for (key, value) in pairs {
             if let Some(value) = value {
@@ -227,6 +242,10 @@ pub async fn update_task(
             "No note at {path:?}. Use list_tasks or search_notes to find one.",
         )));
     };
+    // Before reading the status, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&note.0) {
+        return Ok(tool_error(error.to_string()));
+    }
 
     let mut changes = match measure_changes(&args) {
         Ok(changes) => changes,
@@ -289,7 +308,7 @@ pub struct CancelTaskArgs {
     pub path: String,
     /// The commit message.
     pub message: String,
-    /// Why it was cancelled. The schema requires this.
+    /// Why it was cancelled. The schema requires this, and it may not be blank.
     pub cancel_reason: String,
     /// When. A date, or a datetime carrying its offset. Defaults to now.
     #[serde(default)]
@@ -502,9 +521,17 @@ fn alarm_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     Ok(changes)
 }
 
+/// Refuses a date some reader of it does not take, as `urgency::is_written` decides, and writes
+/// nothing but what it checked: white space around a date is refused rather than trimmed away.
 fn validate_task_date(key: &str, value: &str) -> Result<(), String> {
+    if value.trim() != value {
+        return Err(format!("{key} {value:?} has white space around it; leave it out."));
+    }
     if !crate::urgency::is_written(value) {
-        return Err(format!("{key}: use a valid YYYY-MM-DD date or a datetime with its UTC offset."));
+        return Err(format!(
+            "{key} {value:?}: use a valid YYYY-MM-DD date or a datetime with its UTC offset, to the \
+             second at most (2026-03-15 18:17:46+09:00), from the year 100 on.",
+        ));
     }
     Ok(())
 }
@@ -551,6 +578,10 @@ pub async fn set_task_dates(
     let Some(note) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before reading the alarms to clear, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&note.0) {
+        return Ok(tool_error(error.to_string()));
+    }
 
     let changes = match date_changes(&args, &note.0) {
         Ok(changes) => changes,
@@ -568,7 +599,7 @@ pub async fn set_task_dates(
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateTaskArgs {
-    /// The task's title, which becomes the note's `#` heading.
+    /// The task's title, which becomes the note's `#` heading. Not blank.
     pub title: String,
     /// The commit message.
     pub message: String,
@@ -602,16 +633,16 @@ pub struct CreateTaskArgs {
     /// The hard cutoff, written as `available_from` is.
     #[serde(default)]
     pub deadline: Option<String>,
-    /// Required when `status` is `waiting`.
+    /// Required when `status` is `waiting`, and not blank.
     #[serde(default)]
     pub waiting_for: Option<String>,
-    /// Required when `status` is `blocked`.
+    /// Required when `status` is `blocked`, and not blank.
     #[serde(default)]
     pub blocked_by: Option<String>,
-    /// Required when `status` is `on_hold`.
+    /// Required when `status` is `on_hold`, and not blank.
     #[serde(default)]
     pub hold_reason: Option<String>,
-    /// Required when `status` is `canceled`.
+    /// Required when `status` is `canceled`, and not blank.
     #[serde(default)]
     pub cancel_reason: Option<String>,
 }
@@ -642,6 +673,9 @@ pub async fn create_task(
         lead_time: args.lead_time.clone(),
         ..empty_update()
     };
+    if args.title.trim().is_empty() {
+        return Ok(tool_error("A task needs a title; the web app's task editor will not save one without it."));
+    }
     let mut changes = match measure_changes(&update) {
         Ok(changes) => changes,
         Err(message) => return Ok(tool_error(message)),
@@ -789,6 +823,21 @@ mod tests {
         for date in ["2026-10-15", "2026-10-15 12:00+09:00", "2026-10-15T12:00:00Z"] {
             assert!(validate_task_date("deadline", date).is_ok());
         }
+        // Urgency reads these too, but the calendar draws none of them and no alarm rings.
+        for date in ["2026-10-15T12:00:00.000Z", " 2026-12-01", "0050-01-01"] {
+            assert!(validate_task_date("deadline", date).is_err(), "{date:?}");
+        }
+    }
+
+    /// What is checked is what is written: a date padded with white space is refused, not trimmed.
+    #[test]
+    fn a_padded_date_is_refused_rather_than_written() {
+        let args: SetTaskDatesArgs = serde_json::from_value(
+            serde_json::json!({ "path": "unused", "message": "Test", "due_by": " 2026-12-01" }),
+        )
+        .unwrap();
+        let error = date_changes(&args, "---\ntask:\n    status: {kind: todo}\n---\n").unwrap_err();
+        assert!(error.contains("white space"), "{error}");
     }
 
     fn args(path: &str) -> UpdateTaskArgs {
@@ -848,6 +897,27 @@ mod tests {
         assert!(status_changes(&args("t.md"), "todo", None).is_ok());
         assert!(status_changes(&args("t.md"), "in_progress", None).is_ok());
         assert!(status_changes(&args("t.md"), "procrastinating", None).is_err());
+    }
+
+    /// The task editor will not save a status whose required field is blank, so neither given
+    /// blank nor kept blank from the note does it count as given.
+    #[test]
+    fn a_blank_companion_key_is_no_companion() {
+        for (kind, blank) in [
+            ("waiting", UpdateTaskArgs { waiting_for: Some(String::new()), ..args("t.md") }),
+            ("blocked", UpdateTaskArgs { blocked_by: Some("  ".into()), ..args("t.md") }),
+            ("on_hold", UpdateTaskArgs { hold_reason: Some("\t".into()), ..args("t.md") }),
+            ("canceled", UpdateTaskArgs { cancel_reason: Some(String::new()), ..args("t.md") }),
+        ] {
+            let error = status_changes(&blank, kind, None).expect_err(kind);
+            assert!(error.contains("blank"), "{kind}: {error}");
+        }
+        let waiting = "---\ntask:\n    status:\n        kind: waiting\n        waiting_for: ''\n---\n";
+        let current = frontmatter::value(waiting).unwrap()["task"]["status"].as_mapping().cloned();
+        let error = status_changes(&args("t.md"), "waiting", current.as_ref()).expect_err("kept blank");
+        assert!(error.contains("waiting_for"), "{error}");
+        let given = UpdateTaskArgs { waiting_for: Some("the parts".into()), ..args("t.md") };
+        assert!(status_changes(&given, "waiting", current.as_ref()).is_ok());
     }
 
     /// Completing a done task again, or cancelling a canceled one, keeps the record of when and

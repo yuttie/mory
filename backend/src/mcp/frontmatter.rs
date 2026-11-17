@@ -48,11 +48,13 @@ impl Note {
                 had_frontmatter: false,
             };
         };
-        // The closing fence is a line that is exactly `---` or `...`.
+        // The closing fence is a line that is exactly `---`. YAML's `...` ends a document too, but
+        // the listing does not take it for a fence, so neither does an edit: one made through it
+        // would bring keys the web app never read into play.
         let mut offset = 0;
         for line in rest.split_inclusive('\n') {
             let trimmed = line.strip_suffix('\n').unwrap_or(line);
-            if trimmed == "---" || trimmed == "..." {
+            if trimmed == "---" {
                 return Self {
                     block: rest[..offset].to_owned(),
                     body: rest[offset + line.len()..].to_owned(),
@@ -171,8 +173,48 @@ fn refuse(message: impl Into<String>) -> EditError {
     EditError(message.into())
 }
 
+/// A fence as the listing reads one (markdown-rs, through `extract_metadata`): three `-`, then
+/// only spaces or tabs, its line ending already taken off.
+fn is_listed_fence(line: &str) -> bool {
+    line.strip_prefix("---").is_some_and(|rest| rest.trim_end_matches([' ', '\t']).is_empty())
+}
+
+/// Refuses a note whose frontmatter the listing reads but this module would not find: one after a
+/// byte-order mark, or behind a fence with white space after it.
+///
+/// `Note::parse` takes neither for a fence, so an edit would put a second block above the first,
+/// and the note's own tags, task and events would become body text. Teaching it those spellings
+/// would only spread them, so the note is refused instead, for its author to fix.
+pub fn check_fences(text: &str) -> Result<(), EditError> {
+    let mut lines = text.split_inclusive('\n');
+    let first = lines.next().unwrap_or_default();
+    let unmarked = first.strip_prefix('\u{feff}');
+    let opening = unmarked.unwrap_or(first).trim_end_matches(['\n', '\r']);
+    if !is_listed_fence(opening) {
+        return Ok(());
+    }
+    let fault = if unmarked.is_some() {
+        "opens with a byte-order mark before its `---`"
+    }
+    else if opening != "---" {
+        "opens with a `---` that has white space after it"
+    }
+    else {
+        match lines.map(|line| line.trim_end_matches(['\n', '\r'])).find(|line| is_listed_fence(line)) {
+            Some(closing) if closing != "---" => "closes with a `---` that has white space after it",
+            _ => return Ok(()),
+        }
+    };
+    Err(refuse(format!(
+        "this note's frontmatter {fault}, which the web app reads but these tools do not, so \
+         nothing was written. Each fence must be a line that is exactly `---`: fix the note with \
+         update_note or by hand.",
+    )))
+}
+
 /// Apply `changes` to `text`'s frontmatter and return the whole note.
 pub fn apply(text: &str, changes: &[Change]) -> Result<String, EditError> {
+    check_fences(text)?;
     if text.starts_with("---\r\n") {
         return Err(refuse("CRLF frontmatter cannot be edited safely here; use read_note and update_note."));
     }
@@ -1463,7 +1505,7 @@ fn creation_block(text: &str) -> Option<(usize, &str, &str)> {
     let rest = &text[opening..];
     let mut offset = 0;
     for line in rest.split_inclusive('\n') {
-        if matches!(line.trim_end_matches(['\r', '\n']), "---" | "...") {
+        if line.trim_end_matches(['\r', '\n']) == "---" {
             return Some((opening, &rest[..offset], if opening == 5 { "\r\n" } else { "\n" }));
         }
         offset += line.len();
@@ -1472,6 +1514,7 @@ fn creation_block(text: &str) -> Option<(usize, &str, &str)> {
 }
 
 pub fn with_created_at(text: &str, existing: Option<&str>) -> Result<String, EditError> {
+    check_fences(text)?;
     let timestamp = existing.and_then(value)
         .and_then(|root| root.get("created_at").cloned())
         .unwrap_or_else(|| crate::note_time::now_local().into());
@@ -1525,5 +1568,37 @@ mod creation_tests {
         assert_eq!(with_created_at(original, None).unwrap(), original);
         assert!(with_created_at("# Plain\n", None).unwrap().starts_with("---\ncreated_at:"));
         assert!(with_created_at("---\ntags: [\n---\n", None).is_err());
+    }
+
+    /// A fence the listing reads and the editor does not is refused rather than read past: an
+    /// edit would have put a second block on top, and the note's own keys would have become text.
+    #[test]
+    fn frontmatter_the_listing_reads_and_the_editor_does_not_is_refused() {
+        for note in [
+            "\u{feff}---\ntags: [a]\n---\n# T\n",
+            "--- \ntags: [a]\n---\n# T\n",
+            "---\t\ntags: [a]\n---\n# T\n",
+            "---\ntags: [a]\n--- \n# T\n\n---\n",
+        ] {
+            let (listed, _) = crate::extract_metadata(note.as_bytes(), "text/markdown");
+            assert_eq!(listed.unwrap()["tags"][0], "a", "the listing reads {note:?}");
+            let error = apply(note, &[Change::set(&["task", "status", "kind"], "todo")]).unwrap_err();
+            assert!(error.0.contains("exactly `---`"), "{note:?}: {error}");
+            assert!(with_created_at(note, None).is_err(), "{note:?}");
+        }
+        // A fence the editor reads is still edited, and a note without one gains one.
+        assert!(apply("---\ntags: [a]\n---\n# T\n", &[Change::set(&["tags"], "b")]).is_ok());
+        assert!(apply("\u{feff}# T\n", &[Change::set(&["tags"], "b")]).is_ok());
+    }
+
+    /// `...` ends a YAML document, but the listing takes no such line for a closing fence, so an
+    /// edit does not either: it would put keys the web app never read into play.
+    #[test]
+    fn three_dots_do_not_close_the_frontmatter() {
+        let note = "---\ntags: [a]\n...\n# T\n";
+        assert_eq!(crate::extract_metadata(note.as_bytes(), "text/markdown").0, None);
+        assert!(apply(note, &[Change::set(&["tags"], "b")]).is_err());
+        assert!(with_created_at(note, None).is_err());
+        assert_eq!(value(note), Some(Value::Null), "no frontmatter, as the listing reads it");
     }
 }

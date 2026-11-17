@@ -3243,6 +3243,62 @@ fn note_fixtures_draw_as_recorded() {
     );
 }
 
+/// The event tools refuse to write a rule `note_events::rule_fault` faults, saying the calendar
+/// draws nothing of it, so no fixture's rule it faults may draw in `notes.json`, and one it takes
+/// draws unless something else of the event's drops every occurrence. `note-fixtures.spec.ts` holds
+/// `eventsFromEntries` to the same lines, which is what makes this the calendar's word and not only
+/// `note_events`'s.
+#[test]
+fn note_fixtures_draw_from_exactly_the_rules_the_event_tools_take() {
+    let golden: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(fixtures_dir().join("notes.json")).expect("the golden should be readable"),
+    )
+    .expect("the golden should be JSON");
+    let reader = note_reader();
+    let (mut taken, mut faulted) = (0, 0);
+    for name in note_fixture_names() {
+        let entry = note_fixture_entry(&name);
+        let Some(events) = entry.metadata.as_ref().and_then(|metadata| metadata.get("events")?.as_mapping()) else {
+            continue;
+        };
+        let drawn: Vec<&str> = golden["notes"][&name]["drawn"]
+            .as_array()
+            .expect("each note has its drawn lines")
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        for (event_name, event) in events {
+            let (Some(event_name), Some(event)) = (event_name.as_str(), event.as_mapping()) else {
+                continue;
+            };
+            let (Some(repeat), Some(start)) =
+                (note_events::present(event.get("repeat")), note_events::present(event.get("start")))
+            else {
+                continue;
+            };
+            // Listed occurrences are drawn under the event's name whatever its rule is.
+            let lists = ["instances", "times"]
+                .iter()
+                .any(|key| event.get(*key).and_then(serde_yaml::Value::as_sequence).is_some_and(|list| !list.is_empty()));
+            if lists {
+                continue;
+            }
+            let draws = drawn.iter().any(|line| line.split_once("  ").is_some_and(|(_, drawn_name)| drawn_name == event_name));
+            // An empty `end` is what drops every occurrence of a rule taken here.
+            let fault = note_events::rule_fault(repeat, start, &reader);
+            assert!(fault.is_ok() || !draws, "{name}: {event_name:?} is drawn, but faulted: {fault:?}");
+            if fault.is_ok() {
+                assert!(draws || event.get("end").is_some_and(serde_yaml::Value::is_null), "{name}: {event_name:?} draws nothing");
+                taken += 1;
+            }
+            else {
+                faulted += 1;
+            }
+        }
+    }
+    assert!(taken > 40 && faulted > 20, "only {taken} rules taken and {faulted} faulted");
+}
+
 /// The note the app writes for a feed draws what the feed did, here as in the frontend, and ends
 /// each occurrence where the feed ends it.
 #[test]

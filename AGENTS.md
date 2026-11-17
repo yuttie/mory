@@ -223,6 +223,13 @@ rewrite all of it. `tests::frontmatter_edits_a_real_corpus` measures the in-plac
 one-off figures for re-serializing aside, and is ignored by default; point `MORY_CORPUS` at a real
 repository and run it whenever that module changes.
 
+A note is edited only between fences that are lines exactly `---`. One whose frontmatter the
+listing reads after a byte-order mark, or behind a fence with white space after it, is refused
+(`frontmatter::check_fences`): an edit would put a second block above it and turn the note's own
+keys into text. YAML's `...` closes nothing, as the listing takes no such line for a fence. Neither
+spelling is taught to the editor, which would only spread it; the refusal says to fix the note
+with `update_note` or by hand.
+
 A path under `.tasks/` must keep the UUIDv4 naming the web app derives the task tree from
 (`taskUuidOf` in `frontend/src/task-forest.ts`), which leaves a task named otherwise out of it,
 and `.mory/tasks-v1.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
@@ -283,12 +290,20 @@ makes `backend/src/urgency.rs` a second copy of `frontend/src/urgency.ts`, and `
 so change one, change the other and run both halves. A task's dates, and an event's `start`,
 `until`, `exclusions` and the `start` of an occurrence it lists, are refused unless
 `urgency::is_written` takes them: a bare date or a datetime carrying its offset, the convention
-below. `urgency::instant`, which urgency is worked out with, reads one written without an offset
-too, in moried's zone, as `taskInstant` does.
+below, spelt as every reader of one takes it -- no fraction of a second, which the calendar and the
+alarms draw nowhere, no year before 100, which they or the task editor's date field read in the
+1900s, and no white space around it, which hides a bare date from the calendar or makes it midnight
+in that field; the task editor holds a date changed in it to its twin, `isWrittenTaskDate`, the
+same way. `urgency::instant`, which urgency is worked out with, reads one written without an offset
+too, in moried's zone, as `taskInstant` does, and those other spellings as well.
 An event's `end` may also be a time of day or a duration, as `normalizeEndTime` reads one. An
 occurrence to remove is matched by instant (`note_events::instant_of`, the twin of `instantOf`), so
 the many older starts written without an offset are read in moried's zone, and by whether it is a
-bare date, since the calendar draws a whole day and midnight on it as two occurrences.
+bare date, since the calendar draws a whole day and midnight on it as two occurrences. A `repeat`
+rule an edit leaves on an event is refused when `note_events::rule_fault` finds it is no rule
+against the event's `start` -- an ordinal past what its period counts, `bymonthday` under
+`freq: weekly`, an `until` before the start -- by the expander's own checks rather than a copy of
+them, so the tools write no rule the calendar draws nothing of.
 
 The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
 month as `readPlan` does and writes one as `writePlan` does, and each write is checked against

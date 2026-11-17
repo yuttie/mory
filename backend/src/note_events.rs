@@ -39,7 +39,7 @@ use chrono::{
     TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz as Zone;
-use icalendar::{Frequency, NWeekday, Tz, Weekday, rrule::RRule};
+use icalendar::{Frequency, NWeekday, Tz, Weekday, rrule::{RRule, RRuleError, RRuleSet, ValidationError}};
 use regex::Regex;
 use serde_yaml::{Mapping, Value};
 
@@ -853,6 +853,34 @@ fn integer<T: TryFrom<i64>>(value: &Value) -> Option<T> {
     T::try_from(n).ok()
 }
 
+/// A rule as `expand_rule` reads one, built and ready to expand.
+struct BuiltRule {
+    set: RRuleSet,
+    has_time: bool,
+    /// The zone a timed rule's occurrences are converted from, when it names one.
+    convert_into: Option<Zone>,
+}
+
+/// Why `expand_rule` expands no occurrence of a rule, or `Ok` when it reads the rule: `Err(None)`
+/// for a rule it refuses itself, and the crate's words for one the crate will not build. For the
+/// event tools, which refuse to write a rule the calendar would draw nothing of.
+pub(crate) fn rule_fault(repeat: &Value, start: &Value, reader: &Reader) -> Result<(), Option<String>> {
+    match build_rule(Some(repeat), Some(start), reader) {
+        Some(Ok(_)) => Ok(()),
+        // The crate names both as instants in UTC, which is only where `build_rule` floats the wall
+        // clocks it compares; a note writes neither so, and its offsets are read otherwise.
+        Some(Err(RRuleError::ValidationError(ValidationError::UntilBeforeStart { .. }))) => Err(Some(
+            "its `until` is before its `start`, as the calendar compares the two: by the wall clock \
+             each is written at, reading no offset on `start`, and one on `until` only when the rule \
+             names a `tz`."
+                .to_owned(),
+        )),
+        Some(Err(RRuleError::ValidationError(error))) => Err(Some(error.to_string())),
+        Some(Err(error)) => Err(Some(error.to_string())),
+        None => Err(None),
+    }
+}
+
 /// `expandRule`: the wall clock of every occurrence a rule generates within the days `[from, to]`,
 /// in the reader's zone. `None` for any rule the frontend reports as unusable.
 fn expand_rule(
@@ -862,6 +890,36 @@ fn expand_rule(
     to: NaiveDate,
     reader: &Reader,
 ) -> Option<Vec<Start>> {
+    let BuiltRule { set, has_time, convert_into } = build_rule(repeat, start, reader)?.ok()?;
+    let floating = |wall: NaiveDateTime| Tz::UTC.from_utc_datetime(&wall);
+    let generated = set
+        .after(floating(from.and_time(NaiveTime::MIN)))
+        .before(floating(to.and_hms_opt(23, 59, 59)?))
+        .all(u16::MAX)
+        .dates;
+
+    Some(
+        generated
+            .into_iter()
+            .map(|at| {
+                let wall = at.naive_utc();
+                match (has_time, convert_into) {
+                    (false, _) => Start::Date(wall.date()),
+                    (true, None) => Start::Time(wall),
+                    // Into the reader's zone, to the minute: the frontend formats it `HH:mm`.
+                    (true, Some(zone)) => {
+                        let local = wall_clock_at(resolve_in_zone(wall, zone, reader.now), reader.zone);
+                        Start::Time(local.with_second(0).and_then(|t| t.with_nanosecond(0)).unwrap_or(local))
+                    },
+                }
+            })
+            .collect(),
+    )
+}
+
+/// The rule `expand_rule` expands: `None` for one it refuses before building it, and the crate's
+/// error for one the crate will not build.
+fn build_rule(repeat: Option<&Value>, start: Option<&Value>, reader: &Reader) -> Option<Result<BuiltRule, RRuleError>> {
     let Some(Value::Mapping(repeat)) = repeat else {
         return None;
     };
@@ -979,31 +1037,7 @@ fn expand_rule(
         _ => None,
     };
 
-    let floating = |wall: NaiveDateTime| Tz::UTC.from_utc_datetime(&wall);
-    let set = rule.build(floating(anchor)).ok()?;
-    let generated = set
-        .after(floating(from.and_time(NaiveTime::MIN)))
-        .before(floating(to.and_hms_opt(23, 59, 59)?))
-        .all(u16::MAX)
-        .dates;
-
-    Some(
-        generated
-            .into_iter()
-            .map(|at| {
-                let wall = at.naive_utc();
-                match (has_time, convert_into) {
-                    (false, _) => Start::Date(wall.date()),
-                    (true, None) => Start::Time(wall),
-                    // Into the reader's zone, to the minute: the frontend formats it `HH:mm`.
-                    (true, Some(zone)) => {
-                        let local = wall_clock_at(resolve_in_zone(wall, zone, reader.now), reader.zone);
-                        Start::Time(local.with_second(0).and_then(|t| t.with_nanosecond(0)).unwrap_or(local))
-                    },
-                }
-            })
-            .collect(),
-    )
+    Some(rule.build(Tz::UTC.from_utc_datetime(&anchor)).map(|set| BuiltRule { set, has_time, convert_into }))
 }
 
 #[cfg(test)]

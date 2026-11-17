@@ -37,7 +37,7 @@ fn check_when(key: &str, value: &str) -> Result<(), String> {
     if !crate::urgency::is_written(value) {
         return Err(format!(
             "{key} {value:?} is neither a bare date (`2026-03-12`) nor a datetime carrying its \
-             offset (`2026-03-12 19:00:00+09:00`).",
+             offset, to the second at most (`2026-03-12 19:00:00+09:00`), from the year 100 on.",
         ));
     }
     Ok(())
@@ -123,10 +123,11 @@ pub struct Repeat {
     #[serde(default)]
     pub interval: Option<i64>,
     /// Weekdays as three letters, optionally after an ordinal: `wed`, `3wed`, `-1fri`. An
-    /// ordinal needs `freq: monthly` or `yearly`.
+    /// ordinal needs `freq: monthly`, where it is -4 to 5, or `yearly`, where it is -52 to 53.
     #[serde(default)]
     pub byday: Option<Vec<String>>,
-    /// Days of the month, 1 to 31 or -31 to -1.
+    /// Days of the month, 1 to 31 or -31 to -1. Not with `freq: weekly`, and with `bymonth`,
+    /// on a day one of its months has.
     #[serde(default)]
     pub bymonthday: Option<Vec<i64>>,
     /// Months, 1 to 12.
@@ -139,10 +140,10 @@ pub struct Repeat {
     /// and a series crossing a daylight-saving boundary needs the name to do it.
     #[serde(default)]
     pub tz: Option<String>,
-    /// When the series stops. Mutually exclusive with `count`.
+    /// When the series stops, not before the event's `start`. Mutually exclusive with `count`.
     #[serde(default)]
     pub until: Option<String>,
-    /// How many occurrences. Mutually exclusive with `until`.
+    /// How many occurrences, 1 to 4294967295. Mutually exclusive with `until`.
     #[serde(default)]
     pub count: Option<i64>,
 }
@@ -743,6 +744,44 @@ fn check_shape(text: &str, edited: &str, name: &str) -> Result<(), String> {
     Err(format!("{name:?} was not changed. {}", brought.join(" ")))
 }
 
+/// Why the calendar would draw nothing of an event's rule, as `note_events::rule_fault` says, or
+/// `None` when it reads the rule or the event has none to read.
+fn rule_fault(event: Option<&Value>, zone: Tz) -> Option<Option<String>> {
+    let event = event?.as_mapping()?;
+    let (repeat, start) = (note_events::present(event.get("repeat"))?, note_events::present(event.get("start"))?);
+    let reader = note_events::Reader { zone, now: chrono::Utc::now() };
+    note_events::rule_fault(repeat, start, &reader).err()
+}
+
+/// Refuses an edit that leaves the event with a rule `note_events` expands nothing of, and the
+/// calendar with it: `Repeat::to_value` checks each part of a rule on its own, and this the rule
+/// as a whole, against the event's `start`, by the expander's own checks rather than a copy of
+/// them.
+///
+/// A rule the note already had is let be when the edit neither gives one nor changes what is wrong
+/// with it, as `check_shape` lets a fault be, but one the edit gives is held to the check whatever
+/// the note had: it is the tool's own writing.
+fn check_rule(text: &str, edited: &str, name: &str, gives_rule: bool, zone: Tz) -> Result<(), String> {
+    let Some(fault) = rule_fault(event_in(edited, name).as_ref(), zone) else {
+        return Ok(());
+    };
+    if !gives_rule && rule_fault(event_in(text, name).as_ref(), zone).as_ref() == Some(&fault) {
+        return Ok(());
+    }
+    // `note_events` says why only where the crate refuses the rule; these are some of the rules
+    // it refuses itself, past what `Repeat::to_value` checks.
+    let reason = fault.unwrap_or_else(|| {
+        "it is no rule the calendar reads, as one counting past 4294967295 is not, nor one with an \
+         ordinal past what its period counts, nor one naming months in `bymonth` that have none of \
+         the days in `bymonthday`, as February has no 30th."
+            .to_owned()
+    });
+    Err(format!(
+        "{name:?} was not changed. Its `repeat` rule is not one the calendar can expand from its \
+         `start`, so none of its occurrences would be drawn or ring: {reason}",
+    ))
+}
+
 pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResult, ErrorData> {
     let path = match safe_path(&args.path) {
         Ok(path) => path,
@@ -751,6 +790,10 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
     let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before looking for the event, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&text) {
+        return Ok(tool_error(error.to_string()));
+    }
     if has_event(&text, &args.name) {
         return Ok(tool_error(format!(
             "{:?} already declares an event named {:?}. Use update_event to change it.",
@@ -775,6 +818,10 @@ pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolR
     let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before looking for the event, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&text) {
+        return Ok(tool_error(error.to_string()));
+    }
     if !has_event(&text, &args.name) {
         return Ok(tool_error(format!(
             "{:?} declares no event named {:?}. Use list_events to see what it has, or add_event \
@@ -827,6 +874,7 @@ fn edited_event(text: &str, path: &str, args: &EventArgs, zone: Tz) -> Result<St
     }
     let edited = edited_note(text, &changes, path)?;
     check_shape(text, &edited, &args.name)?;
+    check_rule(text, &edited, &args.name, args.repeat.is_some(), zone)?;
     Ok(edited)
 }
 
@@ -852,6 +900,10 @@ pub async fn remove_event(
     let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
+    // Before looking for the event, which a block these tools do not read would hide.
+    if let Err(error) = frontmatter::check_fences(&text) {
+        return Ok(tool_error(error.to_string()));
+    }
     if !has_event(&text, &args.name) {
         return Ok(tool_error(format!(
             "{:?} declares no event named {:?}.",
@@ -1094,7 +1146,8 @@ mod tests {
         for start in ["2026-03-12", "2026-03-12 19:00:00+09:00", "2026-03-12 19:00+09:00", "2026-03-12T10:00:00Z"] {
             assert!(event_changes(&event(serde_json::json!({ "start": start }))).is_ok(), "{start}");
         }
-        for start in ["2026-03-12 19:00", "2026-03-12 19:00:00", "2026-02-30", "tomorrow", "19:00"] {
+        // A fraction of a second is read by urgency, but the calendar draws no such start.
+        for start in ["2026-03-12 19:00", "2026-03-12 19:00:00", "2026-02-30", "tomorrow", "19:00", "2026-03-12T10:00:00.000Z"] {
             let error = event_changes(&event(serde_json::json!({ "start": start })))
                 .expect_err("not a moment as the notes spell one");
             assert!(error.contains("+09:00"), "{start}: {error}");
@@ -1381,6 +1434,51 @@ mod tests {
         .expect("a move");
         assert_eq!(starts(&moved), ["instances 2026-09-23 09:00:00+09:00"]);
         assert!(edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2026-09-23" }] })).is_ok());
+    }
+
+    /// Each part of these is a rule's on its own; together, or against the start, they are no
+    /// rule `note_events` expands, and the calendar draws none of them either.
+    #[test]
+    fn a_rule_the_calendar_expands_nothing_of_is_refused() {
+        let note = "---\nevents:\n    Standup:\n        start: 2026-09-23\n---\n";
+        let edit = |repeat: serde_json::Value| edit_and_check(note, serde_json::json!({ "repeat": repeat }));
+        for repeat in [
+            serde_json::json!({ "freq": "monthly", "byday": ["-6fri"] }),
+            serde_json::json!({ "freq": "monthly", "byday": ["9mon"] }),
+            serde_json::json!({ "freq": "monthly", "byday": ["-5fri"] }),
+            serde_json::json!({ "freq": "yearly", "byday": ["54mon"] }),
+            serde_json::json!({ "freq": "weekly", "bymonthday": [1] }),
+            serde_json::json!({ "freq": "yearly", "bymonth": [2], "bymonthday": [30] }),
+            serde_json::json!({ "freq": "daily", "count": 4_294_967_296_i64 }),
+            serde_json::json!({ "freq": "daily", "until": "2026-09-01" }),
+        ] {
+            let error = edit(repeat.clone()).expect_err(&repeat.to_string());
+            assert!(error.contains("calendar can expand"), "{repeat}: {error}");
+        }
+        for repeat in [
+            serde_json::json!({ "freq": "monthly", "byday": ["-1fri", "4mon"] }),
+            serde_json::json!({ "freq": "yearly", "byday": ["53mon"] }),
+            serde_json::json!({ "freq": "monthly", "bymonthday": [1] }),
+            serde_json::json!({ "freq": "yearly", "bymonth": [2], "bymonthday": [29] }),
+            serde_json::json!({ "freq": "daily", "count": 4_294_967_295_i64 }),
+        ] {
+            assert!(edit(repeat.clone()).is_ok(), "{repeat}");
+        }
+
+        // A rule the note already had is the author's to fix; an edit beside it goes through, but
+        // one that gives a rule writes it, and a rule as wrong as the one there is still refused.
+        let broken = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        repeat:\n            freq: weekly\n            bymonthday: [1]\n---\n";
+        assert!(edit_and_check(broken, serde_json::json!({ "color": "red" })).is_ok());
+        let again = edit_and_check(broken, serde_json::json!({ "repeat": { "freq": "weekly", "bymonthday": [1] } }));
+        assert!(again.is_err(), "{again:?}");
+        let never = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        repeat:\n            freq: yearly\n            bymonth: [2]\n            bymonthday: [30]\n---\n";
+        let again = edit_and_check(never, serde_json::json!({ "repeat": { "freq": "yearly", "bymonth": [2], "bymonthday": [31] } }));
+        assert!(again.is_err_and(|error| error.contains("February has no 30th")));
+        // Moving the start past the rule's end breaks one that was fine, and is said in the note's
+        // terms rather than in the UTC the crate compares the two in.
+        let ending = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        repeat:\n            freq: daily\n            until: 2026-10-01\n---\n";
+        let error = edit_and_check(ending, serde_json::json!({ "start": "2026-10-02" })).unwrap_err();
+        assert!(error.contains("`until` is before its `start`") && !error.contains("UTC") && !error.contains("+00:00"), "{error}");
     }
 
     /// A note already out of shape is not the edit's doing, and refusing every later edit to it

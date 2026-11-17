@@ -138,13 +138,23 @@ pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Ut
 
 static DATETIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(\.[0-9]{1,3})?)?(Z|[+-][0-9]{2}:[0-9]{2})?$").unwrap());
 
-/// Whether a value is a task date as one is written: a bare date, or a datetime carrying its offset.
-/// The twin of `isWrittenTaskDate`; `instant` reads more, but nothing here writes the rest.
+/// Whether a value is a task date as one is written: a bare date, or a datetime carrying its offset,
+/// spelt as every reader of one takes it. The twin of `isWrittenTaskDate`.
+///
+/// `instant` reads more, and so do some of the other readers, but not all of them. The calendar and
+/// the alarms (`note_events::task_date_start`) read no fraction of a second, and a bare date in the
+/// years 0 to 99 as one in the 1900s, as `Date` does; the task editor's date field reads a datetime
+/// in those years so too. White space parts them as well: before a bare date it hides the date from
+/// the calendar, and after one it makes the date midnight in that field. A tool that wrote one of
+/// those would report success for a date that is not drawn, rung or edited as written, so it is
+/// refused here rather than read some other way. The calendar reads white space around a datetime
+/// carrying its offset, but it is refused with the rest: nothing needs it.
 pub fn is_written(text: &str) -> bool {
-    let text = text.trim();
     let value = Value::String(text.to_owned());
-    instant(Some(&value), chrono_tz::UTC, false).is_some()
-        && (text.len() == 10 || DATETIME.captures(text).is_some_and(|parts| parts.get(6).is_some()))
+    text.trim() == text
+        && !text.starts_with("00")
+        && instant(Some(&value), chrono_tz::UTC, false).is_some()
+        && (text.len() == 10 || DATETIME.captures(text).is_some_and(|parts| parts.get(5).is_none() && parts.get(6).is_some()))
 }
 
 pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTime<Utc>, zone: Tz) -> Urgency {
@@ -212,12 +222,29 @@ mod tests {
     }
     #[test]
     fn what_is_written_is_a_bare_date_or_a_datetime_carrying_its_offset() {
-        for value in ["2026-10-04", "2026-10-04 10:00+09:00", "2026-10-04T10:00:00.5Z"] {
+        for value in ["2026-10-04", "2026-10-04 10:00+09:00", "2026-10-04T10:00:00Z", "0100-01-01"] {
             assert!(is_written(value), "{value}");
         }
         for value in ["2026-10-04 10:00", "2026-10-04T10:00:00.5", "2026-02-30", "2026-10-04 24:00+09:00", ""] {
             assert!(!is_written(value), "{value}");
         }
+        // Read by urgency, but not drawn, rung or edited as written: the calendar and the alarms
+        // read no fraction of a second and no white space before a bare date, and an early year
+        // as a later one, and the task editor's date field reads a space after a bare date as
+        // midnight and a datetime in an early year as one in a later year.
+        for value in ["2026-10-04T10:00:00.5Z", "2026-03-12T10:00:00.000+09:00", " 2026-12-01", "2026-12-01 ", "0050-01-01", "0050-01-01 10:00+09:00"] {
+            assert!(!is_written(value), "{value:?}");
+            assert!(instant(Some(&value.into()), chrono_tz::UTC, false).is_some(), "{value:?}");
+        }
+        for value in ["2026-10-04T10:00:00.5Z", "2026-03-12T10:00:00.000+09:00", " 2026-12-01"] {
+            assert_eq!(crate::note_events::task_date_start(value, chrono_tz::UTC), None, "{value:?}");
+        }
+        let early = NaiveDate::from_ymd_opt(1950, 1, 1).unwrap();
+        assert_eq!(crate::note_events::task_date_start("0050-01-01", chrono_tz::UTC), Some(crate::note_events::Start::Date(early)));
+        // The calendar reads white space around a datetime carrying its offset, but a padded value
+        // is refused all the same: nothing needs one.
+        assert!(crate::note_events::task_date_start(" 2026-12-01 10:00+09:00", chrono_tz::UTC).is_some());
+        assert!(!is_written(" 2026-12-01 10:00+09:00"));
         // What is not written so is still read, as the wall clock in the zone.
         let read = instant(Some(&"2026-10-04 10:00".into()), chrono_tz::America::New_York, true).unwrap();
         assert_eq!(read.to_rfc3339(), "2026-10-04T14:00:00+00:00");
