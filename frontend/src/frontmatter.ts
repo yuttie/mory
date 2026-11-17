@@ -105,11 +105,65 @@ export function stringifyQuotingIndented(value: unknown, options: YAML.ToStringO
     return document.toString(options);
 }
 
+const INTEGER = 'tag:yaml.org,2002:int';
+const FLOAT = 'tag:yaml.org,2002:float';
+
+// An integer written in base `radix` after its `0b`, `0o` or `0x`, with the sign moried allows it.
+function signedInteger(text: string, radix: number): number {
+    const magnitude = parseInt(text.replace(/^[-+]?0[box]/, ''), radix);
+    return text.startsWith('-') ? -magnitude : magnitude;
+}
+
+// A core tag of `yaml` as it would have to be for a plain scalar to read as moried reads it: the
+// integers, with the spellings moried takes and none it does not, and the floats, finite.
+function asMoriedReadsIt(tag: YAML.ScalarTag): YAML.ScalarTag[] {
+    if (tag.tag === INTEGER && tag.format === 'OCT') {
+        return [{ ...tag, test: /^[-+]?0o[0-7]+$/, resolve: (text) => signedInteger(text, 8) }];
+    }
+    if (tag.tag === INTEGER && tag.format === 'HEX') {
+        return [
+            { ...tag, test: /^[-+]?0x[0-9a-fA-F]+$/, resolve: (text) => signedInteger(text, 16) },
+            // No number is written in binary, but text that looks like one is written quoted.
+            { tag: INTEGER, default: true, test: /^[-+]?0b[01]+$/, resolve: (text) => signedInteger(text, 2) },
+        ];
+    }
+    if (tag.tag === INTEGER) {
+        return [{ ...tag, test: /^[-+]?(?:0|[1-9][0-9]*)$/ }];
+    }
+    // Every float but `.inf` and `.nan`, which moried spells as the core schema does.
+    if (tag.tag === FLOAT && tag.test?.test('.nan') !== true) {
+        return [{
+            ...tag,
+            resolve: (text, onError, options) => (Number.isFinite(parseFloat(text))
+                ? tag.resolve(text, onError, options)
+                : text),
+        }];
+    }
+    return [tag];
+}
+
+// Where moried's YAML reader (serde_yaml 0.9) reads a plain scalar otherwise than the YAML 1.2 core
+// schema `yaml` follows: a binary integer (`0b101`) and a hexadecimal or octal one with a sign
+// (`-0x1F`, `+0o7`) are numbers to it, and digits after a leading zero (`017`) and a number too
+// large to be finite (`1e400`) are text. A file both components read, read with these, means to the
+// web app what it means to moried, and written with them, has the text moried would take for a
+// number quoted: `name: 0b101` would otherwise reach moried as the number 5.
+export const MORIED_SCALARS: YAML.SchemaOptions = {
+    customTags: (tags) => tags.flatMap((tag): typeof tags => (typeof tag === 'string' || tag.collection !== undefined
+        ? [tag]
+        : asMoriedReadsIt(tag))),
+};
+
 // `YAML.stringify`, with each list under an `alarms:` key written on the line that names it, as a
 // note writes them: `timed: [-10m, 0m]`, and not a list of `- -10m` under it. Nothing else is
-// written in flow style, so the rest of the document keeps the layout it has everywhere.
-export function stringifyWithFlowAlarms(value: unknown, options: YAML.ToStringOptions = {}): string {
-    const document = new YAML.Document(value);
+// written in flow style, so the rest of the document keeps the layout it has everywhere. `schema`
+// decides which text has to be quoted, as `MORIED_SCALARS` does for a file moried reads.
+export function stringifyWithFlowAlarms(
+    value: unknown,
+    options: YAML.ToStringOptions = {},
+    schema: YAML.SchemaOptions = {},
+): string {
+    const document = new YAML.Document(value, schema);
     YAML.visit(document, {
         Seq(_key, seq, path) {
             const inAlarms = path.some((node) => YAML.isPair(node)

@@ -418,6 +418,12 @@ async function save() {
         draftError.value = `Another calendar already uses the identifier "${id}".`;
         return;
     }
+    // Only an id that is new here: one a subscription already had is not taken from anything.
+    const renamed = editingIndex.value === null || calendars.subscriptions[editingIndex.value].id !== id;
+    if (renamed && calendars.heldIds().includes(id)) {
+        draftError.value = `A calendar the settings cannot read already uses the identifier "${id}".`;
+        return;
+    }
 
     // Trimmed only once edited here: written by hand as a block, a description ends in a newline,
     // and changing a calendar's colour should not rewrite it.
