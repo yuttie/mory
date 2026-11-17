@@ -11,6 +11,22 @@
             are read-only until converted to a note.
         </p>
 
+        <v-alert
+            v-if="calendars.configurationErrors.length > 0"
+            class="mb-4"
+            type="warning"
+            variant="tonal"
+        >
+            <ul class="pl-4">
+                <li
+                    v-for="message of calendars.configurationErrors"
+                    v-bind:key="message"
+                >
+                    {{ message }}
+                </li>
+            </ul>
+        </v-alert>
+
         <v-list
             v-if="calendars.subscriptions.length > 0"
         >

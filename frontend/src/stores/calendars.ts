@@ -175,13 +175,17 @@ export const useCalendarsStore = defineStore('calendars', () => {
             }));
     });
 
+    /// One line per value in the file that is not read, for the settings to show before a save.
+    const configurationErrors = computed(() => unread.value.map(({ at, message, kept }) =>
+        `${CALENDARS_PATH}: ${at}: ${message}. `
+        + (kept
+            ? 'Neither moried nor the web app reads it, and saving the settings keeps it as written.'
+            : 'It is ignored, and saving the settings removes it.')));
+
     /// One line per value in the configuration that is not read, and per calendar that failed, for
     /// the view's existing error alert.
     const errors = computed(() => [
-        ...unread.value.map(({ at, message, kept }) => `${CALENDARS_PATH}: ${at}: ${message}. `
-            + (kept
-                ? 'Neither moried nor the web app reads it, and saving the settings keeps it as written.'
-                : 'It is ignored, and saving the settings removes it.')),
+        ...configurationErrors.value,
         ...loaded.value.calendars
             .filter((calendar) => calendar.error !== null)
             .map((calendar) => `${calendar.name}: ${calendar.error}`),
@@ -444,6 +448,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         events,
         series,
         errors,
+        configurationErrors,
         truncated,
         colorOf,
         nameOf,
