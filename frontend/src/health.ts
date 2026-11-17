@@ -453,7 +453,7 @@ export function settingsChecks(reports: {
         {
             id: 'plans',
             title: 'Every day plan reads cleanly',
-            description: 'Each file under .mory/plans/ is named for a month and holds a plan the app can read. One that does not is refused whole, and cannot be planned in until fixed.',
+            description: 'Each file under .mory/plans/ is named for a month and holds a plan the app can read. One that does not is refused whole until it is fixed: none of its planned days are shown, nothing can be planned in it, and Collect undone leaves it out, or collects nothing while it is the current month. The other months still read.',
             problems: planProblems(reports.planPaths, reports.planErrors),
         },
     ];
@@ -464,8 +464,8 @@ export function planMonthOf(path: string): string | null {
     return /^\.mory\/plans\/([0-9]{4}-(?:0[1-9]|1[0-2]))\.yaml$/.exec(path)?.[1] ?? null;
 }
 
-// Only listed files: the store keeps a month's error after its file is deleted, and that one has
-// nothing left to fix.
+// Only listed files: the store keeps a month's error until it reads the month again, which may
+// come after its file is deleted, and that one has nothing left to fix.
 function planProblems(paths: readonly string[], errors: Readonly<Record<string, string>>): HealthProblem[] {
     const problems: HealthProblem[] = [];
     for (const path of paths) {
