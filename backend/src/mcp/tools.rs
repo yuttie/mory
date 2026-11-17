@@ -925,6 +925,8 @@ struct AgendaCalendar {
     id: String,
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
 
@@ -1028,6 +1030,7 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
             .map(|calendar| AgendaCalendar {
                 id: calendar.id.clone(),
                 name: calendar.name.clone(),
+                description: calendar.description.clone(),
                 error: calendar.error.clone(),
             })
             .collect(),
@@ -1461,6 +1464,7 @@ mod tests {
                 id: "work".to_owned(),
                 name: "Work".to_owned(),
                 color: None,
+                description: Some("The team's meetings, and colleagues' leave.".to_owned()),
                 error: Some("one VEVENT could not be read".to_owned()),
             }],
             events: vec![occurrence],

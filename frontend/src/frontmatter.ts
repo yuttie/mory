@@ -93,6 +93,16 @@ export function stringifyWithFlowAlarms(value: unknown, options: YAML.ToStringOp
                 seq.flow = true;
             }
         },
+        Scalar(_key, scalar) {
+            // A block whose first line starts with a space needs an indentation indicator, and
+            // `yaml` 2.9 writes one for a two-space step whatever `indent` says: at four, the text
+            // reads back indented further, and further again at each save. Quoted, it reads back
+            // as it was.
+            if (typeof scalar.value === 'string' && scalar.value.includes('\n')
+                && /^\n* /.test(scalar.value)) {
+                scalar.type = YAML.Scalar.QUOTE_DOUBLE;
+            }
+        },
     });
     return document.toString({ flowCollectionPadding: false, ...options });
 }

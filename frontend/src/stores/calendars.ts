@@ -48,6 +48,10 @@ export interface CalendarSubscription {
     url: string;
     color?: string;
     enabled: boolean;
+    /// What the calendar holds, in the user's words: whose events they are, and which of them are
+    /// the user's own. The web app only keeps it; the MCP tools hand it to the model, which has
+    /// only the calendar's id and name to go on otherwise.
+    description?: string;
 }
 
 // The colours a task's due date and deadline are drawn in live beside the subscriptions rather
@@ -197,6 +201,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             const { content: text, etag } = await files.readVersion(CALENDARS_PATH);
             const parsed = YAML.parse(text ?? '');
             const list = Array.isArray(parsed?.calendars) ? parsed.calendars : [];
+            const problems: string[] = [];
             // Every view that shows the file asks for it again as it opens, and nearly always finds
             // it as it was: kept, what it holds draws nothing anew, Home's and the Calendar's
             // events among it.
@@ -206,9 +211,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 url: String(entry.url ?? ''),
                 color: entry.color === undefined ? undefined : String(entry.color),
                 enabled: entry.enabled !== false,
+                description: readDescription(entry, problems),
             })));
             keepEqual(taskDateColors, readTaskDateColors(parsed?.task_dates));
-            const problems: string[] = [];
             keepEqual(alarmDefaults, readAlarmDefaults(parsed?.alarms, problems));
             keepEqual(categories, readCategories(parsed?.categories, problems));
             keepEqual(configurationProblems, problems.map((problem) =>
@@ -320,6 +325,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 url: subscription.url,
                 ...(subscription.color ? { color: subscription.color } : {}),
                 enabled: subscription.enabled,
+                ...(subscription.description ? { description: subscription.description } : {}),
             })),
             ...(Object.keys(next.taskDateColors).length > 0
                 ? { task_dates: { ...next.taskDateColors } }
@@ -339,7 +345,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
         try {
             version = await files.writeChecked(
                 CALENDARS_PATH,
-                stringifyWithFlowAlarms(document, { indent: 4 }),
+                // Lines as long as they were written: folded at 80 columns, a description written
+                // by hand as a `|` block would come back from the first save as a `>` one.
+                stringifyWithFlowAlarms(document, { indent: 4, lineWidth: 0 }),
                 version,
             ) ?? null;
         }
@@ -481,6 +489,20 @@ function readTaskDateColors(value: unknown): TaskDateColors {
         }
     }
     return colors;
+}
+
+// Text as it was written, a block's closing newline and all, so a save of anything else writes it
+// back unchanged. Anything else describes nothing, as moried reads it, and is said in `problems`:
+// the next save drops it with the rest of what was not read.
+function readDescription(entry: Record<string, unknown>, problems: string[]): string | undefined {
+    const value = entry.description;
+    if (typeof value === 'string') {
+        return value.trim() === '' ? undefined : value;
+    }
+    if (value !== undefined && value !== null) {
+        problems.push(`calendars: the description of ${String(entry.id ?? '')} is not text`);
+    }
+    return undefined;
 }
 
 function isMissing(error: unknown): boolean {

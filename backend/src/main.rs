@@ -2223,6 +2223,13 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
             self.alarms.as_mapping()
         }
 
+        /// Each subscription as `imported_events` reports it, in the file's order, as if every
+        /// feed had been read.
+        #[cfg(test)]
+        pub(crate) fn reports(self) -> Vec<CalendarReport> {
+            self.calendars.into_iter().map(|subscription| subscription.report(None)).collect()
+        }
+
         /// The ids of the configured event categories, in the file's order, as the web app reads
         /// them.
         pub(crate) fn category_ids(&self) -> Vec<String> {
@@ -2240,6 +2247,26 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         color: Option<String>,
         #[serde(default = "default_true")]
         enabled: bool,
+        /// What the calendar holds, in the user's words, for the MCP tools to hand on. Taken as
+        /// whatever the file holds, as the categories are: a value that is not text describes
+        /// nothing, and must not stop the calendar's events from loading.
+        #[serde(default)]
+        description: serde_yaml::Value,
+    }
+
+    impl CalendarSubscription {
+        /// The calendar as a response reports it, with the error it was read with, if any.
+        fn report(self, error: Option<String>) -> CalendarReport {
+            let description =
+                self.description.as_str().filter(|text| !text.trim().is_empty()).map(str::to_owned);
+            CalendarReport {
+                name: self.name.unwrap_or_else(|| self.id.clone()),
+                id: self.id,
+                color: self.color,
+                description,
+                error,
+            }
+        }
     }
 
     fn default_true() -> bool {
@@ -2251,6 +2278,9 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         pub id: String,
         pub name: String,
         pub color: Option<String>,
+        /// What the calendar holds, as `.mory/calendars.yaml` describes it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub description: Option<String>,
         /// `None` when the feed was read. A calendar that fails is reported here rather than
         /// failing the request, so one dead feed cannot blank the whole view.
         pub error: Option<String>,
@@ -2551,7 +2581,6 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         };
 
         for subscription in subscriptions {
-            let name = subscription.name.clone().unwrap_or_else(|| subscription.id.clone());
             if !subscription.enabled {
                 continue;
             }
@@ -2576,21 +2605,11 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
                     else {
                         Some(expansion.warnings.join("; "))
                     };
-                    response.calendars.push(CalendarReport {
-                        id: subscription.id,
-                        name,
-                        color: subscription.color,
-                        error,
-                    });
+                    response.calendars.push(subscription.report(error));
                 }
                 Err(e) => {
                     tracing::debug!("Calendar {} failed: {:#}", subscription.id, e);
-                    response.calendars.push(CalendarReport {
-                        id: subscription.id,
-                        name,
-                        color: subscription.color,
-                        error: Some(format!("{e:#}")),
-                    });
+                    response.calendars.push(subscription.report(Some(format!("{e:#}"))));
                 }
             }
         }

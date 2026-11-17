@@ -199,13 +199,14 @@ impl Mory {
                        `end` has none.\n\n`source` says where each comes from. A `note` item \
                        carries its `path` and `event`, the key update_event edits it by, its \
                        `category` id, and `finished`. An `imported` one carries the subscribed \
-                       `calendar` and its `calendar_name`, and is read-only; with `details`, it \
-                       also carries its description as `note`, its link as `url`, and its `uid` \
-                       and `recurrence_id`. A `task` one carries its `path`, which `field` it is, \
-                       and the task's `status`, which is settled when done or canceled. The same \
-                       meeting on two calendars is two items, and nothing is merged. Names are as \
-                       written, without a category's template. A note's own description is in the \
-                       note, which read_note returns.",
+                       `calendar` and its `calendar_name`, and is read-only; the calendar's \
+                       `description` in `calendars`, where the user wrote one, says whose events it \
+                       holds. With `details`, it also carries its description as `note`, its link \
+                       as `url`, and its `uid` and `recurrence_id`. A `task` one carries its \
+                       `path`, which `field` it is, and the task's `status`, which is settled when \
+                       done or canceled. The same meeting on two calendars is two items, and \
+                       nothing is merged. Names are as written, without a category's template. A \
+                       note's own description is in the note, which read_note returns.",
         annotations(title = "List agenda", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_agenda(
@@ -245,7 +246,9 @@ impl Mory {
                        are a live view of someone else's calendar: they are read-only, they are \
                        not stored in the repository, and they must never be written into it. A \
                        calendar that could not be read is reported in `calendars` with its \
-                       error rather than failing the call.\n\nAn event the user has converted \
+                       error rather than failing the call. A calendar's `description`, where the \
+                       user wrote one, says what it holds: whose events they are, and which of \
+                       them are the user's own.\n\nAn event the user has converted \
                        into a note under `.events/` is still listed here. The note, which \
                        list_events returns, names the original in its `ical` (`uid`, and \
                        `recurrence_id` for one occurrence), and the calendar draws only the \
