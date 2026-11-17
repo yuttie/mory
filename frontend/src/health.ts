@@ -269,7 +269,7 @@ const EVENT_CHECKS: { id: string; title: string; description: string; properties
     {
         id: 'event-repeat',
         title: 'Recurrence rules can be expanded',
-        description: 'Each repeat: rule is one rrule accepts: a known freq, weekdays as three letters with an optional ordinal, a known tz.',
+        description: 'Each repeat: rule is one the calendar and moried both expand: a known freq, weekdays as three letters with an optional ordinal, a known tz, and an until no earlier than its start. Of a rule whose until comes first, rrule.js draws nothing and moried\'s crate builds nothing.',
         properties: ['repeat'],
     },
     {

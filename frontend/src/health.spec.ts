@@ -148,6 +148,16 @@ describe('eventChecks', () => {
         expect(problems['event-times']).toEqual([{ path: 'series.md', message: 'The rule of "broken": Unusable start "soon"' }]);
     });
 
+    // rrule.js builds such a rule and yields nothing, where moried's crate refuses it and its event
+    // tools refuse to write it: either way nothing is drawn, so the series must not vanish unsaid.
+    it('reports a rule whose until is before its start, wherever the window is', () => {
+        const events = { retro: { start: '2026-10-08 10:00', repeat: { freq: 'weekly', until: '2026-10-01' } } };
+        const problems = problemsOf(eventChecks([entry('series.md', { events })], { from: '2030-01-01', to: '2030-01-31' }, { categories: new Map() }));
+        expect(problems['event-repeat']).toEqual([
+            { path: 'series.md', message: 'The rule of "retro": until "2026-10-01" is before start "2026-10-08 10:00"' },
+        ]);
+    });
+
     it('says the categories were not verified without the configuration', () => {
         const events = { standup: { start: '2026-10-01', category: 'typo' } };
         expect(problemsOf(eventChecks([entry('meetings.md', { events })], window))['event-category']).toEqual([
