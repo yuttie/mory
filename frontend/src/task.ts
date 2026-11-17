@@ -1,9 +1,9 @@
 import YAML from 'yaml';
 import { nowLocal } from '@/time';
-import type { Importance } from '@/urgency';
+import { type Importance, readImportance } from '@/urgency';
 
 import { stringifyWithFlowAlarms } from '@/frontmatter';
-import type { TaskAlarms } from '@/alarms';
+import { type TaskAlarms, alarmValueProblems } from '@/alarms';
 import type { UUID } from '@/api';
 import {
     columnOf,
@@ -102,12 +102,102 @@ export const STATUS_TRANSITION = {
     canceled: [],
 } as const satisfies Record<StatusKind, readonly StatusKind[]>;
 
+// A task's status as every reader takes it: a mapping whose `kind` is one of `STATUS_KINDS`. A
+// note in the task tree is a task by its path alone -- the tree, `TaskHierarchy` and the plans all
+// count it -- so one without a status is still a task, only one none of them knows the status of:
+// `missing` when nothing is written, which the editor can fill in, and `unread` with why when
+// something is written that no reader takes, which a save would replace. The web app draws a task
+// without one as Backlog, and `list_tasks` lists it without one.
+export type StatusReading =
+    | { status: Status }
+    | { missing: string }
+    | { unread: string };
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function readStatus(metadata: unknown): StatusReading {
+    if (metadata === null || metadata === undefined) {
+        return { missing: 'Has no frontmatter, so no task: block.' };
+    }
+    if (!isMapping(metadata)) {
+        return { unread: 'Its frontmatter is not a mapping.' };
+    }
+    const task = metadata.task;
+    if (task === null || task === undefined) {
+        return { missing: 'Has no task: block.' };
+    }
+    if (!isMapping(task)) {
+        return { unread: `Its task: is ${JSON.stringify(task)}, not a mapping.` };
+    }
+    const status = task.status;
+    if (status === null || status === undefined) {
+        return { missing: 'Its task: block has no status.' };
+    }
+    if (!isMapping(status) || !(STATUS_KINDS as unknown[]).includes(status.kind)) {
+        return { unread: `Its status ${JSON.stringify(status)} has no kind among ${STATUS_KINDS.join(', ')}.` };
+    }
+    return { status: status as unknown as Status };
+}
+
+// The keys the task editor has a field for and rewrites on a save, as a note names them.
+// `start_at` is the older spelling of `available_from`, read where that is unset.
+export const EDITOR_KEYS = ['tags', 'importance', 'lead_time', 'available_from', 'start_at', 'due_by', 'deadline', 'alarms'] as const;
+export type EditorKey = typeof EDITOR_KEYS[number];
+
+const ALARM_KEYS = new Set(['due_by', 'deadline']);
+
+// The keys of a note's frontmatter whose value the task editor does not read, each with the value
+// as written. Its field would show such a key as empty and the save would write that empty back,
+// so the editor shows the field empty, keeps the value as written (`render`), and refuses a save
+// that changes the field. `tags` is at the top level, the rest under `task:`. A numeric
+// `importance` is the older task model's, read as low, medium or high or as unrated, and dropped
+// on purpose, so it is not among them.
+export function unreadEditorKeys(metadata: unknown): Partial<Record<EditorKey, string>> {
+    const unread: Partial<Record<EditorKey, string>> = {};
+    if (!isMapping(metadata)) {
+        return unread;
+    }
+    const set = (value: unknown) => value !== undefined && value !== null;
+    const tags = metadata.tags;
+    if (set(tags) && !(Array.isArray(tags) && tags.every((tag) => typeof tag === 'string'))) {
+        unread.tags = JSON.stringify(tags);
+    }
+    const task = isMapping(metadata.task) ? metadata.task : {};
+    if (set(task.importance) && typeof task.importance !== 'number' && readImportance(task.importance) === undefined) {
+        unread.importance = JSON.stringify(task.importance);
+    }
+    if (set(task.lead_time) && typeof task.lead_time !== 'string') {
+        unread.lead_time = JSON.stringify(task.lead_time);
+    }
+    // A date is the editor's as a string, which the date field shows as written, empty or not as
+    // a date included; an empty one is read as unset, and saved as unset.
+    for (const key of ['available_from', 'due_by', 'deadline'] as const) {
+        if (set(task[key]) && typeof task[key] !== 'string') {
+            unread[key] = JSON.stringify(task[key]);
+        }
+    }
+    if (!set(task.available_from) && set(task.start_at) && typeof task.start_at !== 'string') {
+        unread.start_at = JSON.stringify(task.start_at);
+    }
+    const alarms = task.alarms;
+    if (set(alarms) && (!isMapping(alarms)
+        || Object.keys(alarms).some((key) => !ALARM_KEYS.has(key))
+        || [...ALARM_KEYS].some((key) => alarmValueProblems(alarms[key]).length > 0))) {
+        unread.alarms = JSON.stringify(alarms);
+    }
+    return unread;
+}
+
 export interface Task {
     created_at?: string;
     uuid: UUID;
     title: string;
     tags: string[];
-    status: Status;
+    // Absent only for a note in the task tree that holds none yet (`readStatus`), which `render`
+    // refuses to write until one is chosen.
+    status?: Status;
     importance?: Importance;
     available_from?: string;
     lead_time?: string;
@@ -120,6 +210,12 @@ export interface Task {
     // When `due_by` and `deadline` ring, where this task says so; `render` has to write it, or a
     // save from the editor would delete it.
     alarms?: TaskAlarms;
+    // What the note holds between its frontmatter and its title, which the editor does not show:
+    // `render` writes the title first and then the note, so without this a save would drop it.
+    beforeTitle?: string;
+    // The keys the note holds in a shape the editor does not read (`unreadEditorKeys`): `render`
+    // writes each as the source had it, whatever the task says.
+    unread?: Partial<Record<EditorKey, string>>;
     note: string;
 }
 
@@ -164,6 +260,9 @@ export function canTransition(from: StatusKind, to: StatusKind): boolean {
 }
 
 export function render(task: Task): string {
+    if (task.status === undefined) {
+        throw new Error('A task is written with a status.');
+    }
     const metadata = {
         created_at: task.created_at ?? nowLocal(),
         task: {
@@ -178,16 +277,34 @@ export function render(task: Task): string {
         tags: task.tags,
     };
     let frontmatter = stringifyWithFlowAlarms(metadata, { indent: 4 });
-    if (task.source) {
+    // A note without frontmatter, or with an empty one, has nothing in it to keep, and is written
+    // the frontmatter above. A note in the task tree can be either before it is given a status.
+    if (task.source && /^---\r?\n/.test(task.source)) {
         editFrontmatter(task.source, (source) => {
             const doc = YAML.parseDocument(source);
+            // Nothing but comments, if anything: they are kept, above the frontmatter written.
+            if (doc.errors.length === 0 && doc.contents === null) {
+                if (source.trim() !== '') {
+                    const written = source.trimEnd() + '\n' + frontmatter;
+                    if (!parsesTo(written, YAML.parse(frontmatter))) {
+                        throw new Error('Saving the task would change other frontmatter.');
+                    }
+                    frontmatter = written;
+                }
+                return source;
+            }
             if (doc.errors.length > 0 || !YAML.isMap(doc.contents)) {
                 throw new Error('The original frontmatter must be a valid mapping.');
             }
             const original = doc.toJS();
-            const originalTask = original.task;
-            if (!originalTask || typeof originalTask !== 'object' || Array.isArray(originalTask)) {
+            // A note without a `task:` block, or with an empty one, is given the whole block.
+            const blockless = original.task === undefined || original.task === null;
+            const originalTask = blockless ? {} : original.task;
+            if (typeof originalTask !== 'object' || Array.isArray(originalTask)) {
                 throw new Error('The original task must be a mapping.');
+            }
+            if (blockless) {
+                doc.set('task', doc.createNode({}));
             }
             const nextTask = { ...originalTask, ...metadata.task };
             for (const key of ['urgency', 'progress', 'scheduled_dates', 'start_at', 'importance', 'available_from', 'lead_time', 'due_by', 'deadline', 'alarms']) {
@@ -195,8 +312,39 @@ export function render(task: Task): string {
                     delete nextTask[key];
                 }
             }
-            doc.set('created_at', task.created_at ?? original.created_at ?? metadata.created_at);
-            doc.set('tags', task.tags);
+            // What the editor did not read it writes as it was, rather than as the empty field
+            // that stood in for it.
+            const unread = new Set(Object.keys(task.unread ?? {}));
+            for (const key of unread) {
+                if (key !== 'tags' && key in originalTask) {
+                    nextTask[key] = originalTask[key];
+                }
+            }
+            // The editor writes a date's alarms only with the date, so clearing one takes its
+            // alarms with it. Those of a date the note never gave it, or gave in a shape it does not
+            // read, ring at nothing yet and have no box there, but they are the note's: a save that
+            // leaves that date unset leaves them as written.
+            const alarms = originalTask.alarms;
+            if (!unread.has('alarms') && isMapping(alarms)) {
+                const kept = new Set<string>(['due_by', 'deadline'].filter((field) => alarms[field] !== undefined
+                    && (unread.has(field) || !originalTask[field]) && !(field in metadata.task)));
+                if (kept.size > 0) {
+                    const written: Record<string, unknown> = isMapping(nextTask.alarms) ? nextTask.alarms : {};
+                    // In the note's order, so that one kept as it was is written as it was.
+                    nextTask.alarms = Object.fromEntries(Object.keys({ ...alarms, ...written })
+                        .filter((field) => kept.has(field) || field in written)
+                        .map((field) => [field, kept.has(field) ? alarms[field] : written[field]]));
+                }
+            }
+            const createdAt = task.created_at ?? original.created_at ?? metadata.created_at;
+            const tags = unread.has('tags') ? original.tags : task.tags;
+            // Set only where it changes, so a value kept keeps its spelling: `[work]` stays flow.
+            if (!sameValue(original.created_at, createdAt)) {
+                doc.set('created_at', createdAt);
+            }
+            if (!sameValue(original.tags, tags)) {
+                doc.set('tags', tags);
+            }
             // Editing known fields keeps other frontmatter and YAML comments available to the editor.
             for (const key of Object.keys(originalTask)) {
                 if (!(key in nextTask)) {
@@ -209,15 +357,20 @@ export function render(task: Task): string {
                 }
             }
             quoteIndentedText(doc);
-            frontmatter = doc.toString({ indent: 4, lineWidth: 0 });
-            const expected = { ...original, created_at: task.created_at ?? original.created_at ?? metadata.created_at, tags: task.tags, task: nextTask };
+            // The whole document is written again, so every flow collection takes one spacing: the
+            // one a new task is written with (`stringifyWithFlowAlarms`), so `[work]` stays `[work]`.
+            frontmatter = doc.toString({ indent: 4, lineWidth: 0, flowCollectionPadding: false });
+            const expected = { ...original, created_at: createdAt, tags, task: nextTask };
             if (!parsesTo(frontmatter, expected)) {
                 throw new Error('Saving the task would change other frontmatter.');
             }
             return source;
         });
     }
-    return '---\n' + frontmatter + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
+    return '---\n' + frontmatter + '---\n'
+        + (task.beforeTitle ? `\n${task.beforeTitle}\n` : '')
+        + (task.title ? `\n# ${task.title}\n` : '')
+        + `\n${task.note}`;
 }
 
 // A note with its task's status replaced, and every other byte left alone.

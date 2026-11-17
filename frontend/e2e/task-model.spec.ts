@@ -93,3 +93,70 @@ test('clears task dates together with their explicit alarms', async ({ context, 
     const metadata = YAML.parse(repository.writes[0].content.split('---')[1]);
     expect(metadata.task).toEqual({ status: { kind: 'todo' } });
 });
+
+// The text before the title is none of the editor's fields, so only the save can lose it.
+test('keeps what a task holds before its title when it is saved', async ({ context, page }) => {
+    const id = uuid(11);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntask:\n    status: {kind: todo}\n---\n\nIntro paragraph.\n\n> # Quoted\n\n# Real title\n\nBody\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toHaveValue('Real title');
+    await expect(page.getByText('This note holds text before its title, which the editor does not show.')).toBeVisible();
+    await title.fill('Real title, revised');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content.split('---\n')[2]).toBe('\nIntro paragraph.\n\n> # Quoted\n\n# Real title, revised\n\nBody\n');
+});
+
+// A note in the task tree is a task by its path; the editor writes the status it has none of.
+test('opens a task without a status and saves it one, keeping the rest', async ({ context, page }) => {
+    const id = uuid(12);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntags: [work]\n---\n\n# No status\n\nBody\n',
+    });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('No status');
+    await expect(page.getByText('This note has no task status yet.')).toBeVisible();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    const [, frontmatter, body] = repository.writes[0].content.split('---\n');
+    expect(YAML.parse(frontmatter)).toMatchObject({ tags: ['work'], task: { status: { kind: 'backlog' } } });
+    expect(body).toBe('\n# No status\n\nBody\n');
+    expect(errors).toEqual([]);
+});
+
+test('says why it will not open a task whose status it would replace', async ({ context, page }) => {
+    const id = uuid(13);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntask:\n    status: {kind: started}\n---\n\n# Odd status\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    await expect(page.getByText(/cannot be edited as a task: Its status .* has no kind among/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
+    expect(repository.writes).toEqual([]);
+});
+
+test('keeps a value it does not read as written, and will not save a change to its field', async ({ context, page }) => {
+    const id = uuid(14);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntags: foo\ntask:\n    status: {kind: todo}\n    lead_time: 7\n---\n\n# Odd values\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toHaveValue('Odd values');
+    await expect(page.getByText('Kept as written, since the editor does not read them: tags "foo", lead_time 7.')).toBeVisible();
+    const leadTime = page.getByRole('textbox', { name: 'Lead time', exact: true });
+    await leadTime.fill('2w');
+    await expect(page.getByText(/^lead_time cannot be saved from here/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await leadTime.fill('');
+    await title.fill('Odd values, revised');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    const metadata = YAML.parse(repository.writes[0].content.split('---\n')[1]);
+    expect(metadata).toMatchObject({ tags: 'foo', task: { status: { kind: 'todo' }, lead_time: 7 } });
+});

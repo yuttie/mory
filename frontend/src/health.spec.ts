@@ -191,10 +191,31 @@ describe('eventChecks', () => {
 describe('taskChecks', () => {
     it('passes tasks named and nested as the tree expects', () => {
         expect(taskChecks([
-            entry(`.tasks/${A}.md`, { tags: [] }),
-            entry(`.tasks/report-${A.replace('1', '3')}.md`, { tags: [] }),
-            entry(`.tasks/${A}/${B}.md`, { tags: [] }),
+            entry(`.tasks/${A}.md`, { tags: [], task: { status: { kind: 'todo' } } }),
+            entry(`.tasks/report-${A.replace('1', '3')}.md`, { tags: [], task: { status: { kind: 'backlog' } } }),
+            entry(`.tasks/${A}/${B}.md`, { tags: [], task: { status: { kind: 'done', completed_at: '2026-11-01 09:00:00+09:00' } } }),
         ]).flatMap((check) => check.problems)).toEqual([]);
+    });
+
+    // In the tree by its path, drawn as Backlog, and listed by `list_tasks` without a status.
+    it('reports a task without a status the readers take', () => {
+        const problems = taskChecks([
+            entry(`.tasks/${A}.md`, null),
+            entry(`.tasks/${B}.md`, { tags: [] }),
+            entry(`.tasks/${A}/${B.replace('2', '4')}.md`, { task: { due_by: '2026-11-20' } }),
+            entry(`.tasks/${A}/${B.replace('2', '5')}.md`, { task: { status: { kind: 'started' } } }),
+            entry(`.tasks/${A}/${B.replace('2', '6')}.md`, { task: 'soon' }),
+            entry(`.tasks/${A}/${B.replace('2', '7')}.md`, { error: 'did not find expected key' }),
+            entry('.tasks/unnamed.md', null),
+        ]).find((check) => check.id === 'task-status')?.problems ?? [];
+        expect(problems.map((problem) => [problem.severity, problem.path])).toEqual([
+            ['warning', `.tasks/${A}.md`],
+            ['warning', `.tasks/${B}.md`],
+            ['warning', `.tasks/${A}/${B.replace('2', '4')}.md`],
+            ['error', `.tasks/${A}/${B.replace('2', '5')}.md`],
+            ['error', `.tasks/${A}/${B.replace('2', '6')}.md`],
+        ]);
+        expect(problems[2].message).toBe('Its task: block has no status. The task tree draws it as Backlog; list_tasks gives it no status.');
     });
 
     it('reports a task the tree leaves out', () => {
@@ -240,7 +261,7 @@ describe('taskChecks', () => {
         expect(taskChecks([
             entry(`.tasks/report-${A}.md`, null),
             entry(`.tasks/${A}/${B}.md`, null),
-        ]).flatMap((check) => check.problems)).toEqual([]);
+        ]).filter((check) => check.id !== 'task-status').flatMap((check) => check.problems)).toEqual([]);
     });
 
     it('reports a task date urgency does not read', () => {

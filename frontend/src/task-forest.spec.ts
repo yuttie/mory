@@ -266,3 +266,14 @@ describe('parity with GET /v2/tasks?format=tree', () => {
         expect(seen.sort()).toEqual([...forest.byId.keys()].sort());
     });
 });
+
+// The tree is the paths', whatever the file is: moried lists an image with no metadata, and it is
+// a task there as a note without a `task:` block is, which `list_tasks` matches.
+describe('a file in the task tree that is not Markdown', () => {
+    it('is a node of the tree, with no metadata', () => {
+        const image = { ...entry(`.tasks/${uuid(1)}.png`), mime_type: 'image/png', metadata: null, title: null };
+        expect(shapeOf([image, entry(`.tasks/${uuid(1)}/${uuid(2)}.md`)])).toEqual([
+            { uuid: uuid(1), children: [{ uuid: uuid(2) }] },
+        ]);
+    });
+});
