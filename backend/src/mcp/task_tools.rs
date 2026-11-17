@@ -347,6 +347,14 @@ fn new_task_path(path: Option<&str>) -> Result<String, String> {
              `.tasks/<parent-uuid>/<uuid>.md` -- or leave `path` out.",
         ));
     }
+    // The tree takes any extension, but the listing reads no frontmatter from a file it takes for
+    // an image, and the plan tools, like the web app's health check, count only a `.md` file
+    // under `.tasks/` as a task: anything else there is an attachment.
+    if !path.ends_with(".md") {
+        return Err(format!(
+            "{path:?} is not a Markdown note, and a task is one: end its name with `.md`.",
+        ));
+    }
     Ok(path)
 }
 
@@ -555,7 +563,7 @@ pub struct CreateTaskArgs {
     /// Where to put it, under `.tasks/`. Omit for `.tasks/<uuid>.md`, a task at the top of the
     /// tree; a subtask goes in the directory named by its parent's bare UUID, beside the parent's
     /// file: `.tasks/<parent-uuid>/<uuid>.md`. A readable prefix is welcome, but the name must
-    /// still end with a UUIDv4. A path outside `.tasks/` is refused.
+    /// still end with a UUIDv4 and `.md`. A path outside `.tasks/` is refused.
     #[serde(default)]
     pub path: Option<String>,
     /// Markdown to put under the heading.
@@ -715,6 +723,15 @@ mod tests {
         assert!(new_task_path(Some(".tasks/report.md")).unwrap_err().contains("does not end with a UUIDv4"));
         assert!(new_task_path(Some(&format!(".tasks/directory/{uuid}.md"))).unwrap_err().contains("\"directory\" is not a UUIDv4"));
         assert!(crate::tasks::in_task_tree(&new_task_path(None).unwrap()));
+    }
+
+    #[test]
+    fn a_new_task_is_a_markdown_note() {
+        let uuid = "6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60";
+        for attachment in [format!(".tasks/{uuid}.png"), format!(".tasks/{uuid}.txt"), format!(".tasks/{uuid}"), format!(".tasks/{uuid}.MD")] {
+            assert!(new_task_path(Some(&attachment)).unwrap_err().contains("not a Markdown note"), "{attachment}");
+        }
+        assert!(new_task_path(None).unwrap().ends_with(".md"));
     }
 
     #[test]
