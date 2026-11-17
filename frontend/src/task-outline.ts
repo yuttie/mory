@@ -21,7 +21,7 @@
 
 import { childTaskPath } from '@/task-forest';
 import { type StatusKind, type Task, type UUID, STATUS_KINDS, STATUS_LABEL, hasFields, makeDefaultStatus, render } from '@/task';
-import { type Importance, leadTimeDays, readImportance, taskInstant, withOffset } from '@/urgency';
+import { type Importance, isWrittenTaskDate, leadTimeDays, readImportance, withOffset } from '@/urgency';
 
 const LIST_MARKER = /^(?:[-*+]|[0-9]+[.)])(?:\s+|$)/;
 // A task list's box, which the editor continues on Enter as it does a marker.
@@ -357,9 +357,11 @@ function readDate(text: string, zone: string): string | undefined {
     }
     const [, date, time, offset] = match;
     const value = time === undefined ? date : `${date} ${time}${offset ?? 'Z'}`;
-    // Whether a task would read it as a date: only that is asked, so any zone does. Asked first, so
-    // that dayjs below never sees a 2026-02-30 or a 25:00, which it would roll over into another.
-    if (taskInstant(value, 'UTC') === undefined) {
+    // Whether a task holds it as written: only that is asked, so any offset does. Not only whether
+    // `taskInstant` reads it, which takes a year before 100 that the calendar and the task editor
+    // read in the 1900s. Asked first, so that dayjs below never sees a 2026-02-30 or a 25:00, which
+    // it would roll over into another.
+    if (!isWrittenTaskDate(value)) {
         return undefined;
     }
     if (time === undefined || offset !== undefined) {

@@ -176,7 +176,7 @@ describe('parseOutline', () => {
         const { problems } = parseOutline([
             '- A [urgent]',
             '- B [todo, done]',
-            '- C [<=2026-02-30, <=2026-10-10 25:00]',
+            '- C [<=2026-02-30, <=2026-10-10 25:00, >=0026-10-10]',
             '- D [waiting]',
             '- [todo]',
             '- E ["unclosed]',
@@ -192,6 +192,8 @@ describe('parseOutline', () => {
             { line: 2, message: 'The status is given twice.' },
             { line: 3, message: '"2026-02-30" is not a date; write YYYY-MM-DD, or YYYY-MM-DD HH:MM.' },
             { line: 3, message: '"2026-10-10 25:00" is not a date; write YYYY-MM-DD, or YYYY-MM-DD HH:MM.' },
+            // A task would read it, but the calendar would draw it in 1926.
+            { line: 3, message: '"0026-10-10" is not a date; write YYYY-MM-DD, or YYYY-MM-DD HH:MM.' },
             { line: 4, message: 'Waiting needs a reason; give it in the task\'s editor once the task is added.' },
             { line: 5, message: 'The task has no title.' },
             { line: 6, message: 'The brackets that end the line are not a list of fields; check its quotes, or end a title that has brackets with an empty [].' },
