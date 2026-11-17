@@ -612,7 +612,8 @@ impl Mory {
                        leaves its result unrecorded; `interruption` is for work that came up \
                        unplanned, and records it as worked -- on an entry already there too, \
                        whose origin and place are kept. A call that would leave the plan as it \
-                       was is refused, and nothing is committed.",
+                       was is refused, and nothing is committed.\n\nA UUID that names no task \
+                       is planned all the same, and the result says so with `unknown_task`.",
         annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
