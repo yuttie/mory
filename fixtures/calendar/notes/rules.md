@@ -367,6 +367,42 @@ events:
         repeat:
             freq: daily
             until: 2024-05-21
+    An until before its start:
+        start: 2024-05-21 09:00
+        repeat:
+            freq: daily
+            until: 2024-05-20
+    An until before its start in its zone:
+        start: 2024-05-21 20:00
+        repeat:
+            freq: daily
+            tz: Asia/Tokyo
+            until: 2024-05-21 10:00:00+00:00
+    An until at its start:
+        start: 2024-05-22 09:00
+        repeat:
+            freq: daily
+            until: 2024-05-22 09:00
+    An until a second before its start:
+        start: 2024-05-22 10:00
+        repeat:
+            freq: daily
+            until: 2024-05-22 09:59:59
+    An all-day rule until its first midnight:
+        start: 2024-05-23
+        repeat:
+            freq: daily
+            until: 2024-05-23 00:00
+    An all-day rule until the evening before:
+        start: 2024-05-24
+        repeat:
+            freq: daily
+            until: 2024-05-23 23:59:59
+    An until whose offset is not read without a zone:
+        start: 2024-05-25 10:00
+        repeat:
+            freq: daily
+            until: 2024-05-25 10:00:00+09:00
 ---
 
 # Rules

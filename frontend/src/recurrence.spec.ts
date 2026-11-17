@@ -279,6 +279,46 @@ describe('readRule', () => {
         expect(readRule({ freq: 'weekly' }, '2024-05-01 10:00:00-07:00').start)
             .toMatchObject({ year: 2024, month: 5, day: 1, hour: 10, hasTime: true });
     });
+
+    // rrule.js builds such a rule and draws nothing, where moried's crate refuses it
+    // (`UntilBeforeStart`) and its event tools refuse to write it. The crate compares the wall
+    // clocks `build_rule` hands it, which are these, and takes an until at the start itself.
+    it('refuses an until before its start as moried does, and takes one at it', () => {
+        const taken: [unknown, string][] = [
+            [{ freq: 'daily', until: '2024-05-21 09:00' }, '2024-05-21 09:00'],
+            [{ freq: 'daily', until: '2024-05-21' }, '2024-05-21 09:00'],
+            [{ freq: 'daily', until: '2024-05-21 00:00' }, '2024-05-21'],
+            // Without a tz, the offset on until is not read.
+            [{ freq: 'daily', until: '2024-05-21 09:00+09:00' }, '2024-05-21 09:00'],
+            [{ freq: 'daily', tz: 'Asia/Tokyo', until: '2024-05-21 00:00:00+00:00' }, '2024-05-21 09:00'],
+            [{ freq: 'daily', tz: 'Asia/Tokyo', until: '2024-05-20 15:00:00+00:00' }, '2024-05-21'],
+            // 07:30 UTC is 03:30 in New York once its clocks have gone forward, not 02:30.
+            [{ freq: 'daily', tz: 'America/New_York', until: '2024-03-10 07:30:00+00:00' }, '2024-03-10 03:00'],
+            // Read into its tz, an until is a wall clock read again, so the year 50 there is 1950,
+            // as a start in it is.
+            [{ freq: 'daily', tz: 'Asia/Tokyo', until: '0050-01-01 00:00:00+00:00' }, '1949-12-30 10:00'],
+        ];
+        for (const [repeat, start] of taken) {
+            expect(refuses(() => readRule(repeat, start)), `${JSON.stringify(repeat)} at ${start}`).toBe(false);
+        }
+        const how = ', comparing the wall clock each is written at: a rule reads no offset on its start, and one on until only into its tz';
+        const refused: [unknown, string, string][] = [
+            [{ freq: 'daily', until: '2024-05-21 08:59:59' }, '2024-05-21 09:00', ''],
+            [{ freq: 'daily', until: '2024-05-20' }, '2024-05-21', ''],
+            [{ freq: 'daily', until: '2024-05-20 23:59:59' }, '2024-05-21', ''],
+            [{ freq: 'daily', until: '2024-05-21', count: 3 }, '2024-05-22 10:00', ''],
+            [{ freq: 'daily', tz: 'Asia/Tokyo', until: '2024-05-20 14:59:59+00:00' }, '2024-05-21', ''],
+            // Each is after its start as the instants written, in Tokyo, and before it as the wall
+            // clocks the rule reads.
+            [{ freq: 'daily', until: '2024-05-21 08:00-05:00' }, '2024-05-21 09:00', how],
+            [{ freq: 'daily', tz: 'Asia/Tokyo', until: '2024-05-21 08:00' }, '2024-05-21 09:00+14:00', how],
+        ];
+        for (const [repeat, start, tail] of refused) {
+            const until = (repeat as { until: string }).until;
+            expect(() => readRule(repeat, start), `${JSON.stringify(repeat)} at ${start}`)
+                .toThrow(new RecurrenceError(`until "${until}" is before start "${start}"${tail}`));
+        }
+    });
 });
 
 describe('expandRule reading until in the rule\'s zone', () => {

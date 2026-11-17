@@ -390,6 +390,18 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
         options.until = resolved.hasTime
             ? toAnchor(resolved)
             : toAnchor({ ...resolved, hour: 23, minute: 59, second: 59, hasTime: true });
+        // rrule.js builds such a rule and yields nothing, saying nothing, where moried's crate
+        // refuses it; a series that silently vanished is the mistake to report. Both are compared
+        // as wall clocks, as the crate compares them.
+        if (options.until.getTime() < options.dtstart!.getTime()) {
+            // An offset left unread can put the two the other way round as instants, so the message
+            // says how they were compared wherever one is.
+            const unread = HAS_OFFSET.test(start as string) || (HAS_OFFSET.test(written) && resolved === until);
+            const how = unread
+                ? ', comparing the wall clock each is written at: a rule reads no offset on its start, and one on until only into its tz'
+                : '';
+            throw new RecurrenceError(`until "${written}" is before start "${String(start)}"${how}`);
+        }
     }
 
     // rrule throws plain `Error`s for a rule it will not build. Those are a note's mistake, so they

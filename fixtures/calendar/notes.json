@@ -2923,6 +2923,9 @@
         "2024-05-10 09:00  Daily with count  +0m",
         "2024-05-15 12:00  Third Wednesday  +0m",
         "2024-05-21 09:00  An until on its start's day  +0m",
+        "2024-05-22 09:00  An until at its start  +0m",
+        "2024-05-23  An all-day rule until its first midnight  none",
+        "2024-05-25 10:00  An until whose offset is not read without a zone  +0m",
         "2024-05-31 08:00  Last day of the month  +0m",
         "2024-05-31 08:00  The 31st  +0m",
         "2024-05-31 09:00  The fifth Friday of a month  +0m",
@@ -3043,6 +3046,9 @@
         "2024-05-10 09:00  Daily with count  -5m",
         "2024-05-15 12:00  Third Wednesday  -5m",
         "2024-05-21 09:00  An until on its start's day  -5m",
+        "2024-05-22 09:00  An until at its start  -5m",
+        "2024-05-23  An all-day rule until its first midnight  -1d 18:00",
+        "2024-05-25 10:00  An until whose offset is not read without a zone  -5m",
         "2024-05-31 08:00  Last day of the month  -5m",
         "2024-05-31 08:00  The 31st  -5m",
         "2024-05-31 09:00  The fifth Friday of a month  -5m",
@@ -3163,6 +3169,9 @@
         "2024-05-10 09:00  Daily with count",
         "2024-05-15 12:00  Third Wednesday",
         "2024-05-21 09:00  An until on its start's day",
+        "2024-05-22 09:00  An until at its start",
+        "2024-05-23  An all-day rule until its first midnight",
+        "2024-05-25 10:00  An until whose offset is not read without a zone",
         "2024-05-31 08:00  Last day of the month",
         "2024-05-31 08:00  The 31st",
         "2024-05-31 09:00  The fifth Friday of a month",
@@ -3283,6 +3292,9 @@
         "2024-05-10 09:00  Daily with count  none",
         "2024-05-15 12:00  Third Wednesday  none",
         "2024-05-21 09:00  An until on its start's day  none",
+        "2024-05-22 09:00  An until at its start  none",
+        "2024-05-23  An all-day rule until its first midnight  none",
+        "2024-05-25 10:00  An until whose offset is not read without a zone  none",
         "2024-05-31 08:00  Last day of the month  none",
         "2024-05-31 08:00  The 31st  none",
         "2024-05-31 09:00  The fifth Friday of a month  none",
@@ -3568,6 +3580,20 @@
             },
             "start": "2024-10-14 08:00"
           },
+          "An all-day rule until its first midnight": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-23 00:00"
+            },
+            "start": "2024-05-23"
+          },
+          "An all-day rule until the evening before": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-23 23:59:59"
+            },
+            "start": "2024-05-24"
+          },
           "An empty month day list": {
             "repeat": {
               "bymonthday": [],
@@ -3666,12 +3692,48 @@
             },
             "start": "2024-10-14 09:00"
           },
+          "An until a second before its start": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-22 09:59:59"
+            },
+            "start": "2024-05-22 10:00"
+          },
+          "An until at its start": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-22 09:00"
+            },
+            "start": "2024-05-22 09:00"
+          },
+          "An until before its start": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-20"
+            },
+            "start": "2024-05-21 09:00"
+          },
+          "An until before its start in its zone": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "Asia/Tokyo",
+              "until": "2024-05-21 10:00:00+00:00"
+            },
+            "start": "2024-05-21 20:00"
+          },
           "An until on its start's day": {
             "repeat": {
               "freq": "daily",
               "until": "2024-05-21"
             },
             "start": "2024-05-21 09:00"
+          },
+          "An until whose offset is not read without a zone": {
+            "repeat": {
+              "freq": "daily",
+              "until": "2024-05-25 10:00:00+09:00"
+            },
+            "start": "2024-05-25 10:00"
           },
           "Daily with count": {
             "exclusions": [
@@ -4028,6 +4090,7 @@
         "2024-03-08 10:00  Until the reader's clock skips  +0m",
         "2024-03-09 02:30  Wall clock in the spring gap  +0m",
         "2024-03-09 07:00  New York across spring forward  +0m",
+        "2024-03-09 23:00  Until past spring forward in its zone  +0m",
         "2024-03-10 02:30  Wall clock in the spring gap  +0m",
         "2024-03-10 07:00  New York across spring forward  +0m",
         "2024-03-10 17:00  Tokyo morning  +0m",
@@ -4041,6 +4104,8 @@
         "2024-04-04 04:00  Until with an offset  +0m",
         "2024-04-07 16:00  Excluded by instant  +0m",
         "2024-04-09 16:00  Excluded by instant  +0m",
+        "2024-05-26 04:00  Until at its start in its zone  +0m",
+        "2024-05-27  All-day until its first midnight in its zone  none",
         "2024-06-02 17:00  Zone in lower case  +0m",
         "2024-06-03 17:00  Zone in lower case  +0m",
         "2024-06-05 09:00  Empty zone  +0m",
@@ -4067,6 +4132,7 @@
         "2024-03-08 10:00  Until the reader's clock skips  -5m",
         "2024-03-09 02:30  Wall clock in the spring gap  -5m",
         "2024-03-09 07:00  New York across spring forward  -5m",
+        "2024-03-09 23:00  Until past spring forward in its zone  -5m",
         "2024-03-10 02:30  Wall clock in the spring gap  -5m",
         "2024-03-10 07:00  New York across spring forward  -5m",
         "2024-03-10 17:00  Tokyo morning  -5m",
@@ -4080,6 +4146,8 @@
         "2024-04-04 04:00  Until with an offset  -5m",
         "2024-04-07 16:00  Excluded by instant  -5m",
         "2024-04-09 16:00  Excluded by instant  -5m",
+        "2024-05-26 04:00  Until at its start in its zone  -5m",
+        "2024-05-27  All-day until its first midnight in its zone  -1d 18:00",
         "2024-06-02 17:00  Zone in lower case  -5m",
         "2024-06-03 17:00  Zone in lower case  -5m",
         "2024-06-05 09:00  Empty zone  -5m",
@@ -4106,6 +4174,7 @@
         "2024-03-08 10:00  Until the reader's clock skips",
         "2024-03-09 02:30  Wall clock in the spring gap",
         "2024-03-09 07:00  New York across spring forward",
+        "2024-03-09 23:00  Until past spring forward in its zone",
         "2024-03-10 02:30  Wall clock in the spring gap",
         "2024-03-10 07:00  New York across spring forward",
         "2024-03-10 17:00  Tokyo morning",
@@ -4119,6 +4188,8 @@
         "2024-04-04 04:00  Until with an offset",
         "2024-04-07 16:00  Excluded by instant",
         "2024-04-09 16:00  Excluded by instant",
+        "2024-05-26 04:00  Until at its start in its zone",
+        "2024-05-27  All-day until its first midnight in its zone",
         "2024-06-02 17:00  Zone in lower case",
         "2024-06-03 17:00  Zone in lower case",
         "2024-06-05 09:00  Empty zone",
@@ -4145,6 +4216,7 @@
         "2024-03-08 10:00  Until the reader's clock skips  none",
         "2024-03-09 02:30  Wall clock in the spring gap  none",
         "2024-03-09 07:00  New York across spring forward  none",
+        "2024-03-09 23:00  Until past spring forward in its zone  none",
         "2024-03-10 02:30  Wall clock in the spring gap  none",
         "2024-03-10 07:00  New York across spring forward  none",
         "2024-03-10 17:00  Tokyo morning  none",
@@ -4158,6 +4230,8 @@
         "2024-04-04 04:00  Until with an offset  none",
         "2024-04-07 16:00  Excluded by instant  none",
         "2024-04-09 16:00  Excluded by instant  none",
+        "2024-05-26 04:00  Until at its start in its zone  none",
+        "2024-05-27  All-day until its first midnight in its zone  none",
         "2024-06-02 17:00  Zone in lower case  none",
         "2024-06-03 17:00  Zone in lower case  none",
         "2024-06-05 09:00  Empty zone  none",
@@ -4178,6 +4252,14 @@
       ],
       "metadata": {
         "events": {
+          "All-day until its first midnight in its zone": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "Asia/Tokyo",
+              "until": "2024-05-26 15:00:00+00:00"
+            },
+            "start": "2024-05-27"
+          },
           "Empty zone": {
             "repeat": {
               "count": 2,
@@ -4231,6 +4313,22 @@
               "tz": "Mars/Olympus_Mons"
             },
             "start": "2024-06-07"
+          },
+          "Until at its start in its zone": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "Asia/Tokyo",
+              "until": "2024-05-26 11:00:00+00:00"
+            },
+            "start": "2024-05-26 20:00"
+          },
+          "Until past spring forward in its zone": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "America/New_York",
+              "until": "2024-03-10 07:30:00+00:00"
+            },
+            "start": "2024-03-10 03:00"
           },
           "Until the reader's clock skips": {
             "repeat": {

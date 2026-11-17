@@ -359,8 +359,8 @@ function readDate(text: string, zone: string): string | undefined {
     const value = time === undefined ? date : `${date} ${time}${offset ?? 'Z'}`;
     // Whether a task holds it as written: only that is asked, so any offset does. Not only whether
     // `taskInstant` reads it, which takes a year before 100 that the calendar and the task editor
-    // read in the 1900s. Asked first, so that dayjs below never sees a 2026-02-30 or a 25:00, which
-    // it would roll over into another.
+    // read in the 1900s, and a bare date before 1000 the calendar draws nowhere. Asked first, so
+    // that dayjs below never sees a 2026-02-30 or a 25:00, which it would roll over into another.
     if (!isWrittenTaskDate(value)) {
         return undefined;
     }

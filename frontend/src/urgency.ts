@@ -175,11 +175,13 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
 // (`urgency::is_written`). `taskInstant` reads more, but not every reader does: the calendar
 // (`toWallClock`) and the alarms read no fraction of a second and no white space before a bare
 // date, and a bare date in the years 0 to 99 as one in the 1900s, and the editor's own date field
-// reads a datetime in those years so too, and white space after a bare date as midnight.
+// reads a datetime in those years so too, and white space after a bare date as midnight. The
+// calendar draws a bare date in the years 100 to 999 nowhere, spelling its year in three digits it
+// does not read, and nothing needs a datetime in them either.
 export function isWrittenTaskDate(value: unknown): boolean {
     return typeof value === 'string'
         && value.trim() === value
-        && !value.startsWith('00')
+        && !value.startsWith('0')
         && /^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:Z|[+-][0-9]{2}:[0-9]{2}))?$/.test(value)
         && taskInstant(value, 'UTC') !== undefined;
 }

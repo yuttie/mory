@@ -115,6 +115,24 @@ events:
             freq: daily
             count: 2
             tz: 0
+    Until at its start in its zone:
+        start: 2024-05-26 20:00
+        repeat:
+            freq: daily
+            tz: Asia/Tokyo
+            until: 2024-05-26 11:00:00+00:00
+    All-day until its first midnight in its zone:
+        start: 2024-05-27
+        repeat:
+            freq: daily
+            tz: Asia/Tokyo
+            until: 2024-05-26 15:00:00+00:00
+    Until past spring forward in its zone:
+        start: 2024-03-10 03:00
+        repeat:
+            freq: daily
+            tz: America/New_York
+            until: 2024-03-10 07:30:00+00:00
 ---
 
 # Zones

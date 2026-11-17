@@ -541,7 +541,7 @@ fn validate_task_date(key: &str, value: &str) -> Result<(), String> {
     if !crate::urgency::is_written(value) {
         return Err(format!(
             "{key} {value:?}: use a valid YYYY-MM-DD date or a datetime with its UTC offset, to the \
-             second at most (2026-03-15 18:17:46+09:00), from the year 100 on.",
+             second at most (2026-03-15 18:17:46+09:00), from the year 1000 on.",
         ));
     }
     Ok(())
