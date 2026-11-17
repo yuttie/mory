@@ -1,9 +1,4 @@
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-
 import { wallClockOf, zoneOffset } from '@/zone';
-
-dayjs.extend(utc);
 
 export type Importance = 'low' | 'medium' | 'high';
 export const IMPORTANCE_ORDER: Record<Importance, number> = { low: 0, medium: 1, high: 2 };
@@ -102,9 +97,20 @@ export function resolvedLeadTime(task: UrgencyTask, tags: readonly string[], set
 
 const DAY = 86_400_000;
 
-// Date-only limits last through their local day; availability starts at midnight.
+// The instant a wall clock in the zone reads, given as `YYYY-MM-DD HH:mm`, `YYYY-MM-DD HH:mm:ss`
+// or `YYYY-MM-DD HH:mm:ss.sss`. `setUTCFullYear` builds it, as `wallClockOf` does, rather than
+// `dayjs.utc`, which reads through `Date.UTC` and so takes the years 0-99 as 1900-1999, where the
+// Rust twin (`local_instant`) reads them as written.
 export function localInstant(wall: string, zone: string): number {
-    return instantOfWallClock(dayjs.utc(wall).valueOf(), zone);
+    const parts = /^([0-9]{4})-([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]{3}))?)?$/.exec(wall);
+    if (parts === null) {
+        return NaN;
+    }
+    const [, year, month, day, hours, minutes, seconds = '0', millis = '0'] = parts;
+    const clock = new Date(0);
+    clock.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
+    clock.setUTCHours(Number(hours), Number(minutes), Number(seconds), Number(millis));
+    return instantOfWallClock(clock.valueOf(), zone);
 }
 
 // A wall clock in the zone, `YYYY-MM-DD HH:mm` or `YYYY-MM-DD HH:mm:ss`, written with the offset
