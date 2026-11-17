@@ -28,14 +28,15 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                 while (requested) {
                     requested = false;
                     try {
-                        const value = YAML.parse(await files.read(TASK_SETTINGS_PATH));
+                        const source = await files.read(TASK_SETTINGS_PATH);
+                        const value = YAML.parse(source);
                         const parsed = readTaskSettings(value);
                         const colors = readStatusColors(value);
                         // Each task's urgency is worked out from `settings`, so the same settings
                         // read again must not stand in for them.
                         keepEqual(settings, parsed.settings);
                         keepEqual(statusColors, colors.colors);
-                        keepEqual(problems, [...parsed.problems, ...colors.problems]);
+                        keepEqual(problems, [...parsed.problems, ...(parsed.settings.lead_time_by_tag === undefined ? [] : untextTagKeys(source)), ...colors.problems]);
                     }
                     catch (error) {
                         keepEqual(settings, {});
@@ -92,6 +93,23 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     }
     return { settings, statusColors, resolvedStatusColors, problems, load, saveStatusColors };
 });
+
+/// A problem for each key of `lead_time_by_tag` that YAML reads as something other than text, such
+/// as `2024:` or `true:`. The web app matches it by its spelling, as JavaScript makes every key a
+/// string, but `read_settings` in moried takes only a key that is text, so `list_tasks` would
+/// work out another urgency for the tasks it tags.
+export function untextTagKeys(source: string): string[] {
+    const tags = YAML.parseDocument(source).get('lead_time_by_tag', true);
+    if (!YAML.isMap(tags)) {
+        return [];
+    }
+    return tags.items
+        .filter(({ key }) => !(YAML.isScalar(key) && typeof key.value === 'string'))
+        .map(({ key }) => {
+            const spelling = String(key);
+            return `Tag ${spelling} in lead_time_by_tag is not text, so moried's list_tasks ignores its lead time; quote it, as "${spelling}".`;
+        });
+}
 
 function isMissing(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 404;
