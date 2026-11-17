@@ -39,7 +39,7 @@ use chrono::{
     TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz as Zone;
-use icalendar::{Frequency, NWeekday, Tz, Weekday, rrule::{RRule, RRuleError, RRuleSet}};
+use icalendar::{Frequency, NWeekday, Tz, Weekday, rrule::{RRule, RRuleError, RRuleSet, ValidationError}};
 use regex::Regex;
 use serde_yaml::{Mapping, Value};
 
@@ -859,6 +859,26 @@ struct BuiltRule {
     has_time: bool,
     /// The zone a timed rule's occurrences are converted from, when it names one.
     convert_into: Option<Zone>,
+}
+
+/// Why `expand_rule` expands no occurrence of a rule, or `Ok` when it reads the rule: `Err(None)`
+/// for a rule it refuses itself, and the crate's words for one the crate will not build. For the
+/// event tools, which refuse to write a rule the calendar would draw nothing of.
+pub(crate) fn rule_fault(repeat: &Value, start: &Value, reader: &Reader) -> Result<(), Option<String>> {
+    match build_rule(Some(repeat), Some(start), reader) {
+        Some(Ok(_)) => Ok(()),
+        // The crate names both as instants in UTC, which is only where `build_rule` floats the wall
+        // clocks it compares; a note writes neither so, and its offsets are read otherwise.
+        Some(Err(RRuleError::ValidationError(ValidationError::UntilBeforeStart { .. }))) => Err(Some(
+            "its `until` is before its `start`, as the calendar compares the two: by the wall clock \
+             each is written at, reading no offset on `start`, and one on `until` only when the rule \
+             names a `tz`."
+                .to_owned(),
+        )),
+        Some(Err(RRuleError::ValidationError(error))) => Err(Some(error.to_string())),
+        Some(Err(error)) => Err(Some(error.to_string())),
+        None => Err(None),
+    }
 }
 
 /// `expandRule`: the wall clock of every occurrence a rule generates within the days `[from, to]`,

@@ -292,7 +292,11 @@ too, in moried's zone, as `taskInstant` does, and those other spellings as well.
 An event's `end` may also be a time of day or a duration, as `normalizeEndTime` reads one. An
 occurrence to remove is matched by instant (`note_events::instant_of`, the twin of `instantOf`), so
 the many older starts written without an offset are read in moried's zone, and by whether it is a
-bare date, since the calendar draws a whole day and midnight on it as two occurrences.
+bare date, since the calendar draws a whole day and midnight on it as two occurrences. A `repeat`
+rule an edit leaves on an event is refused when `note_events::rule_fault` finds it is no rule
+against the event's `start` -- an ordinal past what its period counts, `bymonthday` under
+`freq: weekly`, an `until` before the start -- by the expander's own checks rather than a copy of
+them, so the tools write no rule the calendar draws nothing of.
 
 The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
 month as `readPlan` does and writes one as `writePlan` does, and each write is checked against

@@ -505,7 +505,10 @@ impl Mory {
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
                        never an offset. A rule recurs from the event's `start`, so it needs one, \
                        and `exclusions` take occurrences out of a rule, so they need a \
-                       `repeat`.\n\n`category` names an event category configured in \
+                       `repeat`. A rule the calendar would expand nothing of is refused: an \
+                       ordinal past what its period counts (`-6fri`), `bymonthday` under \
+                       `freq: weekly`, months that have none of its days, or an `until` before \
+                       the `start`.\n\n`category` names an event category configured in \
                        `.mory/calendars.yaml`, which list_events lists; one that is not \
                        configured is refused rather than invented.\n\n`alarms` says when it \
                        rings, as offsets from the start (`-10m`, `+1h`) or times on its day \
@@ -531,8 +534,9 @@ impl Mory {
                        are changed; name keys in `clear` to remove them. The rest of the note, \
                        comments and hand-formatting included, is untouched. The same spelling \
                        rules as add_event apply: three-letter weekdays with an optional \
-                       ordinal, an IANA zone name for `tz`, offsets on datetimes and none on \
-                       dates, a `category` that is already configured, and `alarms` as offsets \
+                       ordinal, a rule the calendar can expand, an IANA zone name for `tz`, \
+                       offsets on datetimes and none on dates, a `category` that is already \
+                       configured, and `alarms` as offsets \
                        or times on the day, with `clear: [\"alarms\"]` to go back to the \
                        category's and the config's.\n\nMany events list their occurrences one \
                        by one, under `instances` or the older `times`, rather than by a rule. \
