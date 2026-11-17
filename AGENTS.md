@@ -275,7 +275,9 @@ makes `backend/src/urgency.rs` a second copy of `frontend/src/urgency.ts`, and `
 `fixtures/urgency/cases.json` holds the first pair to each other and `hierarchy.json` the second,
 so change one, change the other and run both halves. A task's dates, and an event's `start`,
 `until`, `exclusions` and the `start` of an occurrence it lists, are refused unless
-`urgency::instant` reads them: a bare date or a datetime carrying its offset, the convention below.
+`urgency::is_written` takes them: a bare date or a datetime carrying its offset, the convention
+below. `urgency::instant`, which urgency is worked out with, reads one written without an offset
+too, in moried's zone, as `taskInstant` does.
 An event's `end` may also be a time of day or a duration, as `normalizeEndTime` reads one. An
 occurrence to remove is matched by instant (`note_events::instant_of`, the twin of `instantOf`), so
 the many older starts written without an offset are read in moried's zone, and by whether it is a

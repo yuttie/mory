@@ -400,7 +400,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         {
             id: 'task-date-values',
             title: 'Task dates are ones urgency can read',
-            description: 'Each due_by, deadline and available_from is a bare date or a datetime carrying its offset, such as 2026-10-21 or 2026-10-21 09:00+09:00. Urgency ignores any other, and the MCP tools refuse it.',
+            description: 'Each due_by, deadline and available_from is a bare date or a datetime, such as 2026-10-21 or 2026-10-21 09:00+09:00; one written without its offset is read in moried\'s zone. Urgency ignores any other value.',
             problems: unreadDates,
         },
         {

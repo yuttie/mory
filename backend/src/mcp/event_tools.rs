@@ -30,12 +30,11 @@ const FREQUENCIES: [&str; 4] = ["daily", "weekly", "monthly", "yearly"];
 ///
 /// The calendar reads a datetime without an offset too, as the reader's wall clock, which is why
 /// such a value has to be refused here rather than left for the calendar to catch: it would be
-/// drawn, at an hour that moves with whoever reads it. Read with the reader the task dates are
-/// checked with, so the two kinds of date follow one rule.
+/// drawn, at an hour that moves with whoever reads it. Held to `urgency::is_written`, as the task
+/// dates are, so the two kinds of date follow one rule.
 fn check_when(key: &str, value: &str) -> Result<(), String> {
     check_unpadded(key, value)?;
-    let text = Value::String(value.to_owned());
-    if crate::urgency::instant(Some(&text), crate::urgency::local_zone(), false).is_none() {
+    if !crate::urgency::is_written(value) {
         return Err(format!(
             "{key} {value:?} is neither a bare date (`2026-03-12`) nor a datetime carrying its \
              offset (`2026-03-12 19:00:00+09:00`).",

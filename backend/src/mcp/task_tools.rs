@@ -503,7 +503,7 @@ fn alarm_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
 }
 
 fn validate_task_date(key: &str, value: &str) -> Result<(), String> {
-    if crate::urgency::instant(Some(&Value::String(value.to_owned())), crate::urgency::local_zone(), false).is_none() {
+    if !crate::urgency::is_written(value) {
         return Err(format!("{key}: use a valid YYYY-MM-DD date or a datetime with its UTC offset."));
     }
     Ok(())
@@ -781,7 +781,8 @@ mod tests {
     }
 
     #[test]
-    fn task_dates_are_accepted_only_when_urgency_can_read_them() {
+    fn task_dates_are_accepted_only_as_they_are_written() {
+        // Urgency reads a time without its offset, in moried's zone, but nothing writes one.
         for date in ["2026-02-30", "2026-13-01", "2026-10-15 12:00", ""] {
             assert!(validate_task_date("deadline", date).is_err());
         }

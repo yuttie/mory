@@ -130,6 +130,11 @@ function instantOfWallClock(local: number, zone: string): number {
     return matches.length > 0 ? Math.min(...matches) : local - zoneOffset(local - DAY, zone);
 }
 
+// The instant a task date names: a bare date in `zone`, through its last moment with `endOfDay`, a
+// datetime at its offset, and a datetime written without one as the wall clock in `zone`, which is
+// moried's, as every other reader of a note reads such a time. Notes are written with the offset
+// (`isWrittenTaskDate`), but older ones are not, and reading those as no date at all left a
+// deadline the calendar draws and the alarms ring out of the task's urgency.
 export function taskInstant(value: unknown, zone: string, endOfDay = false): number | undefined {
     if (typeof value !== 'string') {
         return undefined;
@@ -142,17 +147,29 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
         }
         return localInstant(`${text} ${endOfDay ? '23:59:59.999' : '00:00:00.000'}`, zone);
     }
-    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,3})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(text)) {
+    const parts = text.match(/^([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(\.[0-9]{1,3})?)?(Z|[+-][0-9]{2}:[0-9]{2})?$/);
+    if (!parts || Number(parts[2]) > 23 || Number(parts[3]) > 59 || Number(parts[4] ?? 0) > 59) {
         return undefined;
     }
-    const clock = text.slice(11).match(/^([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?/);
-    if (!clock || Number(clock[1]) > 23 || Number(clock[2]) > 59 || Number(clock[3] ?? 0) > 59) {
+    const [, date, hours, minutes, seconds, fraction, offset] = parts;
+    const canonical = new Date(`${date}T00:00:00Z`);
+    if (!Number.isFinite(canonical.valueOf()) || canonical.toISOString().slice(0, 10) !== date) {
         return undefined;
+    }
+    if (offset === undefined) {
+        const millis = (fraction ?? '.').slice(1).padEnd(3, '0');
+        return localInstant(`${date} ${hours}:${minutes}:${seconds ?? '00'}.${millis}`, zone);
     }
     const instant = Date.parse(text.replace(' ', 'T'));
-    const date = text.slice(0, 10);
-    const canonical = new Date(`${date}T00:00:00Z`);
-    return Number.isFinite(instant) && Number.isFinite(canonical.valueOf()) && canonical.toISOString().slice(0, 10) === date ? instant : undefined;
+    return Number.isFinite(instant) ? instant : undefined;
+}
+
+// Whether a value is a task date as one is written: a bare date, or a datetime carrying its offset.
+// What the task editor, the outline and moried's tools write; `taskInstant` reads more.
+export function isWrittenTaskDate(value: unknown): boolean {
+    return typeof value === 'string'
+        && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,3})?)?$/.test(value.trim())
+        && taskInstant(value, 'UTC') !== undefined;
 }
 
 // `zone` is the one a bare date is read in, moried's, as `useZoneStore` gives it.

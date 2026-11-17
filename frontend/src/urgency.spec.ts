@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import fixtures from '../../fixtures/urgency/cases.json';
-import { leadTimeDays, localInstant, readTaskSettings, taskInstant, urgencyOf, readImportance, mostUrgent } from '@/urgency';
+import { isWrittenTaskDate, leadTimeDays, localInstant, readTaskSettings, taskInstant, urgencyOf, readImportance, mostUrgent } from '@/urgency';
 
 describe('shared urgency fixtures', () => {
     for (const test of fixtures.cases) {
@@ -89,6 +89,27 @@ describe('local wall clocks', () => {
     it('reads a date as its whole local day, where its midnight is missing or its end repeated', () => {
         expect(new Date(taskInstant('2018-11-04', 'America/Sao_Paulo')!).toISOString()).toBe('2018-11-04T03:00:00.000Z');
         expect(new Date(taskInstant('2019-02-16', 'America/Sao_Paulo', true)!).toISOString()).toBe('2019-02-17T01:59:59.999Z');
+    });
+
+    // Whatever zone the process is in, and with no end of day to move to, as it is a moment.
+    it('reads a datetime without its offset as the wall clock in the zone', () => {
+        vi.stubEnv('TZ', 'Pacific/Kiritimati');
+        try {
+            expect(new Date(taskInstant('2026-10-04 10:00', 'Asia/Tokyo')!).toISOString()).toBe('2026-10-04T01:00:00.000Z');
+            expect(new Date(taskInstant('2026-10-04 10:00', 'America/New_York', true)!).toISOString()).toBe('2026-10-04T14:00:00.000Z');
+        }
+        finally {
+            vi.unstubAllEnvs();
+        }
+    });
+
+    it('holds what is written to a bare date or a datetime carrying its offset', () => {
+        for (const value of ['2026-10-04', '2026-10-04 10:00+09:00', '2026-10-04T10:00:00.5Z']) {
+            expect(isWrittenTaskDate(value), value).toBe(true);
+        }
+        for (const value of ['2026-10-04 10:00', '2026-10-04T10:00:00.5', '2026-02-30', '2026-10-04 24:00+09:00', '', 7]) {
+            expect(isWrittenTaskDate(value), String(value)).toBe(false);
+        }
     });
 
     // The window opens at the reference's own wall clock, a lead time of calendar days before.

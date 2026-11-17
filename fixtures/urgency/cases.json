@@ -428,9 +428,113 @@
             }
         },
         {
-            "name": "bare datetime ignored",
+            "name": "datetime without an offset read in the zone",
             "task": {
                 "deadline": "2026-10-04 10:00:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.005952380952380952,
+                "reference": "2026-10-04T01:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "minutes and a T without an offset",
+            "task": {
+                "due_by": "2026-10-04T10:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.005952380952380952,
+                "reference": "2026-10-04T01:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "seconds and a fraction without an offset",
+            "task": {
+                "deadline": "2026-10-04 10:00:30.25"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.006002397486772487,
+                "reference": "2026-10-04T01:00:30.250Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "availability without an offset read in the zone",
+            "task": {
+                "deadline": "2026-10-20",
+                "available_from": "2026-10-04 10:00"
+            },
+            "now": "2026-10-04T00:30:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "calm",
+                "slack_ratio": 2.3720238078703706,
+                "reference": "2026-10-20T14:59:59.999Z",
+                "actionable": false,
+                "short_window": false
+            }
+        },
+        {
+            "name": "a clock the zone skips, without an offset, moves forward",
+            "task": {
+                "deadline": "2026-03-08 02:30"
+            },
+            "now": "2026-03-01T12:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "America/New_York",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.9732142857142857,
+                "reference": "2026-03-08T07:30:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "a clock the zone repeats, without an offset, is its first",
+            "task": {
+                "deadline": "2026-11-01 01:30"
+            },
+            "now": "2026-10-30T12:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "America/New_York",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.24702380952380953,
+                "reference": "2026-11-01T05:30:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "an impossible clock or date without an offset is ignored",
+            "task": {
+                "deadline": "2026-10-04 24:00",
+                "due_by": "2026-02-30 10:00"
             },
             "now": "2026-10-04T00:00:00Z",
             "tags": [],

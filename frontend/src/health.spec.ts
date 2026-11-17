@@ -163,9 +163,9 @@ describe('taskChecks', () => {
     });
 
     it('reports a task date urgency does not read', () => {
-        const task = { status: { kind: 'todo' }, due_by: '2026-10-01 10:00', deadline: '2026-02-30', available_from: '2026-10-01' };
+        const task = { status: { kind: 'todo' }, due_by: '2026-10-01 25:00', deadline: '2026-02-30', available_from: '2026-10-01 10:00' };
         expect(problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task })]))['task-date-values']).toEqual([
-            { path: `.tasks/${A}.md`, message: 'due_by "2026-10-01 10:00" is not read.' },
+            { path: `.tasks/${A}.md`, message: 'due_by "2026-10-01 25:00" is not read.' },
             { path: `.tasks/${A}.md`, message: 'deadline "2026-02-30" is not read.' },
         ]);
     });

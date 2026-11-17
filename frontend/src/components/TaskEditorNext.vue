@@ -574,7 +574,7 @@ import { required } from '@/rules';
 import { isSaveKey, useShortcuts } from '@/keyboard';
 import { useCalendarsStore } from '@/stores/calendars';
 
-import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
+import { isWrittenTaskDate, leadTimeDays, resolvedLeadTime, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { useZoneStore } from '@/stores/zone';
@@ -625,7 +625,7 @@ const plans = usePlansStore();
 const plannedDays = computed(() => plans.plannedDays(uuid.value));
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
 // Whether a task reads it as a date: only that is asked, so any zone does.
-const taskDateRule = (value: string) => !value || taskInstant(value, 'UTC') !== undefined || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
+const taskDateRule = (value: string) => !value || isWrittenTaskDate(value) || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
 
 // Emits
 const emit = defineEmits<{
