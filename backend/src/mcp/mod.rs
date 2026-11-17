@@ -467,7 +467,8 @@ impl Mory {
                        last two ring. Requires the notes:write scope.\n\nThe dates say when the \
                        task can start and when it is due; which day it is worked on is a day \
                        plan's, set with plan_task. They are bare dates (`2026-03-15`) \
-                       or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
+                       or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`), with \
+                       no fraction of a second: the calendar draws no such date. due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
                        events as well as fields: list_agenda lists them with the rest of what is \
                        on, and list_events under `task_dates`. \
@@ -747,8 +748,8 @@ which tasks are worked on which day is kept apart from the tasks, in one file a 
 changed with the plan tools rather than update_note.
 
 Two things are easy to get wrong and expensive to fix:
-- Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \
-(2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name. Many older notes \
+- Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00), to the second at most; plain \
+dates are bare (2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name. Many older notes \
 write a time without an offset (2025-10-06 13:00): the tools read it in moried's own zone, \
 whatever `tz` a call asks for, and list_agenda called without `tz` names that zone in its `tz`. \
 Write new ones with the offset.

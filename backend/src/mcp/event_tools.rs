@@ -37,7 +37,7 @@ fn check_when(key: &str, value: &str) -> Result<(), String> {
     if !crate::urgency::is_written(value) {
         return Err(format!(
             "{key} {value:?} is neither a bare date (`2026-03-12`) nor a datetime carrying its \
-             offset (`2026-03-12 19:00:00+09:00`).",
+             offset, to the second at most (`2026-03-12 19:00:00+09:00`), from the year 100 on.",
         ));
     }
     Ok(())
@@ -1094,7 +1094,8 @@ mod tests {
         for start in ["2026-03-12", "2026-03-12 19:00:00+09:00", "2026-03-12 19:00+09:00", "2026-03-12T10:00:00Z"] {
             assert!(event_changes(&event(serde_json::json!({ "start": start }))).is_ok(), "{start}");
         }
-        for start in ["2026-03-12 19:00", "2026-03-12 19:00:00", "2026-02-30", "tomorrow", "19:00"] {
+        // A fraction of a second is read by urgency, but the calendar draws no such start.
+        for start in ["2026-03-12 19:00", "2026-03-12 19:00:00", "2026-02-30", "tomorrow", "19:00", "2026-03-12T10:00:00.000Z"] {
             let error = event_changes(&event(serde_json::json!({ "start": start })))
                 .expect_err("not a moment as the notes spell one");
             assert!(error.contains("+09:00"), "{start}: {error}");

@@ -502,9 +502,17 @@ fn alarm_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     Ok(changes)
 }
 
+/// Refuses a date some reader of it does not take, as `urgency::is_written` decides, and writes
+/// nothing but what it checked: white space around a date is refused rather than trimmed away.
 fn validate_task_date(key: &str, value: &str) -> Result<(), String> {
+    if value.trim() != value {
+        return Err(format!("{key} {value:?} has white space around it; leave it out."));
+    }
     if !crate::urgency::is_written(value) {
-        return Err(format!("{key}: use a valid YYYY-MM-DD date or a datetime with its UTC offset."));
+        return Err(format!(
+            "{key} {value:?}: use a valid YYYY-MM-DD date or a datetime with its UTC offset, to the \
+             second at most (2026-03-15 18:17:46+09:00), from the year 100 on.",
+        ));
     }
     Ok(())
 }
@@ -789,6 +797,21 @@ mod tests {
         for date in ["2026-10-15", "2026-10-15 12:00+09:00", "2026-10-15T12:00:00Z"] {
             assert!(validate_task_date("deadline", date).is_ok());
         }
+        // Urgency reads these too, but the calendar draws none of them and no alarm rings.
+        for date in ["2026-10-15T12:00:00.000Z", " 2026-12-01", "0050-01-01"] {
+            assert!(validate_task_date("deadline", date).is_err(), "{date:?}");
+        }
+    }
+
+    /// What is checked is what is written: a date padded with white space is refused, not trimmed.
+    #[test]
+    fn a_padded_date_is_refused_rather_than_written() {
+        let args: SetTaskDatesArgs = serde_json::from_value(
+            serde_json::json!({ "path": "unused", "message": "Test", "due_by": " 2026-12-01" }),
+        )
+        .unwrap();
+        let error = date_changes(&args, "---\ntask:\n    status: {kind: todo}\n---\n").unwrap_err();
+        assert!(error.contains("white space"), "{error}");
     }
 
     fn args(path: &str) -> UpdateTaskArgs {
