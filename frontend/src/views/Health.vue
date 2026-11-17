@@ -273,16 +273,10 @@ async function check(): Promise<void> {
     checking.value = false;
 }
 
-// Each listed month on its own, after the listing that names them: the store's own `loadAll` stops
-// at the first month it cannot read, and the months after it would read as clean. A month that
-// fails is in `plans.errors`.
+// The listed months, after the listing that names them. A month that fails is in `plans.errors`.
 async function readPlans(): Promise<void> {
-    for (const path of planPaths.value) {
-        const month = planMonthOf(path);
-        if (month !== null) {
-            await plans.loadMonths([month]).catch(() => undefined);
-        }
-    }
+    const months = planPaths.value.map(planMonthOf).filter((month): month is string => month !== null);
+    await plans.loadMonths(months).catch(() => undefined);
 }
 
 onMounted(() => {
