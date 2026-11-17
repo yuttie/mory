@@ -337,6 +337,17 @@ pub async fn cancel_task(
 /// nor `list_tasks` would show it.
 fn task_path(path: String) -> Result<String, String> {
     if crate::tasks::in_task_tree(&path) {
+        // The tree takes any file named for it, but a task is edited as a note: frontmatter put
+        // above an SVG, which is UTF-8 too, would break the image. As the task editor reads one,
+        // by the type it is served as, which is application/octet-stream for a file of no known
+        // type: the editor refuses that one too.
+        let mime = crate::guess_mime_from_path(&path);
+        if !mime.starts_with("text/") {
+            return Err(format!(
+                "{path:?} is {mime}, not a note, so it holds no task to change. A task is a \
+                 Markdown note: use create_task for a new one.",
+            ));
+        }
         return Ok(path);
     }
     Err(format!(
@@ -786,6 +797,11 @@ mod tests {
         assert!(new_task_path(Some(".tasks/report.md")).unwrap_err().contains("does not end with a UUIDv4"));
         assert!(new_task_path(Some(&format!(".tasks/directory/{uuid}.md"))).unwrap_err().contains("\"directory\" is not a UUIDv4"));
         assert!(crate::tasks::in_task_tree(&new_task_path(None).unwrap()));
+        assert_eq!(task_path(format!(".tasks/{uuid}.md")), Ok(format!(".tasks/{uuid}.md")));
+        assert_eq!(task_path(format!(".tasks/{uuid}.txt")), Ok(format!(".tasks/{uuid}.txt")));
+        for file in [format!(".tasks/{uuid}.svg"), format!(".tasks/{uuid}.png"), format!(".tasks/{uuid}.json"), format!(".tasks/{uuid}")] {
+            assert!(task_path(file.clone()).unwrap_err().contains("not a note"), "{file}");
+        }
     }
 
     #[test]

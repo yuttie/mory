@@ -1637,6 +1637,15 @@ mod tests {
             listed(TASK_B, "tags: [work]"),
             listed(".tasks/0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2c.md", "task: {due_by: 2026-11-20}"),
             listed(".tasks/untitled.md", "task: {status: {kind: todo}}"),
+            // An image named for the tree is a node of it in the web app too, listed without
+            // metadata.
+            crate::models::ListEntry {
+                mime_type: "image/png".to_owned(),
+                metadata: None,
+                title: None,
+                binary: true,
+                ..listed(".tasks/1b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2c.png", "")
+            },
         ];
         let args = |status: Option<&str>| ListTasksArgs { status: status.map(str::to_owned), tag: None, limit: None, offset: None };
         let now = chrono::DateTime::parse_from_rfc3339("2026-10-04T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
@@ -1648,6 +1657,7 @@ mod tests {
             (TASK_A.to_owned(), serde_json::json!({"status": {"kind": "todo"}})),
             (TASK_B.to_owned(), serde_json::Value::Null),
             (".tasks/0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2c.md".to_owned(), serde_json::json!({"due_by": "2026-11-20"})),
+            (".tasks/1b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2c.png".to_owned(), serde_json::Value::Null),
         ]);
         assert_eq!(listed(Some("backlog")), vec![]);
         assert_eq!(listed(Some("todo")).len(), 1);
