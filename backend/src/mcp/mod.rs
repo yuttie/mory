@@ -242,7 +242,11 @@ impl Mory {
     #[tool(
         name = "list_imported_events",
         description = "List the events from the external calendars subscribed in \
-                       `.mory/calendars.yaml`, expanded over a window of whole days.\n\nThese \
+                       `.mory/calendars.yaml`, expanded over a window of whole days and a day \
+                       either side of it in UTC: each feed keeps its own zone, so the window is \
+                       widened rather than cut in one, and events from just outside the days \
+                       asked for may be listed too. Each time carries the offset of the zone its \
+                       feed gives it. Check a `start` against the days meant.\n\nThese \
                        are a live view of someone else's calendar: they are read-only, they are \
                        not stored in the repository, and they must never be written into it. A \
                        calendar that could not be read is reported in `calendars` with its \
@@ -255,8 +259,8 @@ impl Mory {
                        note, so count such an event once.\n\nEach occurrence is listed on its \
                        own. The whole definition of the series it belongs to is returned under \
                        `series`, keyed by `uid`, only with `include_series`.\n\nTo ask what is \
-                       on, use list_agenda, which expands the notes too and leaves out what a \
-                       note claims.",
+                       on, use list_agenda, which keeps to the days asked for in one zone, \
+                       expands the notes too and leaves out what a note claims.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
@@ -272,7 +276,10 @@ impl Mory {
                        `path` and it becomes `<uuid>.md` at the repository root, which is what \
                        the web app does. A path under `.tasks/` must end with a UUIDv4 -- \
                        `<uuid>.md` or `readable-name-<uuid>.md` -- because the task tree is \
-                       derived from the paths. Fails rather than overwriting an existing file.",
+                       derived from the paths. Fails rather than overwriting an existing file.\
+                       \n\nA Markdown note without `created_at` in its frontmatter is given one \
+                       of now, as the web app gives a new note, and one whose frontmatter does \
+                       not read as a YAML mapping is refused.",
         annotations(title = "Create a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -295,10 +302,12 @@ impl Mory {
                        It also writes over anything changed in the note since you read it. A \
                        file read_note does not return whole -- one longer than it returns, an \
                        image, or text not in UTF-8 -- is refused, since it cannot have been \
-                       read whole.\
+                       read whole. A Markdown note sent without `created_at` keeps the one it \
+                       had, or is given one of now.\
                        \n\nTo change a task or an event, use the task and event tools instead: \
                        they edit its frontmatter in place, in one step, and check what they \
-                       write, where this writes whatever it is sent.",
+                       write, where this checks only that the frontmatter it is sent reads as a \
+                       YAML mapping.",
         annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -410,8 +419,8 @@ impl Mory {
         description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
                        the status to done with a completed_at of now unless one is given. A \
                        task already done keeps its completed_at and completion_note unless new \
-                       ones are given, so completing it again changes nothing. A parent's \
-                       progress follows from it.",
+                       ones are given, so completing it again with nothing new is refused, and \
+                       nothing is committed. A parent's progress follows from it.",
         annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -453,7 +462,8 @@ impl Mory {
                        plan's, set with plan_task. They are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
-                       events as well as fields, and list_events returns them. \
+                       events as well as fields: list_agenda lists them with the rest of what is \
+                       on, and list_events under `task_dates`. \
                        `due_by_alarms` and `deadline_alarms` say when each rings, as offsets \
                        (`-1h`) or times on its day (`09:00`, `-1d 18:00`).",
         annotations(title = "Set a task's dates", read_only_hint = false,
@@ -473,7 +483,9 @@ impl Mory {
     #[tool(
         name = "add_event",
         description = "Add a calendar event to a note's `events:` frontmatter and commit it. \
-                       Requires the notes:write scope.\n\nAn event is keyed by its name in that \
+                       Requires the notes:write scope.\n\nThe note must exist already; for an \
+                       event with a note of its own, make one under `.events/` with create_note \
+                       first. An event is keyed by its name in that \
                        map, so the name must not already be taken. It needs a `start`, or a \
                        list of occurrences in `add_instances`, each with its own `start`, for \
                        one that happens on dates no rule describes. A bare date makes an \
@@ -483,7 +495,9 @@ impl Mory {
                        a `repeat` rule, weekdays are three letters (`wed`), not iCal's two, and \
                        may carry an ordinal: `3wed` is the third Wednesday, which needs `freq: \
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
-                       never an offset.\n\n`category` names an event category configured in \
+                       never an offset. A rule recurs from the event's `start`, so it needs one, \
+                       and `exclusions` take occurrences out of a rule, so they need a \
+                       `repeat`.\n\n`category` names an event category configured in \
                        `.mory/calendars.yaml`, which list_events lists; one that is not \
                        configured is refused rather than invented.\n\n`alarms` says when it \
                        rings, as offsets from the start (`-10m`, `+1h`) or times on its day \
@@ -520,7 +534,12 @@ impl Mory {
                        and every occurrence listed at that moment goes. Removing one and adding \
                        another in the same call replaces it in one commit; the new one has only \
                        the fields `add_instances` gives it, so repeat any of the old one's to \
-                       keep them. The other occurrences are left as the note wrote them.",
+                       keep them. The other occurrences are left as the note wrote them.\
+                       \n\nA rule's `overrides`, which change one occurrence it generates, can \
+                       be cleared here but not written. To move or change one occurrence of a \
+                       rule, exclude it -- `exclusions` is set whole, so send those it has too \
+                       -- and list what replaces it with `add_instances`, or write an override \
+                       with read_note and update_note.",
         annotations(title = "Update an event", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -602,7 +621,8 @@ impl Mory {
                        leaves its result unrecorded; `interruption` is for work that came up \
                        unplanned, and records it as worked -- on an entry already there too, \
                        whose origin and place are kept. A call that would leave the plan as it \
-                       was is refused, and nothing is committed.",
+                       was is refused, and nothing is committed.\n\nA UUID that names no task \
+                       is planned all the same, and the result says so with `unknown_task`.",
         annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -721,7 +741,10 @@ changed with the plan tools rather than update_note.
 
 Two things are easy to get wrong and expensive to fix:
 - Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \
-(2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name.
+(2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name. Many older notes \
+write a time without an offset (2025-10-06 13:00): the tools read it in moried's own zone, \
+whatever `tz` a call asks for, and list_agenda called without `tz` names that zone in its `tz`, \
+but list_tasks works out no urgency from a task date written so. Write new ones with the offset.
 - Weekdays in a recurrence rule are three letters (`wed`), not iCal's two, and may carry an \
 ordinal: `3wed` is the third Wednesday of the month.
 
