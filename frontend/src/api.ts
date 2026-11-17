@@ -180,6 +180,9 @@ export interface ListEntry2 {
   // name cannot say, for a file without an extension, or one `mime_guess` takes for another type.
   // Absent for text.
   binary?: boolean;
+  // What some reader does not take of the file's frontmatter, one sentence each: fences the
+  // readers find in different places, and keys the listing leaves out. Absent when there is none.
+  unread?: string[];
 }
 
 export function compareTags(a: string, b: string): number {

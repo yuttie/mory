@@ -198,6 +198,11 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
     const invalid: HealthProblem[] = [];
     const unsearched: HealthProblem[] = [];
     for (const entry of entries) {
+        // Said by moried, which reads the file itself, and so also of a file the listing reads no
+        // frontmatter from.
+        for (const message of Array.isArray(entry.unread) ? entry.unread : []) {
+            unreadable.push({ severity: 'error', message: String(message), path: entry.path });
+        }
         if (entry.metadata === null) {
             continue;
         }
@@ -224,7 +229,7 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
         {
             id: 'frontmatter-yaml',
             title: 'Frontmatter can be read',
-            description: 'moried reads each note\'s frontmatter as YAML and lists it. A note whose frontmatter it cannot parse, or cannot list, has no tags, events or task as far as the app can tell.',
+            description: 'moried reads each note\'s frontmatter as YAML and lists it. A note whose frontmatter it cannot parse, or cannot list, has no tags, events or task as far as the app can tell. Its fences are ones every reader finds in the same place, without a byte order mark before them, blanks after a ---, or a closing ..., and every key is one the listing keeps.',
             problems: unreadable,
         },
         {

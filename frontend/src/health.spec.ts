@@ -57,6 +57,17 @@ describe('frontmatterChecks', () => {
         ]);
     });
 
+    it('reports what moried says some reader does not take, with frontmatter or without', () => {
+        const files = [
+            { ...entry('dotted.md', null), unread: ['The frontmatter ends with `...`.'] },
+            { ...entry('keyed.md', { tags: [] }), unread: ['The listing leaves out a null key in `events`.'] },
+        ];
+        expect(problemsOf(frontmatterChecks(files))['frontmatter-yaml']).toEqual([
+            { path: 'dotted.md', message: 'The frontmatter ends with `...`.' },
+            { path: 'keyed.md', message: 'The listing leaves out a null key in `events`.' },
+        ]);
+    });
+
     // Each says what is wrong in one line, where Ajv reports how the value fails every shape it
     // might have taken.
     it.each([
