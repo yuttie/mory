@@ -69,6 +69,16 @@ describe('frontmatterChecks', () => {
         ]);
     });
 
+    // An empty value is YAML null, which every reader takes as the key's absence.
+    it('passes an event field left empty', () => {
+        const empty = { color: null, location: null, url: null, note: null, name: null };
+        const events = { standup: { start: '2026-10-01', category: null, ...empty, repeat: { freq: 'daily' }, overrides: [{ at: '2026-10-02', ...empty }] } };
+        expect(problemsOf(frontmatterChecks([entry('note.md', { events })]))['frontmatter-schema']).toEqual([]);
+        expect(problemsOf(frontmatterChecks([entry('note.md', { events: { standup: { start: '2026-10-01', color: 5 } } })]))['frontmatter-schema']).toEqual([
+            { path: 'note.md', message: '/events/standup/color: must be string' },
+        ]);
+    });
+
     it('validates an `error` key beside others as any other key', () => {
         expect(frontmatterChecks([entry('note.md', { error: 'x', tags: [] })]).flatMap((check) => check.problems)).toEqual([]);
     });

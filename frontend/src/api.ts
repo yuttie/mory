@@ -60,16 +60,17 @@ export interface EventIcal {
   recurrence_id?: string;
 }
 
-// What an event and one of its occurrences both carry.
+// What an event and one of its occurrences both carry. `null`, from a key with nothing after it,
+// is the key's absence wherever a text may be.
 export interface EventFields {
   end?: string;
   finished?: boolean;
-  color?: string;
-  note?: string;
+  color?: string | null;
+  note?: string | null;
   // Overrides the map key for this occurrence, which is how a renamed occurrence is recorded.
-  name?: string;
-  location?: string;
-  url?: string;
+  name?: string | null;
+  location?: string | null;
+  url?: string | null;
   // When it rings, as `alarms.ts` reads them: a list, or one string for a list of one. An empty
   // list silences it, and an unset value takes the category's and then the global ones. `null` is
   // what a key with nothing after it reads as, and is unset.

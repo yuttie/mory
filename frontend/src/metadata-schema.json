@@ -48,6 +48,10 @@
                 }
             ]
         },
+        "event-text": {
+            "description": "Text, or an empty value, which the calendar and moried read as though the key were absent: an occurrence takes its event's, and a colour its category's or the default.",
+            "oneOf": [{ "type": "null" }, { "type": "string" }]
+        },
         "event-ical": {
             "description": "Where an imported event came from. recurrence_id narrows the claim to one occurrence; without it the note shadows the whole series.",
             "type": "object",
@@ -66,11 +70,11 @@
                 "start": { "type": "string" },
                 "end": { "type": "string" },
                 "finished": { "type": "boolean" },
-                "color": { "type": "string" },
-                "note": { "type": "string" },
-                "name": { "type": "string" },
-                "location": { "type": "string" },
-                "url": { "type": "string" },
+                "color": { "$ref": "#/definitions/event-text" },
+                "note": { "$ref": "#/definitions/event-text" },
+                "name": { "$ref": "#/definitions/event-text" },
+                "location": { "$ref": "#/definitions/event-text" },
+                "url": { "$ref": "#/definitions/event-text" },
                 "alarms": { "$ref": "#/definitions/event-alarms" }
             }
         },
@@ -93,15 +97,15 @@
                 "start": { "type": "string" },
                 "end": { "type": "string" },
                 "finished": { "type": "boolean" },
-                "color": { "type": "string" },
-                "note": { "type": "string" },
-                "name": { "type": "string" },
-                "location": { "type": "string" },
-                "url": { "type": "string" },
+                "color": { "$ref": "#/definitions/event-text" },
+                "note": { "$ref": "#/definitions/event-text" },
+                "name": { "$ref": "#/definitions/event-text" },
+                "location": { "$ref": "#/definitions/event-text" },
+                "url": { "$ref": "#/definitions/event-text" },
                 "alarms": { "$ref": "#/definitions/event-alarms" },
                 "category": {
-                    "description": "The id of a category under categories: in .mory/calendars.yaml, which supplies a default color, a name template and alarms. A nested id such as meeting/1on1 takes whatever it does not set from meeting.",
-                    "type": "string"
+                    "description": "The id of a category under categories: in .mory/calendars.yaml, which supplies a default color, a name template and alarms. A nested id such as meeting/1on1 takes whatever it does not set from meeting. An empty value names none.",
+                    "oneOf": [{ "type": "null" }, { "type": "string" }]
                 },
                 "repeat": { "$ref": "#/definitions/event-repeat" },
                 "exclusions": {

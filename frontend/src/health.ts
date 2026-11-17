@@ -52,7 +52,9 @@ function describeValue(value: unknown): string {
 const ajv = new Ajv({ verbose: true, allErrors: true });
 const validateMetadata = ajv.compile(metadataSchema);
 
-const definitions = metadataSchema.definitions as Record<string, { oneOf?: { $ref: string }[]; properties?: { kind?: { const?: string } } }>;
+// Only `task-status` has its alternatives read, and those are each a `$ref`; others, such as
+// `event-text`, are alternatives of type.
+const definitions = metadataSchema.definitions as unknown as Record<string, { oneOf?: { $ref: string }[]; properties?: { kind?: { const?: string } } }>;
 
 // Each status kind's own schema. A status is one of eight alternatives, told apart by `kind`, and
 // Ajv reports how the value fails every one of them: a `done` missing `completed_at` came out as
