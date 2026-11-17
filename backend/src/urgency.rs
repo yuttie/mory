@@ -104,6 +104,10 @@ fn local_instant(wall: NaiveDateTime, zone: Tz) -> DateTime<Utc> {
     }
 }
 
+/// The instant a task date names, as `taskInstant` in `frontend/src/urgency.ts` reads it: a bare
+/// date in `zone`, through its last moment with `end`, a datetime at its offset, and one written
+/// without an offset as the wall clock in `zone`, which is moried's, as the alarms and the calendar
+/// tools read such a time. What a tool writes is held to `is_written` instead.
 pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Utc>> {
     let text = value?.as_str()?.trim();
     if text.len() == 10 {
@@ -114,13 +118,33 @@ pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Ut
         let at = if end { date.and_hms_milli_opt(23, 59, 59, 999)? } else { date.and_hms_opt(0, 0, 0)? };
         return Some(local_instant(at, zone));
     }
-    static DATETIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]{1,3})?)?(Z|[+-][0-9]{2}:[0-9]{2})$").unwrap());
     let parts = DATETIME.captures(text)?;
-    if parts[1].parse::<u8>().ok()? > 23 || parts[2].parse::<u8>().ok()? > 59 || parts.get(3).is_some_and(|seconds| seconds.as_str().parse::<u8>().is_ok_and(|value| value > 59)) {
+    if parts[2].parse::<u8>().ok()? > 23 || parts[3].parse::<u8>().ok()? > 59 || parts.get(4).is_some_and(|seconds| seconds.as_str().parse::<u8>().is_ok_and(|value| value > 59)) {
         return None;
     }
-    let written = if parts.get(3).is_none() { format!("{}:00{}", &text[..16], &parts[4]) } else { text.to_owned() };
+    let date = NaiveDate::parse_from_str(&parts[1], "%Y-%m-%d").ok()?;
+    if date.format("%Y-%m-%d").to_string() != parts[1] {
+        return None;
+    }
+    let Some(offset) = parts.get(6) else {
+        let millis = parts.get(5).map_or(0, |fraction| format!("{:0<3}", &fraction.as_str()[1..]).parse().unwrap_or(0));
+        let seconds = parts.get(4).map_or(Some(0), |seconds| seconds.as_str().parse().ok())?;
+        let wall = date.and_hms_milli_opt(parts[2].parse().ok()?, parts[3].parse().ok()?, seconds, millis)?;
+        return Some(local_instant(wall, zone));
+    };
+    let written = if parts.get(4).is_none() { format!("{}:00{}", &text[..16], offset.as_str()) } else { text.to_owned() };
     DateTime::parse_from_rfc3339(&written.replace(' ', "T")).ok().map(|dt| dt.with_timezone(&Utc))
+}
+
+static DATETIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(\.[0-9]{1,3})?)?(Z|[+-][0-9]{2}:[0-9]{2})?$").unwrap());
+
+/// Whether a value is a task date as one is written: a bare date, or a datetime carrying its offset.
+/// The twin of `isWrittenTaskDate`; `instant` reads more, but nothing here writes the rest.
+pub fn is_written(text: &str) -> bool {
+    let text = text.trim();
+    let value = Value::String(text.to_owned());
+    instant(Some(&value), chrono_tz::UTC, false).is_some()
+        && (text.len() == 10 || DATETIME.captures(text).is_some_and(|parts| parts.get(6).is_some()))
 }
 
 pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTime<Utc>, zone: Tz) -> Urgency {
@@ -186,6 +210,19 @@ mod tests {
         assert!(compare(&zero, &finite).is_lt());
         assert_eq!(serde_json::to_value(&zero).unwrap()["slack_ratio"], serde_json::Value::Null);
     }
+    #[test]
+    fn what_is_written_is_a_bare_date_or_a_datetime_carrying_its_offset() {
+        for value in ["2026-10-04", "2026-10-04 10:00+09:00", "2026-10-04T10:00:00.5Z"] {
+            assert!(is_written(value), "{value}");
+        }
+        for value in ["2026-10-04 10:00", "2026-10-04T10:00:00.5", "2026-02-30", "2026-10-04 24:00+09:00", ""] {
+            assert!(!is_written(value), "{value}");
+        }
+        // What is not written so is still read, as the wall clock in the zone.
+        let read = instant(Some(&"2026-10-04 10:00".into()), chrono_tz::America::New_York, true).unwrap();
+        assert_eq!(read.to_rfc3339(), "2026-10-04T14:00:00+00:00");
+    }
+
     #[test]
     fn shared_golden_fixtures() {
         let fixtures: serde_json::Value = serde_json::from_str(include_str!("../../fixtures/urgency/cases.json")).unwrap();

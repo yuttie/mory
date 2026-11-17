@@ -425,7 +425,7 @@
                     <DateSelector
                         v-bind:model-value="form.available_from"
                         v-on:update:model-value="form.available_from = $event ?? ''"
-                        v-bind:rules="[() => taskDateRule(form.available_from)]"
+                        v-bind:rules="[() => taskDateRule('available_from')]"
                         label="Available from"
                     >
                         <template v-slot:prepend>
@@ -439,7 +439,7 @@
                         v-bind:model-value="form.due_by"
                         v-bind:hide-details="form.due_by === '' ? false : 'auto'"
                         v-on:update:model-value="form.due_by = $event ?? ''"
-                        v-bind:rules="[() => taskDateRule(form.due_by)]"
+                        v-bind:rules="[() => taskDateRule('due_by')]"
                         label="Due date (soft target)"
                     >
                         <template v-slot:prepend>
@@ -457,7 +457,7 @@
                         v-bind:model-value="form.deadline"
                         v-bind:hide-details="form.deadline === '' ? false : 'auto'"
                         v-on:update:model-value="form.deadline = $event ?? ''"
-                        v-bind:rules="[() => taskDateRule(form.deadline)]"
+                        v-bind:rules="[() => taskDateRule('deadline')]"
                         label="Deadline (hard cutoff)"
                     >
                         <template v-slot:prepend>
@@ -574,7 +574,7 @@ import { required } from '@/rules';
 import { isSaveKey, useShortcuts } from '@/keyboard';
 import { useCalendarsStore } from '@/stores/calendars';
 
-import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
+import { isWrittenTaskDate, leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { useZoneStore } from '@/stores/zone';
@@ -624,8 +624,15 @@ const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, 
 const plans = usePlansStore();
 const plannedDays = computed(() => plans.plannedDays(uuid.value));
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
-// Whether a task reads it as a date: only that is asked, so any zone does.
-const taskDateRule = (value: string) => !value || taskInstant(value, 'UTC') !== undefined || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
+// A date is held to how one is written, a bare date or a datetime carrying its offset, as the picker
+// writes it. One the task already holds without its offset is kept as it is, as moried's tools keep
+// it: urgency, the alarms and those tools read it in moried's zone, and its field shows it with the
+// offset it is read at, so refusing it would leave the task unsavable over a date nobody touched.
+const taskDateRule = (key: 'available_from' | 'due_by' | 'deadline') => {
+    const value = form[key];
+    const kept = value === initialForm.value[key] && taskInstant(value, zones.zone) !== undefined;
+    return !value || isWrittenTaskDate(value) || kept || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
+};
 
 // Emits
 const emit = defineEmits<{

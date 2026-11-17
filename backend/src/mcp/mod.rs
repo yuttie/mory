@@ -743,8 +743,8 @@ Two things are easy to get wrong and expensive to fix:
 - Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \
 (2025-10-06). The one exception is `repeat.tz`, which is an IANA zone name. Many older notes \
 write a time without an offset (2025-10-06 13:00): the tools read it in moried's own zone, \
-whatever `tz` a call asks for, and list_agenda called without `tz` names that zone in its `tz`, \
-but list_tasks works out no urgency from a task date written so. Write new ones with the offset.
+whatever `tz` a call asks for, and list_agenda called without `tz` names that zone in its `tz`. \
+Write new ones with the offset.
 - Weekdays in a recurrence rule are three letters (`wed`), not iCal's two, and may carry an \
 ordinal: `3wed` is the third Wednesday of the month.
 
