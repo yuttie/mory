@@ -2,9 +2,14 @@ import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import axios from 'axios';
 import { useFilesStore } from '@/stores/files';
-import { collectUndone, isPlanDate, PLAN_UUID, putPlanEntry, readPlan, writePlan, type MonthPlan, type PlanOrigin, type PlanResult } from '@/plans';
+import { collectUndone, isPlanDate, PLAN_UUID, planMonthOf, putPlanEntry, readPlan, writePlan, type MonthPlan, type PlanOrigin, type PlanResult } from '@/plans';
 
 const planPath = (month: string) => `.mory/plans/${month}.yaml`;
+// Only a file named for a month holds a plan. One named otherwise, such as `2026-13.yaml`, is never
+// read as one, and the health check reports it.
+function listedMonths(entries: readonly { path: string }[]): string[] {
+    return entries.map((entry) => planMonthOf(entry.path)).filter((month): month is string => month !== null);
+}
 export const usePlansStore = defineStore('plans', () => {
     const files = useFilesStore();
     const months = ref<Record<string, MonthPlan>>({});
@@ -24,8 +29,17 @@ export const usePlansStore = defineStore('plans', () => {
         try {
             const version = await files.readVersion(planPath(month), etags.get(month));
             if (version.content !== null) {
-                const parsed = readPlan(version.content, month);
-                months.value[month] = parsed;
+                try {
+                    months.value[month] = readPlan(version.content, month);
+                }
+                catch (error) {
+                    // What an earlier read held of the month is not what its file says now, so
+                    // none of it is shown or collected. A month that only failed to be fetched,
+                    // as while moried restarts, keeps it: its file may well be unchanged.
+                    delete months.value[month];
+                    etags.delete(month);
+                    throw error;
+                }
                 etags.set(month, version.etag);
             }
             delete errors.value[month];
@@ -47,20 +61,35 @@ export const usePlansStore = defineStore('plans', () => {
             }
         }
     }
-    function loadMonths(visible: readonly string[]): Promise<void> {
-        return serialize(async () => {
-            for (const month of [...new Set(visible)].sort()) {
+    // Every month, each on its own: a month that does not read is refused whole, but it must not
+    // keep the months after it from being read, or the planned days they hold would go unseen.
+    // What failed is named once all are read, and kept in `errors` for the views that show it.
+    async function readMonths(wanted: Iterable<string>): Promise<void> {
+        const failures: string[] = [];
+        for (const month of [...new Set(wanted)].sort()) {
+            try {
                 await readMonth(month);
             }
-        });
+            catch (error) {
+                failures.push(`${month}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+        if (failures.length > 0) {
+            throw new Error(`These day plans could not be read: ${failures.join('; ')}`);
+        }
+    }
+    function loadMonths(visible: readonly string[]): Promise<void> {
+        return serialize(() => readMonths(visible));
+    }
+    // The months held and listed, and those known only by their error: a refused month is not
+    // held, and must still be read again, so that it stops failing once its file is fixed or gone.
+    function knownMonths(): string[] {
+        return [...Object.keys(months.value), ...Object.keys(errors.value), ...listedMonths(files.entries)];
     }
     async function loadAll(): Promise<void> {
         historyRequested = true;
         await files.refresh();
-        const listed = files.entries.map((entry) => /^\.mory\/plans\/([0-9]{4}-[0-9]{2})\.yaml$/.exec(entry.path)?.[1]).filter((month): month is string => month !== undefined);
-        for (const month of new Set([...Object.keys(months.value), ...listed])) {
-            await readMonth(month);
-        }
+        await readMonths(knownMonths());
     }
     async function saveMonth(month: string, plan: MonthPlan): Promise<void> {
         if (errors.value[month]) {
@@ -179,17 +208,35 @@ export const usePlansStore = defineStore('plans', () => {
             return Promise.reject(new Error('Use a valid date in YYYY-MM-DD format.'));
         }
         return serialize(async () => {
-            await loadAll();
             const currentMonth = today.slice(0, 7);
-            if (!months.value[currentMonth]) {
+            // A month that does not read is in `errors` once the rest are read, and is dealt with
+            // below. A listing that cannot be refreshed still stops the collection: without it, which
+            // months there are to collect from is not known.
+            historyRequested = true;
+            await files.refresh();
+            await readMonths(knownMonths()).catch(() => undefined);
+            if (!months.value[currentMonth] && !errors.value[currentMonth]) {
                 await readMonth(currentMonth);
             }
-            const next = JSON.parse(JSON.stringify(months.value)) as Record<string, MonthPlan>;
+            if (errors.value[currentMonth]) {
+                throw new Error(`Collected nothing: the ${currentMonth} plan, which today's tasks go into, could not be read: ${errors.value[currentMonth]}`);
+            }
+            // A past month that does not read is left out rather than refusing the whole collection,
+            // which one old mistake would then block for good. So is what the store still holds of
+            // one that could not be fetched: it may be out of date, and what it added to today would
+            // be saved before its own write was refused.
+            const unreadable = Object.keys(errors.value).filter((month) => month < currentMonth).sort();
+            const readable = Object.fromEntries(Object.entries(months.value).filter(([month]) => !errors.value[month]));
+            const next = JSON.parse(JSON.stringify(readable)) as Record<string, MonthPlan>;
             const changed = collectUndone(next, today, statusOf);
             // Save today's additions first. If a later month fails, collecting again deduplicates today.
             const order = [...changed].sort((a, b) => a === currentMonth ? -1 : b === currentMonth ? 1 : a.localeCompare(b));
             for (const month of order) {
                 await saveMonth(month, next[month]);
+            }
+            // Thrown after saving, as a partial move is, so the error alert says what was not done.
+            if (unreadable.length > 0) {
+                throw new Error(`Left out ${unreadable.join(', ')}, which could not be read, and collected undone tasks from the other months. Collect again once ${unreadable.length === 1 ? 'it reads' : 'they read'}.`);
             }
         });
     }
@@ -202,9 +249,8 @@ export const usePlansStore = defineStore('plans', () => {
     }
     // Repository commits include external MCP edits and deleted plan files.
     watch(() => files.commitId, (commit) => {
-        if (commit && (historyRequested || Object.keys(months.value).length > 0)) {
-            const listed = files.entries.map((entry) => /^\.mory\/plans\/([0-9]{4}-[0-9]{2})\.yaml$/.exec(entry.path)?.[1]).filter((month): month is string => month !== undefined);
-            void loadMonths([...Object.keys(months.value), ...listed]).catch(() => undefined);
+        if (commit && (historyRequested || Object.keys(months.value).length > 0 || Object.keys(errors.value).length > 0)) {
+            void loadMonths(knownMonths()).catch(() => undefined);
         }
     });
     return { months, days, errors, loadMonths, loadAll: () => serialize(loadAll), planTask, moveTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
