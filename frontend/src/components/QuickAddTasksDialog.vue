@@ -180,6 +180,7 @@ import { statusIcon } from '@/status-icon';
 import { taskRoute, tasksRoute } from '@/task-route';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { useTasksStore } from '@/stores/tasks';
+import { useZoneStore } from '@/stores/zone';
 
 const EXAMPLE = [
     '- Task 1 [to do, high, 3w, <=2026-12-01, !<=2026-12-08]',
@@ -212,6 +213,7 @@ const isOpen = defineModel<boolean>({ required: true });
 const route = useRoute();
 const router = useRouter();
 const tasks = useTasksStore();
+const zones = useZoneStore();
 const taskSettings = useTaskSettingsStore();
 
 const text = ref('');
@@ -251,7 +253,7 @@ const parentTitle = computed<string>(() => {
 });
 
 const outline = computed(() => {
-    const read = parseOutline(text.value);
+    const read = parseOutline(text.value, zones.zone);
     const tag = topTag.value;
     if (tag !== null) {
         // First, since a task's group is its first tag.

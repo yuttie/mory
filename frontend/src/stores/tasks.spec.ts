@@ -24,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
     searchNotes: vi.fn<(pattern: string) => Promise<{ data: unknown[] }>>(
         async () => ({ data: [] })),
     noteExists: vi.fn<(path: string) => Promise<boolean>>(async () => false),
+    getZone: vi.fn<() => Promise<string>>(async () => 'UTC'),
 }));
 
 vi.mock('@/api', () => apiMocks);
@@ -870,7 +871,7 @@ describe('derived parent progress', () => {
             { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, deadline: '1970-01-01' },
         ]);
         const { urgencyOf } = await import('@/urgency');
-        const edited = urgencyOf({ deadline: '2099-01-01', available_from: '2098-01-01' });
+        const edited = urgencyOf({ deadline: '2099-01-01', available_from: '2098-01-01' }, [], {}, Date.now(), 'Asia/Tokyo');
         const inherited = store.urgency(uuid(1), edited, 'todo');
         expect(inherited.level).toBe('overdue');
         expect(inherited.actionable).toBe(false);
@@ -908,6 +909,26 @@ describe('own urgency', () => {
 
         store.now = Date.parse('2026-10-25T00:00:00Z');
         expect(store.ownUrgency(uuid(1)).level).toBe('overdue');
+    });
+
+    // A bare date ends in moried's zone, wherever the reader is.
+    it('follows the zone moried reads a bare date in', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, deadline: '2026-10-20' },
+        ]);
+        const { useZoneStore } = await import('@/stores/zone');
+        const zones = useZoneStore();
+        store.now = Date.parse('2026-10-20T12:00:00Z');
+
+        // The 20th has ended at UTC+14.
+        apiMocks.getZone.mockResolvedValue('Pacific/Kiritimati');
+        await zones.load();
+        expect(store.ownUrgency(uuid(1)).level).toBe('overdue');
+
+        // And still has hours to go at UTC-10.
+        apiMocks.getZone.mockResolvedValue('Pacific/Honolulu');
+        await zones.load();
+        expect(store.ownUrgency(uuid(1)).level).not.toBe('overdue');
     });
 
     it('gives a tag group, or a task no longer listed, no urgency', async () => {

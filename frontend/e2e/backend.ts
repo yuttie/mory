@@ -43,8 +43,12 @@ export interface Repository {
 
 // When each file named was last changed, for a test of what is listed by it. Every other file was
 // changed at one moment, the same for all.
+//
+// `zone` is the one moried reads a time without an offset in. Without it, moried answers as one
+// too old to say, and the app keeps to the browser's.
 export interface MockOptions {
     times?: Record<string, string>;
+    zone?: string;
 }
 
 // A repository of notes, listed with the metadata their frontmatter holds, so a write shows up in
@@ -82,6 +86,10 @@ export async function mockBackend(
                 };
             });
             await route.fulfill({ json: { kind: 'full', commit: commitId(), head: commitId(), entries } });
+            return;
+        }
+        if (path === '/api/v2/zone') {
+            await route.fulfill(options.zone === undefined ? { status: 404, json: {} } : { json: options.zone });
             return;
         }
         if (path === '/api/v2/commits/head') {

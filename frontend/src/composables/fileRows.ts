@@ -20,6 +20,7 @@ import type { ListEntry2 } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { useZoneStore } from '@/stores/zone';
 import { routeForMime } from '@/file-route';
 import { EVENTS_DIR } from '@/event-note';
 import { summarizeEvent } from '@/event-summary';
@@ -194,6 +195,7 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
     // As the store last read them, which it does again whenever the listing moves. A view that
     // wants them read afresh as it opens loads them itself.
     const taskSettings = useTaskSettingsStore();
+    const zones = useZoneStore();
 
     // The files the open tab lists, before the query narrows them.
     const kindEntries = computed<ListEntry2[]>(() => {
@@ -202,10 +204,8 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
     });
 
     const rows = computed<FileRow[]>(() => {
-        // The reader's zone, guessed once for all the rows rather than for each date of each task:
-        // each guess builds an `Intl.DateTimeFormat`, and with 700 tasks the guesses took a quarter
-        // of the time Firefox took to open the Tasks tab.
-        const zone = dayjs.tz.guess();
+        // The zone a bare date is read in, moried's.
+        const zone = zones.zone;
         return kindEntries.value.flatMap(
             (entry) => (kind.value === 'events' ? eventRows(entry, zone) : [fileRow(entry, zone)]),
         );

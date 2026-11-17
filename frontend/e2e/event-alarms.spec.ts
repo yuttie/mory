@@ -86,7 +86,7 @@ test.beforeEach(async ({ context, baseURL }) => {
     await context.grantPermissions(['notifications'], { origin: baseURL });
 });
 
-test('registers this browser for alarms, with the zone it reads the calendar in', async ({ context, page }) => {
+test('registers this browser for alarms', async ({ context, page }) => {
     await mockBackend(context, { 'a.md': '# A\n' });
     const key = vapidKey();
     const { registered } = await mockPush(context, key);
@@ -94,11 +94,10 @@ test('registers this browser for alarms, with the zone it reads the calendar in'
 
     await page.goto('/note/a.md');
     await expect.poll(() => registered).toHaveLength(1);
-    const zone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+    // Without the zone it is in: moried rings every browser in its own.
     expect(registered[0]).toEqual({
         endpoint: 'https://push.example/1',
         keys: { p256dh: 'p', auth: 'a' },
-        zone,
     });
     expect(await recorded(page)).toEqual({ subscribedWith: key });
 });

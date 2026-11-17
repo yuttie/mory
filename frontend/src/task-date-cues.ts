@@ -29,7 +29,8 @@ export interface TaskDateCue {
 const LABELS: Record<TaskDateField, string> = { available_from: 'Available', due_by: 'Due', deadline: 'Deadline' };
 const COLORS: Partial<Record<UrgencyLevel, string>> = { notice: 'info', urgent: 'warning', target_missed: 'warning', overdue: 'error' };
 
-export function taskDateCues(task: UrgencyTask, tags: readonly string[], settings: TaskSettings, now: number, zone = dayjs.tz.guess()): TaskDateCue[] {
+// `zone` is the one a bare date is read in, moried's, as `useZoneStore` gives it.
+export function taskDateCues(task: UrgencyTask, tags: readonly string[], settings: TaskSettings, now: number, zone: string): TaskDateCue[] {
     const cues: TaskDateCue[] = [];
     for (const field of ['available_from', 'due_by', 'deadline'] as const) {
         const value = field === 'available_from' ? task.available_from ?? task.start_at : task[field];

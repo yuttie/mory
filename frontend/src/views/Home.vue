@@ -328,6 +328,8 @@ import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
 import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
+import { useZoneStore } from '@/stores/zone';
+import { taskInstant } from '@/urgency';
 import { type TaskNode } from '@/task-forest';
 import type { Task } from '@/task';
 import { taskRoute } from '@/task-route';
@@ -358,6 +360,7 @@ const emit = defineEmits<{
 
 // Stores
 const taskStore = useTasksStore();
+const zones = useZoneStore();
 const router = useRouter();
 const files = useFilesStore();
 const calendars = useCalendarsStore();
@@ -503,13 +506,9 @@ const todayTasks = computed(() => {
     return (plans.days[today] ?? []).map((entry) => taskStore.allTasks.find((task) => task.uuid.toLowerCase() === entry.task)).filter((task): task is TaskNode => task !== undefined && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? ''));
 });
 
-function parseDue(input: string): dayjs.Dayjs {
-    const hasTime = /\d{1,2}:\d{2}/.test(input);
-    if (hasTime) {
-        return dayjs(input);
-    } else {
-        return dayjs(input).endOf('day');
-    }
+// When a task is due, as its urgency reads it: a bare date at the end of its day in moried's zone.
+function dueInstant(value: unknown): number {
+    return taskInstant(value, zones.zone, true) ?? NaN;
 }
 
 const upcomingTasks = computed(() => {
@@ -538,7 +537,7 @@ const upcomingTasks = computed(() => {
         const dateA = a.metadata?.task?.due_by ?? a.metadata?.task?.deadline;
         const dateB = b.metadata?.task?.due_by ?? b.metadata?.task?.deadline;
         if (!dateA || !dateB) return 0;
-        return parseDue(dateA).diff(parseDue(dateB));
+        return dueInstant(dateA) - dueInstant(dateB);
     });
 });
 

@@ -235,6 +235,12 @@ export async function getEntries(since?: string, schema?: number): Promise<Entri
   return res.data as EntriesResponse;
 }
 
+// The zone moried reads a time written without an offset in, as an IANA name.
+export async function getZone(): Promise<string> {
+  const res = await getAxios().get('/v2/zone');
+  return res.data;
+}
+
 // The ID of the repository's HEAD commit. Notes are files in a Git repository, so this
 // identifies the exact state every other file API call observes, and is what the
 // frontend's cache is validated against.
@@ -517,8 +523,6 @@ export async function getImportedEvents(
 export interface PushSubscriptionRequest {
     endpoint: string;
     keys: { p256dh: string; auth: string };
-    /// The zone this browser reads the calendar in, which a note without offsets depends on.
-    zone: string;
 }
 
 /// The key a browser subscribes to moried's pushes with, base64url-encoded.

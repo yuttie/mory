@@ -1,11 +1,9 @@
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
 
 import { wallClockOf, zoneOffset } from '@/zone';
 
 dayjs.extend(utc);
-dayjs.extend(timezone);
 
 export type Importance = 'low' | 'medium' | 'high';
 export const IMPORTANCE_ORDER: Record<Importance, number> = { low: 0, medium: 1, high: 2 };
@@ -109,6 +107,21 @@ export function localInstant(wall: string, zone: string): number {
     return instantOfWallClock(dayjs.utc(wall).valueOf(), zone);
 }
 
+// A wall clock in the zone, `YYYY-MM-DD HH:mm` or `YYYY-MM-DD HH:mm:ss`, written with the offset
+// the zone has then, as a datetime is written in a note. One the zone skips moves forward, as
+// `localInstant` reads it, rather than keep the typed clock beside an offset that, paired with it,
+// names an hour earlier.
+export function withOffset(wall: string, zone: string): string {
+    const instant = localInstant(wall, zone);
+    const clock = wallClockOf(instant, zone);
+    const minutes = Math.round((clock - instant) / 60_000);
+    const iso = new Date(clock).toISOString();
+    const time = iso.slice(11, wall.length > 16 ? 19 : 16);
+    const sign = minutes < 0 ? '-' : '+';
+    const hours = String(Math.floor(Math.abs(minutes) / 60)).padStart(2, '0');
+    return `${iso.slice(0, 10)} ${time}${sign}${hours}:${String(Math.abs(minutes) % 60).padStart(2, '0')}`;
+}
+
 // The instant a wall clock, given as `wallClockOf` gives it, reads in the zone.
 function instantOfWallClock(local: number, zone: string): number {
     const offsets = [...new Set([-2, 0, 2].map((days) => zoneOffset(local + days * DAY, zone)))];
@@ -142,7 +155,8 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
     return Number.isFinite(instant) && Number.isFinite(canonical.valueOf()) && canonical.toISOString().slice(0, 10) === date ? instant : undefined;
 }
 
-export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], settings: TaskSettings = {}, now = Date.now(), zone = dayjs.tz.guess()): Urgency {
+// `zone` is the one a bare date is read in, moried's, as `useZoneStore` gives it.
+export function urgencyOf(task: UrgencyTask, tags: readonly string[], settings: TaskSettings, now: number, zone: string): Urgency {
     const due = taskInstant(task.due_by, zone, true);
     const deadline = taskInstant(task.deadline, zone, true);
     const available = taskInstant(task.available_from ?? task.start_at, zone);
@@ -180,7 +194,8 @@ export function compareUrgency(a: Urgency, b: Urgency): number {
     return URGENCY_ORDER[b.level] - URGENCY_ORDER[a.level] || (a.slack_ratio ?? Infinity) - (b.slack_ratio ?? Infinity);
 }
 export function mostUrgent(values: readonly Urgency[]): Urgency {
-    return [...values].sort(compareUrgency)[0] ?? urgencyOf({});
+    // A task without dates, which no zone reads anything of.
+    return [...values].sort(compareUrgency)[0] ?? urgencyOf({}, [], {}, Date.now(), 'UTC');
 }
 export function isUrgent(urgency: Urgency): boolean {
     return URGENCY_ORDER[urgency.level] >= URGENCY_ORDER.urgent;

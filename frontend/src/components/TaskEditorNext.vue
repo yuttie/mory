@@ -572,12 +572,12 @@ import { useLocalStorage } from '@/composables/localStorage';
 import { useConfigValue } from '@/config';
 import { required } from '@/rules';
 import { isSaveKey, useShortcuts } from '@/keyboard';
-import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
 
 import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { useZoneStore } from '@/stores/zone';
 import { useTaskAssessmentStore } from '@/stores/taskAssessment';
 import { usePlansStore } from '@/stores/plans';
 
@@ -616,14 +616,16 @@ const { task, loading, error, reread } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
+const zones = useZoneStore();
 const assessmentPrompt = useTaskAssessmentStore();
 const derivedProgress = computed(() => tasks.progress(uuid.value));
 const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
-const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, form.tags, settings.settings, tasks.now), form.status.kind));
+const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, form.tags, settings.settings, tasks.now, zones.zone), form.status.kind));
 const plans = usePlansStore();
 const plannedDays = computed(() => plans.plannedDays(uuid.value));
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
-const taskDateRule = (value: string) => !value || taskInstant(value, dayjs.tz.guess()) !== undefined || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
+// Whether a task reads it as a date: only that is asked, so any zone does.
+const taskDateRule = (value: string) => !value || taskInstant(value, 'UTC') !== undefined || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
 
 // Emits
 const emit = defineEmits<{

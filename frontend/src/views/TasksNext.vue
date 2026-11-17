@@ -400,7 +400,7 @@
 </template>
 
 <script lang="ts" setup>
-import { readImportance, isUrgent, compareUrgency } from '@/urgency';
+import { readImportance, isUrgent, compareUrgency, taskInstant } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { usePlansStore } from '@/stores/plans';
@@ -444,13 +444,14 @@ import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 import { taskRoute, tasksRoute } from '@/task-route';
 import { SavedUnlisted, isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
+import { useZoneStore } from '@/stores/zone';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
 import axios from 'axios';
-import dayjs from 'dayjs';
 
 // Stores
 const store = useTasksStore();
+const zones = useZoneStore();
 const taskSettings = useTaskSettingsStore();
 const planHistoryError = ref('');
 void taskSettings.load();
@@ -618,28 +619,17 @@ function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
         const date1 = dueBy1 || deadline1;
         const date2 = dueBy2 || deadline2;
         
-        // If both have dates, sort by earliest first
+        // If both have dates, sort by earliest first, as a task's urgency reads them: a bare date
+        // at the end of its day in moried's zone.
         if (date1 && date2) {
-            // Normalize dates: if no time portion, treat as end of day (23:59:59.999)
-            const normalizeDate = (dateStr: string) => {
-                const parsed = dayjs(dateStr);
-                // Check if the date string contains time information
-                // If it's just a date (YYYY-MM-DD format), set to end of day
-                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
-                    return parsed.endOf('day');
-                }
-                return parsed;
-            };
-            
-            const dayjs1 = normalizeDate(date1);
-            const dayjs2 = normalizeDate(date2);
-            
-            if (dayjs1.isBefore(dayjs2)) {
+            const instant1 = taskInstant(date1, zones.zone, true) ?? NaN;
+            const instant2 = taskInstant(date2, zones.zone, true) ?? NaN;
+            if (instant1 < instant2) {
                 return -1; // task1 is earlier
-            } else if (dayjs1.isAfter(dayjs2)) {
+            } else if (instant1 > instant2) {
                 return 1; // task2 is earlier
             } else {
-                return 0; // same date
+                return 0; // same date, or one that cannot be read
             }
         }
         

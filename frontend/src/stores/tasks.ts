@@ -1,9 +1,9 @@
 import { urgencyOf, mostUrgent, type Urgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { useZoneStore } from '@/stores/zone';
 import { onScopeDispose, ref, computed } from 'vue';
 import { defineStore } from 'pinia';
 import axios from 'axios';
-import dayjs from 'dayjs';
 
 import type { UUID } from '@/api';
 import {
@@ -113,6 +113,7 @@ function toItem(node: TaskNode, children: TaskTreeItem[] | undefined): TaskTreeI
 export const useTasksStore = defineStore('tasks', () => {
     const files = useFilesStore();
     const taskSettings = useTaskSettingsStore();
+    const zones = useZoneStore();
     const now = ref(Date.now());
     const timer = setInterval(() => { now.value = Date.now(); }, 60_000);
     onScopeDispose(() => clearInterval(timer));
@@ -208,11 +209,10 @@ export const useTasksStore = defineStore('tasks', () => {
     }
 
     // Every task's own urgency, worked out in one pass. It changes only with the listing, the
-    // settings and the minute, but each row of the task tree asks again whenever the tree
-    // re-renders, and `urgencyOf` left to itself guesses the time zone on every call -- the costly
-    // part, at about a tenth of the time it took to open a parent. One guess per pass instead.
+    // settings, the zone and the minute, but each row of the task tree asks again whenever the
+    // tree re-renders.
     const ownUrgencies = computed(() => {
-        const zone = dayjs.tz.guess();
+        const zone = zones.zone;
         const byId = new Map<string, Urgency>();
         for (const task of forest.value.byId.values()) {
             byId.set(task.id, urgencyOf(task.metadata?.task ?? {}, task.metadata?.tags ?? [], taskSettings.settings, now.value, zone));

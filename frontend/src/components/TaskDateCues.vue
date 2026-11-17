@@ -32,6 +32,7 @@ import type { TaskNode } from '@/task-forest';
 import { taskDateCues, type TaskDateField } from '@/task-date-cues';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { useZoneStore } from '@/stores/zone';
 
 const props = defineProps<{
     value: TaskNode;
@@ -40,7 +41,8 @@ const props = defineProps<{
 }>();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
-const cues = computed(() => taskDateCues(props.value.metadata?.task ?? {}, props.value.metadata?.tags ?? [], settings.settings, tasks.now).filter((cue) => !props.fields || props.fields.includes(cue.field)));
+const zones = useZoneStore();
+const cues = computed(() => taskDateCues(props.value.metadata?.task ?? {}, props.value.metadata?.tags ?? [], settings.settings, tasks.now, zones.zone).filter((cue) => !props.fields || props.fields.includes(cue.field)));
 </script>
 
 <style scoped>
