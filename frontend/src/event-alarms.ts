@@ -56,7 +56,6 @@ async function subscribe(): Promise<void> {
     await api.putPushSubscription({
         endpoint,
         keys: { p256dh: keys.p256dh, auth: keys.auth },
-        zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
 }
 

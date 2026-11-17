@@ -517,8 +517,6 @@ export async function getImportedEvents(
 export interface PushSubscriptionRequest {
     endpoint: string;
     keys: { p256dh: string; auth: string };
-    /// The zone this browser reads the calendar in, which a note without offsets depends on.
-    zone: string;
 }
 
 /// The key a browser subscribes to moried's pushes with, base64url-encoded.
