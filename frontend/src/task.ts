@@ -5,7 +5,18 @@ import type { Importance } from '@/urgency';
 import { stringifyWithFlowAlarms } from '@/frontmatter';
 import type { TaskAlarms } from '@/alarms';
 import type { UUID } from '@/api';
-import { columnOf, editFrontmatter, hasKey, indentBlock, lineEnding, parsesTo, sameValue, splice } from '@/frontmatter';
+import {
+    columnOf,
+    editFrontmatter,
+    hasKey,
+    indentBlock,
+    lineEnding,
+    parsesTo,
+    quoteIndentedText,
+    sameValue,
+    splice,
+    stringifyQuotingIndented,
+} from '@/frontmatter';
 
 export { UUID };
 
@@ -197,6 +208,7 @@ export function render(task: Task): string {
                     doc.setIn(['task', key], value);
                 }
             }
+            quoteIndentedText(doc);
             frontmatter = doc.toString({ indent: 4, lineWidth: 0 });
             const expected = { ...original, created_at: task.created_at ?? original.created_at ?? metadata.created_at, tags: task.tags, task: nextTask };
             if (!parsesTo(frontmatter, expected)) {
@@ -248,7 +260,7 @@ function replaceStatusInYaml(source: string, status: Status): string {
     if (sameValue(before.task.status, value)) {
         return source;
     }
-    const block = YAML.stringify(value, { indent: step, lineWidth: 0 });
+    const block = stringifyQuotingIndented(value, { indent: step, lineWidth: 0 });
 
     const pair = task.items.find((p) => hasKey(p, 'status'));
     let edited: string;

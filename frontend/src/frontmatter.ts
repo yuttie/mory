@@ -8,7 +8,8 @@
 // `mcp::frontmatter` edits the same way.
 //
 // Where a whole file has to be written afresh, as the task editor and the calendar settings do,
-// `stringifyWithFlowAlarms` is the layout the app writes it in.
+// `stringifyWithFlowAlarms` is the layout the app writes it in. Whatever writes YAML at an indent
+// other than two goes through `quoteIndentedText`, or `stringifyQuotingIndented` for a plain value.
 
 import YAML from 'yaml';
 import type { Pair, Scalar } from 'yaml';
@@ -80,6 +81,30 @@ export function sameValue(a: unknown, b: unknown): boolean {
     return Object.is(a, b);
 }
 
+// Marks each text in a document that would be written as a block whose first line starts with a
+// space to be written quoted instead. Such a block needs an indentation indicator, and `yaml` 2.9
+// writes the one a two-space step needs whatever `indent` says (eemeli/yaml#733): at four, the text
+// of a mapping's value reads back indented further, and further again at each save. Quoted, it
+// reads back as it was. Text in a sequence comes out right either way, and is quoted too, so that
+// no writer has to know where its text sits.
+export function quoteIndentedText(document: YAML.Document): void {
+    YAML.visit(document, {
+        Scalar(_key, scalar) {
+            if (typeof scalar.value === 'string' && scalar.value.includes('\n')
+                && /^\n* /.test(scalar.value)) {
+                scalar.type = YAML.Scalar.QUOTE_DOUBLE;
+            }
+        },
+    });
+}
+
+// `YAML.stringify`, through `quoteIndentedText`.
+export function stringifyQuotingIndented(value: unknown, options: YAML.ToStringOptions = {}): string {
+    const document = new YAML.Document(value);
+    quoteIndentedText(document);
+    return document.toString(options);
+}
+
 // `YAML.stringify`, with each list under an `alarms:` key written on the line that names it, as a
 // note writes them: `timed: [-10m, 0m]`, and not a list of `- -10m` under it. Nothing else is
 // written in flow style, so the rest of the document keeps the layout it has everywhere.
@@ -93,16 +118,7 @@ export function stringifyWithFlowAlarms(value: unknown, options: YAML.ToStringOp
                 seq.flow = true;
             }
         },
-        Scalar(_key, scalar) {
-            // A block whose first line starts with a space needs an indentation indicator, and
-            // `yaml` 2.9 writes one for a two-space step whatever `indent` says: at four, the text
-            // reads back indented further, and further again at each save. Quoted, it reads back
-            // as it was.
-            if (typeof scalar.value === 'string' && scalar.value.includes('\n')
-                && /^\n* /.test(scalar.value)) {
-                scalar.type = YAML.Scalar.QUOTE_DOUBLE;
-            }
-        },
     });
+    quoteIndentedText(document);
     return document.toString({ flowCollectionPadding: false, ...options });
 }

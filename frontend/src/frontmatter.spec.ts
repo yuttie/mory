@@ -1,7 +1,16 @@
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { editFrontmatter, hasKey, indentBlock, parsesTo, sameValue, stringifyWithFlowAlarms } from '@/frontmatter';
+import {
+    editFrontmatter,
+    hasKey,
+    indentBlock,
+    parsesTo,
+    quoteIndentedText,
+    sameValue,
+    stringifyQuotingIndented,
+    stringifyWithFlowAlarms,
+} from '@/frontmatter';
 
 describe('editFrontmatter', () => {
     it('hands over the text between the fences and keeps the rest', () => {
@@ -86,5 +95,21 @@ categories:
     it('still writes other text over several lines as a block', () => {
         expect(stringifyWithFlowAlarms({ text: 'one\n  two\n' }, { indent: 4 }))
             .toBe('text: |\n    one\n      two\n');
+    });
+});
+
+describe('quoteIndentedText', () => {
+    it('reads back text whose first line starts with a space, written at any indent', () => {
+        const value = { map: { text: '  indented\nthen not' }, list: ['  indented\nthen not'] };
+        for (const indent of [2, 4, 8]) {
+            expect(YAML.parse(stringifyQuotingIndented(value, { indent }))).toEqual(value);
+        }
+    });
+
+    // As the task editor writes a note back: a block the author wrote, in a key nothing here knows.
+    it('quotes such text in a document read from a note', () => {
+        const document = YAML.parseDocument('custom: |4-\n      indented\n    then not\nother: |\n    one\n');
+        quoteIndentedText(document);
+        expect(document.toString({ indent: 4 })).toBe('custom: "  indented\\nthen not"\nother: |\n    one\n');
     });
 });
