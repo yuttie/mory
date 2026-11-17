@@ -149,6 +149,15 @@ describe('taskChecks', () => {
         expect(problems[0].message).toBe(`Shares its UUID with .tasks/old-${A}.md, .tasks/${B}/${A}.md; the task tree shows only one of them.`);
     });
 
+    it('reports a UUID written in another case as the same one', () => {
+        const lower = 'abcdef01-0000-4000-8000-000000000000';
+        const paths = [`.tasks/${lower}.md`, `.tasks/${lower.toUpperCase()}.md`];
+        expect(problemsOf(taskChecks(paths.map((path) => entry(path, null))))['task-ids']).toEqual([
+            { path: paths[0], message: `Shares its UUID with ${paths[1]}; day plans and moried's tools take them for one task.` },
+            { path: paths[1], message: `Shares its UUID with ${paths[0]}; day plans and moried's tools take them for one task.` },
+        ]);
+    });
+
     it('reports a subtask whose parent is missing', () => {
         const [problem] = problemsOf(taskChecks([entry(`.tasks/${A}/${B}.md`, null)]))['task-parents'];
         expect(problem.path).toBe(`.tasks/${A}/${B}.md`);

@@ -329,18 +329,25 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         if (directory !== null) {
             covered.add(directory);
         }
-        const id = taskUuidOf(entry.path);
-        if (id !== null) {
+        // In any case: a day plan and moried's tools name a task by its UUID in lower case.
+        const id = taskUuidOf(entry.path)?.toLowerCase();
+        if (id !== undefined) {
             pathsOf.set(id, [...(pathsOf.get(id) ?? []), entry.path]);
         }
     }
     // The tree keeps the first file it meets for an id and drops the rest, saying so only in the
-    // console: a copied task file, or one renamed beside its original, goes missing silently.
+    // console: a copied task file, or one renamed beside its original, goes missing silently. Two
+    // that differ only in case are both in the tree, which tells ids apart as written, but a plan
+    // or a tool finds only one of them.
     const shared: HealthProblem[] = [];
     for (const paths of pathsOf.values()) {
         for (const path of paths.length > 1 ? paths : []) {
             const others = paths.filter((other) => other !== path);
-            shared.push({ severity: 'error', message: `Shares its UUID with ${others.join(', ')}; the task tree shows only one of them.`, path });
+            const id = taskUuidOf(path);
+            const consequence = others.some((other) => taskUuidOf(other) === id)
+                ? 'the task tree shows only one of them'
+                : 'day plans and moried\'s tools take them for one task';
+            shared.push({ severity: 'error', message: `Shares its UUID with ${others.join(', ')}; ${consequence}.`, path });
         }
     }
     for (const entry of entries) {
@@ -389,7 +396,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         {
             id: 'task-ids',
             title: 'Each task\'s UUID names one file',
-            description: 'No two files under .tasks/ end with the same UUIDv4, wherever they are and whatever name precedes it. A task is known by its UUID, and the tree keeps only one file of a pair.',
+            description: 'No two files under .tasks/ end with the same UUIDv4, in either case, wherever they are and whatever name precedes it. A task is known by its UUID: the tree keeps only one file of a pair, and day plans and moried\'s tools read a UUID in any case.',
             problems: shared,
         },
         {
