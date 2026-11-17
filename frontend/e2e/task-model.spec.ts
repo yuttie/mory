@@ -93,3 +93,18 @@ test('clears task dates together with their explicit alarms', async ({ context, 
     const metadata = YAML.parse(repository.writes[0].content.split('---')[1]);
     expect(metadata.task).toEqual({ status: { kind: 'todo' } });
 });
+
+// The text before the title is none of the editor's fields, so only the save can lose it.
+test('keeps what a task holds before its title when it is saved', async ({ context, page }) => {
+    const id = uuid(11);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntask:\n    status: {kind: todo}\n---\n\nIntro paragraph.\n\n> # Quoted\n\n# Real title\n\nBody\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toHaveValue('Real title');
+    await title.fill('Real title, revised');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content.split('---\n')[2]).toBe('\nIntro paragraph.\n\n> # Quoted\n\n# Real title, revised\n\nBody\n');
+});
