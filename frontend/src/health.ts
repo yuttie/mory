@@ -219,7 +219,7 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
         {
             id: 'frontmatter-schema',
             title: 'Frontmatter follows metadata-schema.json',
-            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note.',
+            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note. tags is a list of text: the readers part ways on anything else, the tag tree taking a string letter by letter and moried\'s tools taking no tags from it.',
             problems: invalid,
         },
     ];

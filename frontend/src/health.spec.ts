@@ -46,6 +46,9 @@ describe('frontmatterChecks', () => {
     // might have taken.
     it.each([
         ['a value of no shape allowed', { tags: 'a' }, ['/tags: must be array']],
+        ['a tag that is not text', { tags: [2024, 'a'] }, ['/tags/0: must be string']],
+        ['a nested tag', { tags: [['a']] }, ['/tags/0: must be string']],
+        ['tags as a mapping', { tags: { a: 1 } }, ['/tags: must be array']],
         ['a value no alternative fits', { events: { standup: { start: '2026-10-01', alarms: 5 } } }, ['/events/standup/alarms: must be string or array']],
         ['an alarm', { events: { standup: { start: '2026-10-01', alarms: ['10m'] } } }, ['/events/standup/alarms/0: is not in the form it should be: "10m"']],
         ['an event naming no occurrence', { events: { e: { end: '2026-01-01' } } }, ['/events/e: must have one of start, instances, times']],
