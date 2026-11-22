@@ -1188,7 +1188,7 @@ async function performTaskAssessment(title: string) {
     try {
         const taskForAssessment = {
             title: title,
-            tags: (form.tags || []).filter((t) => t !== 'quick-create'),
+            tags: form.tags || [],
             status: form.status,
             importance: form.importance ?? undefined,
             available_from: form.available_from,
