@@ -1,80 +1,5 @@
 <template>
     <div id="home">
-        <!-- Quick Note/Task Creation Section -->
-        <div class="quick-create-section ma-3">
-            <h2 class="mb-3 text-center">Quick Create</h2>
-            <div class="quick-create-grid">
-                <v-card variant="outlined">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiNotePlusOutline }}</v-icon>
-                        Note
-                    </v-card-title>
-                    <v-card-text>
-                        <v-textarea
-                            ref="noteTextarea"
-                            v-model="quickNoteContent"
-                            placeholder="Enter note content..."
-                            rows="5"
-                            variant="outlined"
-                            hide-details="auto"
-                            v-on:keydown="handleNoteKeydown"
-                        ></v-textarea>
-                        <div class="d-flex mt-3">
-                            <v-spacer />
-                            <v-btn
-                                color="primary"
-                                v-bind:disabled="!quickNoteContent.trim()"
-                                v-on:click="createQuickNote"
-                            >
-                                <v-icon start>{{ mdiFileDocumentPlusOutline }}</v-icon>
-                                Create Note
-                            </v-btn>
-                        </div>
-                    </v-card-text>
-                </v-card>
-                <v-card variant="outlined">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                        Task
-                    </v-card-title>
-                    <v-card-text>
-                        <v-text-field
-                            ref="taskNameField"
-                            v-model="quickTaskName"
-                            placeholder="Enter task name..."
-                            variant="outlined"
-                            hide-details="auto"
-                            class="mb-2"
-                            v-on:keydown="handleTaskKeydown"
-                        ></v-text-field>
-
-                        <DateSelector
-                            v-model="quickTaskDueBy"
-                            label="Due by (optional)"
-                            clearable
-                            class="mt-3"
-                        />
-                        <DateSelector
-                            v-model="quickTaskDeadline"
-                            label="Deadline (optional)"
-                            clearable
-                        />
-                        <div class="d-flex mt-3">
-                            <v-spacer />
-                            <v-btn
-                                color="primary"
-                                v-bind:disabled="!quickTaskName.trim()"
-                                v-on:click="createQuickTask"
-                            >
-                                <v-icon start>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                                Create Task
-                            </v-btn>
-                        </div>
-                    </v-card-text>
-                </v-card>
-            </div>
-        </div>
-
         <!-- Events Section -->
         <!-- An imported event is labelled with its calendar and drawn without its description:
              a feed's description is someone else's text, often HTML or a long invite boilerplate,
@@ -278,23 +203,10 @@
             <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
         </v-overlay>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
-        <v-snackbar v-model="successMessage" color="success" location="top" timeout="5000">
-            {{ successText }}
-            <template v-slot:actions>
-                <v-btn
-                    v-if="createdItemPath"
-                    variant="text"
-                    v-on:click="openCreatedItem"
-                >
-                    Open
-                </v-btn>
-            </template>
-        </v-snackbar>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { nowLocal } from '@/time';
 import TaskDateCues from '@/components/TaskDateCues.vue';
 import { usePlansStore } from '@/stores/plans';
 import { ref, computed, watch, onMounted } from 'vue';
@@ -304,14 +216,11 @@ import { useRouter } from 'vue-router';
 import {
     mdiSortAscending,
     mdiSortDescending,
-    mdiFileDocumentPlusOutline,
-    mdiCheckboxMarkedCirclePlusOutline,
     mdiCalendarToday,
     mdiCalendar,
     mdiCalendarPlus,
     mdiCheckboxMarkedCircleOutline,
     mdiClockOutline,
-    mdiNotePlusOutline,
 } from '@mdi/js';
 
 import type { ListEntry2 } from '@/api';
@@ -328,11 +237,10 @@ import { useFilesStore } from '@/stores/files';
 import { tagsOf } from '@/tags';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
-import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
+import { useTasksStore } from '@/stores/tasks';
 import { useZoneStore } from '@/stores/zone';
 import { taskInstant } from '@/urgency';
 import { type TaskNode } from '@/task-forest';
-import type { Task } from '@/task';
 import { taskRoute } from '@/task-route';
 
 import Color from 'color';
@@ -371,24 +279,6 @@ const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
-
-// Quick create states
-const quickNoteContent = ref('');
-const quickTaskName = ref('');
-const quickTaskDueBy = ref('');
-const quickTaskDeadline = ref('');
-
-// Refs for focusing
-const noteTextarea = ref(null);
-const taskNameField = ref(null);
-
-// Scheduled day options
-
-// Success/error messaging
-const successMessage = ref(false);
-const successText = ref('');
-const createdItemPath = ref('');
-const createdItemType = ref<'note' | 'task' | ''>('');
 
 // Computed properties
 const sortedCategorizedEntries = computed(() => {
@@ -539,14 +429,6 @@ const upcomingTasks = computed(() => {
 });
 
 // Watchers
-watch(successMessage, (newValue) => {
-    // Clear created item info when success message is dismissed
-    if (!newValue) {
-        createdItemPath.value = '';
-        createdItemType.value = '';
-    }
-});
-
 watch([eventWindow, () => calendars.subscriptionRevision], ([window]) => {
     calendars.load(window.from, window.to).catch((err) => {
         // A calendar that fails is already reported per calendar in the response; this is the
@@ -569,24 +451,6 @@ onMounted(() => {
 });
 
 // Methods
-function handleNoteKeydown(event: KeyboardEvent) {
-    if (event.ctrlKey && event.key === 'Enter') {
-        event.preventDefault();
-        if (quickNoteContent.value.trim()) {
-            createQuickNote();
-        }
-    }
-}
-
-function handleTaskKeydown(event: KeyboardEvent) {
-    if (event.ctrlKey && event.key === 'Enter') {
-        event.preventDefault();
-        if (quickTaskName.value.trim()) {
-            createQuickTask();
-        }
-    }
-}
-
 function load() {
     isLoading.value = true;
     files.refresh()
@@ -619,89 +483,6 @@ async function loadTasks() {
         await taskStore.refresh();
     } catch (_err) {
         console.error('Failed to load tasks:', _err);
-    }
-}
-
-async function createQuickNote() {
-    try {
-        const content = quickNoteContent.value.trim();
-        const filename = crypto.randomUUID() + '.md';
-
-        // Add metadata with quick-create tag
-        const metadata = {
-            created_at: nowLocal(),
-            tags: ['quick-create']
-        };
-        const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';
-        const noteContent = yamlHeader + content;
-
-        await files.write(filename, noteContent);
-        successText.value = 'Note created successfully!';
-        successMessage.value = true;
-        createdItemPath.value = filename;
-        createdItemType.value = 'note';
-        quickNoteContent.value = '';
-
-        // Focus the textarea for creating another note
-        if (noteTextarea.value) {
-            noteTextarea.value.focus();
-        }
-
-        // Reload notes to show the new one if it has home tags
-        load();
-    } catch (_err) {
-        errorText.value = 'Failed to create note';
-        error.value = true;
-    }
-}
-
-async function createQuickTask() {
-    try {
-        const taskUuid = crypto.randomUUID();
-        const taskPath = `.tasks/${taskUuid}.md`;
-
-        const newTask: Task = {
-            uuid: taskUuid,
-            title: quickTaskName.value.trim(),
-            tags: ['quick-create'],
-            // Scheduling it for today or tomorrow is the commitment that makes it To do; without
-            // one it waits in the backlog like any other new task.
-            status: { kind: 'backlog' },
-            due_by: quickTaskDueBy.value || undefined,
-            deadline: quickTaskDeadline.value || undefined,
-            note: '',
-        };
-
-        let unlisted: SavedUnlisted | null = null;
-        try {
-            await taskStore.save(newTask, taskPath);
-        }
-        catch (e) {
-            // Created all the same, and the name cleared below keeps it from being created twice.
-            if (!(e instanceof SavedUnlisted)) {
-                throw e;
-            }
-            unlisted = e;
-        }
-
-        successText.value = unlisted === null
-            ? `Task "${newTask.title}" created successfully!`
-            : `Task "${newTask.title}" created, but ${unlisted.message}`;
-        successMessage.value = true;
-        createdItemPath.value = taskUuid;
-        createdItemType.value = 'task';
-        quickTaskName.value = '';
-        quickTaskDueBy.value = '';
-        quickTaskDeadline.value = '';
-
-        // Focus the task name field for creating another task
-        if (taskNameField.value) {
-            taskNameField.value.focus();
-        }
-
-    } catch (_err) {
-        errorText.value = 'Failed to create task';
-        error.value = true;
     }
 }
 
@@ -752,22 +533,6 @@ function navigateToEvent(event: CalendarEvent) {
             path: event.notePath.split('/')
         }
     });
-}
-
-function openCreatedItem() {
-    if (createdItemType.value === 'note') {
-        // Navigate to the Note view for the created note
-        router.push({
-            name: 'Note',
-            params: {
-                path: createdItemPath.value.split('/')
-            }
-        });
-    } else if (createdItemType.value === 'task') {
-        router.push(taskRoute(createdItemPath.value));
-    }
-    // Clear the success message after navigation
-    successMessage.value = false;
 }
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -849,16 +614,9 @@ function changeSortOrder(category: string, kind: string) {
     }
 }
 
-.quick-create-section, .events-section, .tasks-section, .notes-section {
+.events-section, .tasks-section, .notes-section {
     max-width: 1200px;
     margin: 0 auto;
-}
-
-.quick-create-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
 }
 
 .events-grid {
@@ -971,7 +729,7 @@ function changeSortOrder(category: string, kind: string) {
 }
 
 @media (max-width: 599px) {
-    .quick-create-section, .events-section, .tasks-section, .notes-section {
+    .events-section, .tasks-section, .notes-section {
         flex-grow: 1;
         margin: 0 8px;
     }
