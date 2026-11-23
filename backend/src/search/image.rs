@@ -15,6 +15,10 @@ pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v2";
 pub const DETAIL: &str = "high";
 const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+// What an image may decode to, as production must hold it: a 2 GB machine running moried, Git and
+// the web server besides. A decoder keeps buffers the limits below do not count, up to 8 bytes a
+// pixel for a progressive CMYK JPEG, so at this bound ImageMagick peaks at about 320 MB resident
+// and spills at most 530 MB to disk, an RGBA PNG; it took under a second on one core here.
 const MAX_DECODED_PIXELS: u64 = 40_000_000;
 const MAX_DIMENSION: u64 = 20_000;
 const PREPROCESS_TIMEOUT: Duration = Duration::from_secs(30);
@@ -177,29 +181,30 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
 
 fn apply_resource_limits(command: &mut Command) {
     command
+        // The pixel cache, in memory and in mapped files, which a mapped page counts toward too;
+        // what does not fit goes to disk.
         .arg("-limit")
         .arg("memory")
-        .arg("256MiB")
+        .arg("128MiB")
         .arg("-limit")
         .arg("map")
-        .arg("512MiB")
+        .arg("128MiB")
+        // About twice the most an image within `MAX_DECODED_PIXELS` spills: 530 MB for an RGBA PNG
+        // with its alpha, 410 MB for a CMYK JPEG turned upright, whose turned copy is a second cache.
         .arg("-limit")
         .arg("disk")
-        .arg("512MiB")
-        .arg("-limit")
-        .arg("area")
-        .arg("40MP")
+        .arg("1GiB")
         .arg("-limit")
         .arg("width")
-        .arg("20000")
+        .arg(MAX_DIMENSION.to_string())
         .arg("-limit")
         .arg("height")
         .arg(MAX_DIMENSION.to_string());
 }
 
 async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), ProviderError> {
-    // `-limit area` controls when ImageMagick spills pixels to disk; it does not reject a
-    // decompression bomb. Ping reads only enough metadata to enforce the hard bound first.
+    // The limits above decide where pixels go, not whether an image is decoded at all, so they
+    // would let a decompression bomb fill the disk. Ping reads only enough to refuse one first.
     let mut command = Command::new("magick");
     command.arg("identify");
     apply_resource_limits(&mut command);
@@ -343,6 +348,21 @@ mod tests {
         assert!(validate_dimensions(MAX_DIMENSION + 1, 1).is_err());
         assert!(validate_dimensions(u64::MAX, 2).is_err());
         assert!(validate_dimensions(0, 100).is_err());
+    }
+
+    #[tokio::test]
+    async fn normalizes_an_image_at_the_pixel_bound_within_the_limits() {
+        // An RGBA PNG, which spills the most of any image measured: 530 MB to disk.
+        let generated = std::process::Command::new("magick")
+            .args(["-size", "6324x6324", "xc:#ff000080", "-define", "png:color-type=6", "png:-"])
+            .output()
+            .unwrap();
+        assert!(generated.status.success());
+        assert!(validate_dimensions(6_324, 6_324).is_ok());
+
+        let normalized = normalize(&generated.stdout).await.unwrap();
+
+        assert!(normalized.starts_with(&[0xff, 0xd8, 0xff]));
     }
 
     #[tokio::test]
