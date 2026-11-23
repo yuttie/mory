@@ -2,13 +2,12 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
-function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
+function note(title: string): string {
     return [
         '---',
         'task:',
         '  status:',
         '    kind: todo',
-        ...(tags.length > 0 ? [`tags: [${tags.join(', ')}]`] : []),
         '---',
         '',
         `# ${title}`,
@@ -23,7 +22,7 @@ const ERRAND = uuid(3);
 const NOTES = {
     [`.tasks/${PROJECT}.md`]: note('Project'),
     [`.tasks/${PROJECT}/${STEP}.md`]: note('Step'),
-    [`.tasks/${ERRAND}.md`]: note('Errand', { tags: ['work'] }),
+    [`.tasks/${ERRAND}.md`]: note('Errand'),
 };
 
 function tree(page: Page): Locator {
