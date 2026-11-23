@@ -5,7 +5,8 @@ import { mdiAlertCircleOutline, mdiAlertOutline } from '@mdi/js';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
-import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, statusOf, taskChecks } from '@/health';
+import { eventChecks, frontmatterChecks, guardChecks, imageChecks, settingsChecks, statusOf, taskChecks } from '@/health';
+import type { ImageSearchReport } from '@/api';
 import type { HealthCheck, HealthProblem, HealthSeverity, HealthStatus } from '@/health';
 import { planMonthOf } from '@/plans';
 import { useAppStore } from '@/stores/app';
@@ -471,7 +472,7 @@ export const useHealthStore = defineStore('health', () => {
             }
             checking.value = true;
             try {
-                const { reached, calendarsError, feeds } = await read(key, force);
+                const { reached, calendarsError, feeds, images } = await read(key, force);
                 if (started !== session) {
                     rerunIfSignedIn();
                     return;
@@ -484,7 +485,7 @@ export const useHealthStore = defineStore('health', () => {
                     feeds,
                     // What was read is of the commit only if the listing is still of it.
                     complete: reached && key.commit !== null && files.commitId === key.commit,
-                    sections: sectionsOf(key.day, feeds.errors, calendarsError),
+                    sections: sectionsOf(key.day, feeds.errors, calendarsError, images),
                 };
                 record.value = next;
                 if (next.complete) {
@@ -504,7 +505,12 @@ export const useHealthStore = defineStore('health', () => {
         /// Why `.mory/calendars.yaml` could not be read at all, which no store holds a problem for.
         calendarsError: string | null;
         feeds: FeedsRecord;
+        /// What moried had described of the images, which changes without a commit as it works
+        /// through them, so it is asked at every check rather than taken over from the last.
+        images: Images;
     }
+
+    type Images = { report: ImageSearchReport } | { error: string };
 
     // Each store keeps what it last read, and reading again is what makes a fix show up. Every read
     // is caught on its own: one that fails leaves the checks on what the others found. The task
@@ -513,15 +519,21 @@ export const useHealthStore = defineStore('health', () => {
     async function read(key: HealthKey, force: boolean): Promise<Read> {
         const months = listedMonths();
         const { commit } = key;
-        const [calendarsRead] = await Promise.all([
+        const [calendarsRead, images] = await Promise.all([
             readCalendars(key.day, force),
+            files.searchImages().then(
+                (report): Images => ({ report }),
+                (error: unknown): Images => ({ error: String(error) }),
+            ),
             // Never rejects: the store reports a file it cannot read among its problems.
             commit === null ? taskSettings.load() : taskSettings.loadAt(commit),
             (commit === null ? plans.loadMonths(months) : plans.loadMonthsAt(commit, months)).catch(() => undefined),
         ]);
         return {
             ...calendarsRead,
+            images,
             reached: calendarsRead.reached
+                && 'report' in images && images.report.commit === key.commit
                 && taskSettings.readAt === key.commit
                 && months.every((month) => plans.readAt(month) === key.commit),
         };
@@ -530,7 +542,7 @@ export const useHealthStore = defineStore('health', () => {
     // `.mory/calendars.yaml`, then the feeds it subscribes to, unless the check before, this tab's
     // or one it took from another, asked about the same subscriptions the same day, within
     // `RECORD_LIFETIME_MS`.
-    async function readCalendars(day: string, force: boolean): Promise<Read> {
+    async function readCalendars(day: string, force: boolean): Promise<Omit<Read, 'images'>> {
         const failure = await calendars.reloadConfiguration().then(() => null, (error: unknown) => ({ error }));
         const calendarsError = failure === null ? null : String(failure.error);
         // A file that is not YAML is the file's fault, and moried, which cannot read it either,
@@ -560,12 +572,13 @@ export const useHealthStore = defineStore('health', () => {
 
     // Worked out once a check has read everything, rather than kept computed: every tab would
     // otherwise work all of them out again at each sync, for a verdict one tab records for all.
-    function sectionsOf(day: string, feeds: string[], calendarsError: string | null): HealthSection[] {
+    function sectionsOf(day: string, feeds: string[], calendarsError: string | null, images: Images): HealthSection[] {
         const span = {
             from: dayjs(day).subtract(1, 'year').format('YYYY-MM-DD'),
             to: dayjs(day).add(1, 'year').format('YYYY-MM-DD'),
         };
         const entries = files.entries;
+        const search = guardChecks('search', 'Search can be checked', () => imageChecks(images));
         return [
             {
                 id: 'frontmatter',
@@ -603,6 +616,8 @@ export const useHealthStore = defineStore('health', () => {
                     planErrors: plans.errors,
                 })),
             },
+            // Only where moried describes images: without a vision model there is nothing to check.
+            ...(search.length > 0 ? [{ id: 'search', title: 'Search', checks: search }] : []),
         ];
     }
 

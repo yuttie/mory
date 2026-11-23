@@ -9,7 +9,7 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 
 import type { AlarmDefaults } from '@/alarms';
-import type { ListEntry2 } from '@/api';
+import type { ImageSearchReport, ListEntry2 } from '@/api';
 import { eventsFromEntries, isCalendarReadable, taskDatesFromEntries, toWallClock } from '@/events';
 import type { EventCategories, EventError, EventWindow } from '@/events';
 import metadataSchema from '@/metadata-schema.json';
@@ -596,6 +596,38 @@ function planProblems(paths: readonly string[], errors: Readonly<Record<string, 
         }
     }
     return problems;
+}
+
+const IMAGE_SEARCH_CHECK = {
+    id: 'image-search',
+    title: 'Semantic search can read every image',
+    description: 'Each image outside .mory/ has been described by the vision model, at a size that keeps the text in it legible. An image whose description was given up can be found only by its file name. One larger than moried decodes stays given up; any other is tried again only when moried changes in a way that may help it. One scaled down below a fifth of its size to be described, such as a screenshot of a whole web page, is found by its layout rather than by what it says. This is what moried had described when the check ran; images still waiting to be described are not counted.',
+};
+
+/// What moried lists of the images semantic search cannot read, or why it could not be asked.
+/// Where images are not described at all, there is nothing to check.
+export function imageChecks(images: { report: ImageSearchReport } | { error: string }): HealthCheck[] {
+    if ('error' in images) {
+        return [{
+            ...IMAGE_SEARCH_CHECK,
+            problems: [{ severity: 'error', message: `moried could not be asked about the images: ${images.error}` }],
+        }];
+    }
+    const { report } = images;
+    if (!report.described) {
+        return [];
+    }
+    const undescribed: HealthProblem[] = report.undescribed.map(({ path, failure }) => ({
+        severity: 'warning',
+        message: `Not described, so semantic search cannot find it by what it shows: ${failure ?? 'the reason was not recorded'}.`,
+        path,
+    }));
+    const shrunk: HealthProblem[] = report.shrunk.map((image) => ({
+        severity: 'warning',
+        message: `Described from ${image.sent_width}×${image.sent_height}, scaled down from ${image.width}×${image.height}, so text in it is likely too small to have been read.`,
+        path: image.path,
+    }));
+    return [{ ...IMAGE_SEARCH_CHECK, problems: [...undescribed, ...shrunk] }];
 }
 
 /// The checks `run` makes, or one failed check in their place when it throws.

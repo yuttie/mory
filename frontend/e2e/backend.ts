@@ -96,6 +96,12 @@ export async function mockBackend(
             await route.fulfill({ json: commitId() });
             return;
         }
+        // As a moried that describes no images reports them: a health check takes itself as
+        // current only once the report names the commit it checks.
+        if (path === '/api/v2/search/images') {
+            await route.fulfill({ json: { commit: commitId(), described: false, undescribed: [], shrunk: [] } });
+            return;
+        }
         if (path === '/api/v2/assess-task') {
             await route.fulfill({ json: { quality_score: 8, feedback: '', suggestions: [], note_suggestions: [] } });
             return;

@@ -194,6 +194,7 @@ async fn main() -> Result<()> {
         .route("/imported-events", get(v2::get_imported_events))
         .route("/search", post(search::post_search))
         .route("/search/status", get(search::get_status))
+        .route("/search/images", get(search::get_images))
         .route("/search/indexing", get(search::get_indexing))
         .route("/assess-task", post(v2::post_assess_task))
         .route("/ai-action", post(v2::post_ai_action))
@@ -375,11 +376,37 @@ async fn init_cache_database(
                 last_attempt   INTEGER,
                 next_retry     INTEGER,
                 last_used      INTEGER NOT NULL,
+                -- Why the description was given up, where it was.
+                failure        TEXT,
                 PRIMARY KEY (blob_id, model, prompt_version, preprocess, detail)
             ) STRICT;
         ")
         .execute(&mut *conn)
         .await?;
+    // NULL for a blob whose header gives no size.
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS search_image_size (
+                blob_id  TEXT PRIMARY KEY,
+                width    INTEGER,
+                height   INTEGER
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    // Added as a column rather than by recreating the table, which would describe every image
+    // again at the provider's expense.
+    let records_failure: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1 FROM pragma_table_info('search_image_description') WHERE name = 'failure'
+            );",
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+    if !records_failure {
+        sqlx::query("ALTER TABLE search_image_description ADD COLUMN failure TEXT;")
+            .execute(&mut *conn)
+            .await?;
+    }
     search::retry_earlier_failures(&mut *conn).await?;
     // The `entry` table holds exactly one generation: the listing at the commit recorded in
     // `cache_state.commit_id`. There is no migration mechanism, so a schema change is applied by

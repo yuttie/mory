@@ -402,6 +402,22 @@ export async function getSearchStatus(signal?: AbortSignal): Promise<SearchStatu
   return response.data;
 }
 
+// What moried lists of one commit's images that semantic search cannot read.
+export interface ImageSearchReport {
+    commit: string;
+    // Whether images are described at all; where they are not, none is missing for its own sake.
+    described: boolean;
+    // Given up, with what the provider or ImageMagick said, if moried recorded it.
+    undescribed: { path: string; failure: string | null }[];
+    // Scaled down so far to be described that text in them is likely too small to read.
+    shrunk: { path: string; width: number; height: number; sent_width: number; sent_height: number }[];
+}
+
+export async function getSearchImages(signal?: AbortSignal): Promise<ImageSearchReport> {
+    const response = await getAxios().get<ImageSearchReport>('/v2/search/images', { signal });
+    return response.data;
+}
+
 // Indexing that has stopped on a failure only an admin can fix, such as a rejected API key. It
 // stays stopped until moried restarts.
 export interface IndexingStop {

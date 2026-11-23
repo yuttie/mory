@@ -15,6 +15,12 @@ pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v2";
 pub const DETAIL: &str = "high";
 const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+/// The side of the square an image is scaled down to fit before it is described.
+pub const SENT_SIDE: u64 = 2048;
+/// How many times an image may be scaled down before text in it is likely too small to read once
+/// sent. Photographed slides sent at a quarter of their size were transcribed in full; a page
+/// screenshot sent at a fourteenth was not legible at all.
+const LEGIBLE_REDUCTION: u64 = 5;
 // What an image may decode to, as production must hold it: a 2 GB machine running moried, Git and
 // the web server besides. A decoder keeps buffers the limits below do not count, up to 8 bytes a
 // pixel for a progressive CMYK JPEG, so at this bound ImageMagick peaks at about 320 MB resident
@@ -175,7 +181,7 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
         .arg("-auto-orient")
         .arg("-strip")
         .arg("-resize")
-        .arg("2048x2048>")
+        .arg(format!("{SENT_SIDE}x{SENT_SIDE}>"))
         .arg("-quality")
         .arg("92")
         .arg(&output)
@@ -251,6 +257,22 @@ async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), Provi
         return Err(item_failure("ImageMagick returned invalid image dimensions"));
     }
     validate_dimensions(width, height)
+}
+
+/// The size an image of `width` by `height` is sent at, as `-resize` scales it down to fit.
+pub fn sent_size(width: u64, height: u64) -> (u64, u64) {
+    let longest = width.max(height);
+    if longest <= SENT_SIDE {
+        return (width, height);
+    }
+    let scaled = |side: u64| ((side * SENT_SIDE + longest / 2) / longest).max(1);
+    (scaled(width), scaled(height))
+}
+
+/// Whether an image is scaled down so far to be sent that text in it is likely too small to read,
+/// leaving a description of its layout rather than of what it says.
+pub fn shrunk_past_reading(width: u64, height: u64) -> bool {
+    width.max(height) > SENT_SIDE * LEGIBLE_REDUCTION
 }
 
 fn remaining_preprocess_time(deadline: Instant) -> Result<Duration, ProviderError> {
@@ -361,6 +383,16 @@ mod tests {
         assert_eq!(request["input"][0]["content"][1]["detail"], DETAIL);
         assert_eq!(request["text"]["format"]["type"], "json_schema");
         assert_eq!(request["text"]["format"]["strict"], true);
+    }
+
+    #[test]
+    fn says_which_images_are_shrunk_past_reading() {
+        assert_eq!(sent_size(1_000, 28_000), (73, 2_048));
+        assert_eq!(sent_size(4_032, 3_024), (2_048, 1_536));
+        assert_eq!(sent_size(800, 600), (800, 600));
+        assert!(shrunk_past_reading(1_000, 28_000));
+        assert!(!shrunk_past_reading(10_240, 10_240));
+        assert!(!shrunk_past_reading(4_032, 3_024));
     }
 
     #[test]
