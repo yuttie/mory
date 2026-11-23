@@ -219,6 +219,19 @@ describe('the derived forest', () => {
         expect(store.flattenDescendants(uuid(1)).map((t) => t.title)).toEqual(['Newer step', 'Waiting step']);
     });
 
+    it('moves a task in the tree as its status changes', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, title: 'Older', status: 'todo', day: 1 },
+            { path: `.tasks/${uuid(2)}.md`, title: 'Newer', status: 'todo', day: 2 },
+        ]);
+        expect(titles(store.tree)).toEqual(['Newer', 'Older']);
+        apiMocks.getNote.mockResolvedValueOnce({ data: '---\ntask:\n  status:\n    kind: todo\n---\n' });
+
+        await store.setStatus(`.tasks/${uuid(1)}.md`, { kind: 'in_progress' });
+
+        expect(titles(store.tree)).toEqual(['Older', 'Newer']);
+    });
+
     it('resolves a path to its uuid', async () => {
         const { store } = await storeWith(sample);
         expect(store.idByPath(`.tasks/${uuid(3)}.md`)).toBe(uuid(3));
