@@ -4,7 +4,8 @@
 // `.tasks/<a>/<b>.md` is the task `b` under the task `a`. The parenting rule itself lives in
 // `path-forest.ts` -- `.tasks/<a>.md` covers the directory `.tasks/<a>`, so `b`'s parent is the
 // file `a` -- and this module supplies only what is task-specific: identity by UUID, the
-// directory a file covers, the validation the backend applied, and the sibling order it produced.
+// directory a file covers, the validation the backend applied, the sibling order it produced, and
+// the order by status the task tree draws instead.
 
 import type { UUID } from '@/api';
 import type { Status, StatusKind } from '@/task';
@@ -129,7 +130,7 @@ const STATUS_RANK: Record<StatusKind, number> = {
     canceled: 6,
 };
 
-// The work under way, which lifts every task above it to its place.
+// The work under way, which lifts every open task above it to its place.
 const UNDER_WAY: ReadonlySet<StatusKind> = new Set(['in_progress', 'waiting', 'blocked']);
 
 // The status a task is drawn with (`statusIcon`): Backlog for one naming none, and To do, as not
