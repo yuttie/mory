@@ -6,7 +6,7 @@
             </v-toolbar-title>
             <v-icon-btn
                 v-bind:icon="mdiReload"
-                v-bind:loading="checking"
+                v-bind:loading="busy"
                 title="Check again"
                 class="me-2"
                 v-on:click="check"
@@ -15,7 +15,7 @@
         <v-sheet class="sheet pa-4">
             <p class="text-body-2 text-medium-emphasis mb-4">
                 What is verified across the whole repository, whichever view would otherwise report a
-                problem: {{ files.entries.length.toLocaleString() }} files checked.
+                problem<span v-if="checked">: {{ fileCount.toLocaleString() }} files checked</span>.
             </p>
             <v-alert
                 v-if="listingError !== null"
@@ -23,10 +23,23 @@
                 density="compact"
                 class="mb-4"
             >
-                The file listing cannot be refreshed, so nothing else was read again either: the
-                checks below cover the {{ files.entries.length.toLocaleString() }} files listed
-                before, and the settings and plans as last read: {{ listingError }}
+                <template v-if="checked">
+                    The file listing cannot be refreshed, so nothing else was read again either: the
+                    checks below are the last recorded.
+                </template>
+                <template v-else>
+                    The file listing cannot be refreshed, so nothing could be checked.
+                </template>
+                <div class="text-caption">
+                    {{ listingError }}
+                </div>
             </v-alert>
+            <p
+                v-if="!checked && listingError === null"
+                class="text-body-2 text-medium-emphasis"
+            >
+                {{ busy ? 'Checking…' : 'Not checked yet.' }}
+            </p>
             <section
                 v-for="section of sections"
                 v-bind:key="section.id"
@@ -123,7 +136,7 @@ import { useHealthStore } from '@/stores/health';
 
 const files = useFilesStore();
 const health = useHealthStore();
-const { checking, listingError, sections } = storeToRefs(health);
+const { busy, checked, checking, fileCount, listingError, sections } = storeToRefs(health);
 
 const entryOf = computed(() => new Map(files.entries.map((entry) => [entry.path, entry])));
 

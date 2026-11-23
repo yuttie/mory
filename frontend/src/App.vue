@@ -901,9 +901,8 @@ async function refreshIndexingStops(): Promise<void> {
     }
 }
 
-// The checks follow the listing by themselves, so a note fixed or broken in this tab shows at once;
-// this reads what else they need, on load, on login and on returning to the tab, whenever the store
-// finds its last check stale.
+// The store checks again whenever this tab learns of a commit no tab has checked; this asks moried
+// what HEAD is, for when nothing else would: loading the app, logging in, coming back to the tab.
 function refreshHealth(): void {
     void healthStore.checkIfStale();
 }

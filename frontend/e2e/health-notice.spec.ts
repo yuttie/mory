@@ -18,7 +18,8 @@ test('shows no health notice while every check passes', async ({ context, page }
     await mockBackend(context, { 'fine.md': '# Fine\n' });
     await page.goto('/health');
 
-    // Every label reads … until the checks end, and the notice is worked out from the same checks.
+    // Nothing is listed until a check is recorded, and every label reads … while one reads again;
+    // the notice is worked out from the same record.
     const labels = page.locator('.check .label');
     await expect(labels.first()).toHaveText('OK');
     await expect(labels.filter({ hasNotText: 'OK' })).toHaveCount(0);
