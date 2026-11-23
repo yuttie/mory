@@ -5,12 +5,18 @@ import { visualizer } from "rollup-plugin-visualizer";
 import Components from 'unplugin-vue-components/vite';
 import pkg from './package.json' with { type: 'json' };
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd());
   process.env.VITE_APP_NAME = pkg.name;
   process.env.VITE_APP_VERSION = pkg.version;
   process.env.VITE_APP_AUTHOR = pkg.author.name;
   process.env.VITE_APP_BUILD_YEAR = String(new Date().getFullYear());
+  if (command === 'serve') {
+    // The dev server serves a module at the URL it had before a restart, edited meanwhile or not,
+    // so what tells one version of the code from another by a module's URL, as the health checks'
+    // record does, takes this with it.
+    process.env.VITE_APP_DEV_SERVER_STARTED = String(Date.now());
+  }
 
   return {
     base: env.VITE_APP_APPLICATION_ROOT,

@@ -252,6 +252,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
         return reading;
     }
 
+    /// Reads the configuration in a read begun after this call, once any read under way has ended,
+    /// for what needs the file as it is at a moment it knows of, as the health checks need it at
+    /// the commit they report on: a read under way may have begun before it.
+    async function reloadConfiguration(): Promise<CalendarSubscription[]> {
+        await reading?.catch(() => undefined);
+        return loadConfiguration();
+    }
+
     /// Reads the configuration only if it has not been read, for what wants it there rather than
     /// fresh: a box that shows the defaults beside a task's own.
     async function ensureLoaded(): Promise<void> {
@@ -454,6 +462,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         nameOf,
         isLoading,
         loadConfiguration,
+        reloadConfiguration,
         ensureLoaded,
         heldIds,
         saveSubscriptions,

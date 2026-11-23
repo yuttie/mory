@@ -135,6 +135,23 @@ describe('loading the configuration', () => {
         expect(apiMocks.getNote).toHaveBeenCalledTimes(1);
     });
 
+    it('reads it again for a reload asked for while a load is under way, once that one ends', async () => {
+        const release = held();
+        const store = await freshStore();
+
+        const first = store.loadConfiguration();
+        const reloaded = store.reloadConfiguration();
+        const joined = store.reloadConfiguration();
+        await Promise.resolve();
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(1);
+        release();
+
+        expect((await reloaded).map(({ id }) => id)).toEqual(['work', 'old']);
+        await Promise.all([first, joined]);
+        // Both reloads began after the first load and share the read begun for them.
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(2);
+    });
+
     it('reads it again for a load asked for afterwards, which is how a view finds a changed file', async () => {
         apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
         const store = await freshStore();

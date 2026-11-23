@@ -61,6 +61,55 @@ describe('task settings freshness', () => {
     });
 });
 
+describe('the commit a read is of', () => {
+    it('is the one the read began at, whatever the file held', async () => {
+        const store = useTaskSettingsStore();
+        await store.load();
+        expect(store.readAt).toBe('initial');
+        files.read.mockResolvedValue('default_lead_time: [\n');
+        reactive(files).commitId = 'broken';
+        await vi.waitFor(() => expect(store.readAt).toBe('broken'));
+        expect(store.problems).toHaveLength(1);
+        files.read.mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
+        reactive(files).commitId = 'removed';
+        await vi.waitFor(() => expect(store.readAt).toBe('removed'));
+        expect(store.problems).toEqual([]);
+    });
+
+    it('is read for a commit only where the reload at that commit has not read it', async () => {
+        const store = useTaskSettingsStore();
+        await store.loadAt('initial');
+        expect(files.read).toHaveBeenCalledTimes(1);
+        let finish!: (content: string) => void;
+        files.read.mockImplementationOnce(() => new Promise<string>((resolve) => {
+            finish = resolve;
+        }));
+        reactive(files).commitId = 'edited';
+        await vi.waitFor(() => expect(files.read).toHaveBeenCalledTimes(2));
+        const loaded = store.loadAt('edited');
+        finish('default_lead_time: 30d\n');
+        await loaded;
+        expect(files.read).toHaveBeenCalledTimes(2);
+        expect(store.settings.default_lead_time).toBe('30d');
+        await store.loadAt('another');
+        expect(files.read).toHaveBeenCalledTimes(3);
+    });
+
+    // A moried restarting, or the network gone: the problem it leaves says nothing of the file.
+    it('is none when the read reached no file', async () => {
+        const store = useTaskSettingsStore();
+        await store.load();
+        files.read.mockRejectedValue({ isAxiosError: true, response: { status: 502 }, message: 'Request failed with status code 502' });
+        await store.load();
+        expect(store.readAt).toBeNull();
+        expect(store.problems).toHaveLength(1);
+        files.read.mockResolvedValue('default_lead_time: 7d\n');
+        await store.loadAt('initial');
+        expect(store.readAt).toBe('initial');
+        expect(store.problems).toEqual([]);
+    });
+});
+
 describe('status colours', () => {
     it('reads them beside the lead times, and reports the ones it drops with the rest', async () => {
         files.read.mockResolvedValue('default_lead_time: nope\nstatus_colors:\n    done: light-green\n    todo: not a colour\n');

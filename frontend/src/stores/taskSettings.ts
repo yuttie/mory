@@ -15,6 +15,10 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     const statusColors = ref<StatusColors>({});
     const resolvedStatusColors = computed(() => resolveStatusColors(statusColors.value));
     const problems = ref<string[]>([]);
+    // The commit the last read began at, or `null` when it reached no file to read, failing for
+    // moried or the network rather than for what the file holds: what needs the settings as of a
+    // commit, as the health checks do, tells by it whether `problems` are the file's then.
+    const readAt = ref<string | null>(null);
     let loading: Promise<void> | null = null;
     let requested = false;
     function load(): Promise<void> {
@@ -27,6 +31,7 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                 // A commit arriving during a read still needs a read of its newer contents.
                 while (requested) {
                     requested = false;
+                    const commit = files.commitId;
                     try {
                         const source = await files.read(TASK_SETTINGS_PATH);
                         const value = YAML.parse(source);
@@ -37,11 +42,13 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                         keepEqual(settings, parsed.settings);
                         keepEqual(statusColors, colors.colors);
                         keepEqual(problems, [...parsed.problems, ...(parsed.settings.lead_time_by_tag === undefined ? [] : untextTagKeys(source)), ...colors.problems]);
+                        readAt.value = commit;
                     }
                     catch (error) {
                         keepEqual(settings, {});
                         keepEqual(statusColors, {});
                         keepEqual(problems, isMissing(error) ? [] : [String(error)]);
+                        readAt.value = axios.isAxiosError(error) && !isMissing(error) ? null : commit;
                     }
                 }
             }
@@ -50,6 +57,15 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
             }
         });
         return loading;
+    }
+    /// Reads the file unless the last read began at `commit` and reached it, once a read under way
+    /// has ended: what needs the settings as of a commit, as the health checks do, nearly always
+    /// finds them read by the reload at each commit below.
+    async function loadAt(commit: string): Promise<void> {
+        await loading;
+        if (readAt.value !== commit) {
+            await load();
+        }
     }
     // Git timestamps have second precision and cannot identify a settings version.
     watch(() => files.commitId, () => {
@@ -91,7 +107,7 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
         }
         statusColors.value = readStatusColors(YAML.parse(edited)).colors;
     }
-    return { settings, statusColors, resolvedStatusColors, problems, load, saveStatusColors };
+    return { settings, statusColors, resolvedStatusColors, problems, readAt, load, loadAt, saveStatusColors };
 });
 
 /// A problem for each key of `lead_time_by_tag` that YAML reads as something other than text, such

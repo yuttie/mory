@@ -39,6 +39,17 @@ export interface HealthCheck {
     problems: HealthProblem[];
 }
 
+/// What checks come to: the worst severity among their problems, or `ok` when they have none.
+export type HealthStatus = HealthSeverity | 'ok';
+
+export function statusOf(checks: readonly HealthCheck[]): HealthStatus {
+    const problems = checks.flatMap((item) => item.problems);
+    if (problems.some((problem) => problem.severity === 'error')) {
+        return 'error';
+    }
+    return problems.length > 0 ? 'warning' : 'ok';
+}
+
 /// Describes a value from the frontmatter as it was written, whatever its type.
 function describeValue(value: unknown): string {
     if (typeof value === 'string') {
@@ -524,8 +535,9 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
 /// What the stores report of the files under `.mory/`, each file a check of its own.
 export function settingsChecks(reports: {
     calendarsPath: string;
-    /// The calendar store's errors. Only those of the file, prefixed with its path, are taken: those
-    /// of a feed describe the last window a view loaded, if any, and the feeds are asked afresh.
+    /// What the calendar store reports of the file, each line prefixed with its path. Any other line
+    /// is left out: one of a feed describes the last window a view loaded, if any, and the feeds are
+    /// asked afresh.
     calendarErrors: readonly string[];
     /// One line per feed that could not be read, or why the feeds could not be asked at all.
     feedErrors: readonly string[];
@@ -550,7 +562,7 @@ export function settingsChecks(reports: {
         {
             id: 'calendar-feeds',
             title: 'Subscribed calendars load',
-            description: 'Each enabled feed in .mory/calendars.yaml can be fetched and read by moried. moried keeps a feed it fetched for an hour by default, so a feed fixed since is seen when that runs out.',
+            description: 'Each enabled feed in .mory/calendars.yaml can be fetched and read by moried. What is found of the feeds stands for an hour while the subscriptions stay as they are, and moried keeps a feed it fetched for an hour by default, so a feed fixed since can take as long to be seen.',
             problems: reports.feedErrors.map((message) => ({ severity: 'error', message })),
         },
         {

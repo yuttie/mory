@@ -217,6 +217,25 @@ describe('the files store', () => {
         expect(idb.schema).toBe(5);
     });
 
+    // A deploy of moried alone can say something new of the same commit, which what was worked out
+    // from its listing before must not stand for.
+    it('names the schema its listing was served under, at the same commit too', async () => {
+        const tab = newTab();
+        await tab.list();
+        expect(tab.schema).toBe(5);
+        servedSchema = 6;
+        await tab.refresh();
+        expect(tab.commitId).toBe('C1');
+        expect(tab.schema).toBe(6);
+        servedSchema = undefined;
+        await tab.refresh();
+        expect(tab.schema).toBeUndefined();
+        servedSchema = 6;
+        await tab.refresh();
+        await tab.clear();
+        expect(tab.schema).toBeUndefined();
+    });
+
     // Every consumer derives from the one array, so a new array of the same entries makes all of
     // them work everything out again: over Home, that froze the page at each sync.
     it('keeps the listing it holds when a sync brings no change', async () => {

@@ -47,7 +47,9 @@ async function mockBackend(context: BrowserContext, options: BackendOptions = {}
             await route.fulfill({ json: TOKEN });
             return;
         }
-        if (url.pathname.startsWith('/api/notes/.mory/custom.')) {
+        // A repository with no files in it, rather than one whose settings all read as `[]`, which
+        // the health checks would report.
+        if (url.pathname.startsWith('/api/notes/') || url.pathname.startsWith('/api/v2/files/')) {
             await route.fulfill({ status: 404, json: {} });
             return;
         }
