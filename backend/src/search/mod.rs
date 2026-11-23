@@ -717,7 +717,7 @@ impl SearchManager {
                      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', ?, NULL, ?)
                      ON CONFLICT(blob_id, model, prompt_version, preprocess, detail) DO UPDATE SET
                         description = excluded.description, visible_text = excluded.visible_text,
-                        state = 'ready', last_attempt = excluded.last_attempt,
+                        failure = NULL, state = 'ready', last_attempt = excluded.last_attempt,
                         next_retry = NULL, last_used = excluded.last_used;",
                 )
                 .bind(&selected.blob_id)
@@ -743,17 +743,20 @@ impl SearchManager {
                 sqlx::query(
                     "INSERT INTO search_image_description (
                         blob_id, model, prompt_version, preprocess, detail, description,
-                        visible_text, state, last_attempt, next_retry, last_used
-                     ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
+                        visible_text, failure, state, last_attempt, next_retry, last_used
+                     ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)
                      ON CONFLICT(blob_id, model, prompt_version, preprocess, detail) DO UPDATE SET
-                        description = NULL, visible_text = NULL, state = excluded.state,
-                        last_attempt = excluded.last_attempt, next_retry = excluded.next_retry;",
+                        description = NULL, visible_text = NULL, failure = excluded.failure,
+                        state = excluded.state, last_attempt = excluded.last_attempt,
+                        next_retry = excluded.next_retry;",
                 )
                 .bind(&selected.blob_id)
                 .bind(&model)
                 .bind(image::PROMPT_VERSION)
                 .bind(image::PREPROCESS_VERSION)
                 .bind(image::DETAIL)
+                // Kept for the health page, which says why an image is missing from search.
+                .bind(error.to_string())
                 .bind(state)
                 .bind(last_attempt)
                 .bind(next_retry)

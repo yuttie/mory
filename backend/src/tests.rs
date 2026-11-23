@@ -1034,6 +1034,45 @@ async fn a_subscription_keeps_its_browser_when_its_zone_column_goes() {
 }
 
 #[tokio::test]
+async fn image_descriptions_survive_gaining_their_failure_column() {
+    // As moried left the table before it recorded why a description was given up.
+    let opts = SqliteConnectOptions::from_str("sqlite::memory:").unwrap();
+    let mut conn = SqliteConnection::connect_with(&opts).await.unwrap();
+    sqlx::query("
+            CREATE TABLE search_image_description (
+                blob_id        TEXT NOT NULL,
+                model          TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                preprocess     TEXT NOT NULL,
+                detail         TEXT NOT NULL,
+                description    TEXT,
+                visible_text   TEXT,
+                state          TEXT NOT NULL,
+                last_attempt   INTEGER,
+                next_retry     INTEGER,
+                last_used      INTEGER NOT NULL,
+                PRIMARY KEY (blob_id, model, prompt_version, preprocess, detail)
+            ) STRICT;
+            INSERT INTO search_image_description
+                VALUES ('photo', 'm', 'p', 'pp', 'd', 'A cat', '', 'ready', 1, NULL, 1);
+        ")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    // Twice, as every start does it.
+    crate::init_cache_database(&mut conn).await.unwrap();
+    crate::init_cache_database(&mut conn).await.unwrap();
+
+    let rows: Vec<(String, Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT blob_id, description, failure FROM search_image_description;")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(rows, [("photo".to_owned(), Some("A cat".to_owned()), None)]);
+}
+
+#[tokio::test]
 async fn items_given_up_before_a_fix_are_tried_once_more() {
     let opts = SqliteConnectOptions::from_str("sqlite::memory:").unwrap();
     let mut conn = SqliteConnection::connect_with(&opts).await.unwrap();
@@ -1048,9 +1087,9 @@ async fn items_given_up_before_a_fix_are_tried_once_more() {
                 ('given-up', 'h', 'm', 1, 't', NULL, NULL, 'failed', 1, NULL, 1),
                 ('embedded', 'h', 'm', 1, 't', x'00', 1.0, 'ready', 1, NULL, 1);
             INSERT INTO search_image_description VALUES
-                ('cut-off', 'm', 'p', 'pp', 'd', NULL, NULL, 'failed', 1, NULL, 1),
-                ('described', 'm', 'p', 'pp', 'd', 'a', '', 'ready', 1, NULL, 1),
-                ('too-large', 'm', 'p', 'pp', 'd', NULL, NULL, 'too_large', 1, NULL, 1);
+                ('cut-off', 'm', 'p', 'pp', 'd', NULL, NULL, 'failed', 1, NULL, 1, 'cut off'),
+                ('described', 'm', 'p', 'pp', 'd', 'a', '', 'ready', 1, NULL, 1, NULL),
+                ('too-large', 'm', 'p', 'pp', 'd', NULL, NULL, 'too_large', 1, NULL, 1, '46 MP');
         ")
         .execute(&mut conn)
         .await
