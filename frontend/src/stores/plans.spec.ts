@@ -69,6 +69,18 @@ describe('monthly plan store', () => {
         await vi.waitFor(() => expect(store.errors).toEqual({}));
         expect(store.plannedDays(A)).toEqual(['2026-07-05']);
     });
+    it('says which commit each month was last read at, and none for a read that reached no file', async () => {
+        repository.set('.mory/plans/2026-07.yaml', { content: YAML.stringify({ '2026-07-05': [{ task: A, origin: 'planned' }] }), etag: 'good' });
+        repository.set('.mory/plans/2026-08.yaml', { content: '2026-08-05: invalid', etag: 'bad' });
+        reactive(files).commitId = 'c1';
+        const store = usePlansStore();
+        await expect(store.loadMonths(['2026-07', '2026-08', '2026-09'])).rejects.toThrow('2026-08');
+        expect(['2026-07', '2026-08', '2026-09'].map(store.readAt)).toEqual(['c1', 'c1', 'c1']);
+        files.readVersion.mockRejectedValueOnce({ isAxiosError: true, message: 'Network Error' });
+        await expect(store.loadMonths(['2026-07'])).rejects.toThrow('2026-07');
+        expect(store.readAt('2026-07')).toBeNull();
+        expect(store.readAt('2026-10')).toBeNull();
+    });
     it('keeps what it holds of months a commit leaves as they were', async () => {
         repository.set('.mory/plans/2026-10.yaml', { content: YAML.stringify({ '2026-10-05': [{ task: A, origin: 'planned' }] }), etag: 'october' });
         const store = usePlansStore();

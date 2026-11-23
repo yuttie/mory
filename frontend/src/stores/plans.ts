@@ -15,6 +15,10 @@ export const usePlansStore = defineStore('plans', () => {
     const months = ref<Record<string, MonthPlan>>({});
     const errors = ref<Record<string, string>>({});
     const etags = new Map<string, string>();
+    // The commit each month's last read began at, or `null` where it reached no file to read,
+    // failing for moried or the network rather than for what the file holds: what needs the plans
+    // as of a commit, as the health checks do, tells by it whether a month's error is its file's.
+    const readCommits = new Map<string, string | null>();
     let queue: Promise<unknown> = Promise.resolve();
     let historyRequested = false;
     function serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -26,6 +30,7 @@ export const usePlansStore = defineStore('plans', () => {
         if (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month)) {
             throw new Error('Use a month in YYYY-MM format.');
         }
+        const commit = files.commitId;
         try {
             const version = await files.readVersion(planPath(month), etags.get(month));
             if (version.content !== null) {
@@ -43,6 +48,7 @@ export const usePlansStore = defineStore('plans', () => {
                 etags.set(month, version.etag);
             }
             delete errors.value[month];
+            readCommits.set(month, commit);
         }
         catch (error) {
             if (axios.isAxiosError(error) && error.response?.status === 404) {
@@ -54,9 +60,11 @@ export const usePlansStore = defineStore('plans', () => {
                 }
                 etags.set(month, 'absent');
                 delete errors.value[month];
+                readCommits.set(month, commit);
             }
             else {
                 errors.value[month] = String(error);
+                readCommits.set(month, axios.isAxiosError(error) ? null : commit);
                 throw error;
             }
         }
@@ -240,6 +248,11 @@ export const usePlansStore = defineStore('plans', () => {
             }
         });
     }
+    /// The commit the last read of `month` began at, or `null` if it reached no file or none has
+    /// been made.
+    function readAt(month: string): string | null {
+        return readCommits.get(month) ?? null;
+    }
     const days = computed(() => Object.assign({}, ...Object.values(months.value)) as MonthPlan);
     function plannedDays(uuid: string): string[] {
         return Object.entries(days.value).filter(([, entries]) => entries.some((entry) => entry.task === uuid.toLowerCase())).map(([date]) => date).sort();
@@ -253,5 +266,5 @@ export const usePlansStore = defineStore('plans', () => {
             void loadMonths(knownMonths()).catch(() => undefined);
         }
     });
-    return { months, days, errors, loadMonths, loadAll: () => serialize(loadAll), planTask, moveTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
+    return { months, days, errors, readAt, loadMonths, loadAll: () => serialize(loadAll), planTask, moveTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
 });
