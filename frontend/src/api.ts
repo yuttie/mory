@@ -349,7 +349,9 @@ export interface SemanticIndexStatus {
   state: 'disabled' | 'indexing' | 'ready' | 'error';
   indexed: number;
   total: number;
+  // Passages whose embedding was given up, and images whose description was.
   failed: number;
+  failed_images: number;
 }
 
 export interface SearchWarning {
