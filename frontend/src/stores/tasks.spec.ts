@@ -207,6 +207,15 @@ describe('the derived forest', () => {
         expect(titles(store.tree)).toEqual(['Delta', 'Gamma', 'Beta', 'Alpha', { Parent: ['Child'] }]);
     });
 
+    it('orders the tree by status, and leaves the lists beside it newest first', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, title: 'Started', status: 'in_progress', day: 1 },
+            { path: `.tasks/${uuid(2)}.md`, title: 'Newer', status: 'todo', day: 2 },
+        ]);
+        expect(titles(store.tree)).toEqual(['Started', 'Newer']);
+        expect(store.allTasks.map((t) => t.title)).toEqual(['Newer', 'Started']);
+    });
+
     it('resolves a path to its uuid', async () => {
         const { store } = await storeWith(sample);
         expect(store.idByPath(`.tasks/${uuid(3)}.md`)).toBe(uuid(3));

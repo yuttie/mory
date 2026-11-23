@@ -21,6 +21,7 @@ import {
     TASKS_DIR,
     buildTaskPath,
     childTaskPath,
+    inStatusOrder,
     taskDirectoryOf,
     taskPolicy,
 } from '@/task-forest';
@@ -387,10 +388,12 @@ export const useTasksStore = defineStore('tasks', () => {
         isLoading: computed(() => files.isLoading),
         hasData: computed(() => forest.value.byId.size > 0),
 
-        // The forest as the task tree, and every dialog choosing a parent, draws it.
-        tree: computed<TaskTreeItem[]>(
-            () => toNestedForest(forest.value, forest.value.roots, toItem),
-        ),
+        // The forest as the task tree, and every dialog choosing a parent, draws it: in the order
+        // the statuses give, where the lists take the forest's own.
+        tree: computed<TaskTreeItem[]>(() => {
+            const ordered = inStatusOrder(forest.value);
+            return toNestedForest(ordered, ordered.roots, toItem);
+        }),
 
         allTasks,
         knownTags,

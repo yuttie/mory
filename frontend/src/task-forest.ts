@@ -7,9 +7,10 @@
 // directory a file covers, the validation the backend applied, and the sibling order it produced.
 
 import type { UUID } from '@/api';
-import type { Status } from '@/task';
+import type { Status, StatusKind } from '@/task';
 import type { Importance } from '@/urgency';
-import type { ForestNode } from '@/forest';
+import type { Forest, ForestNode } from '@/forest';
+import { sortForest } from '@/forest';
 import type { PathForestPolicy } from '@/path-forest';
 import { stripExtension } from '@/path-forest';
 import { compareInstantsDesc } from '@/utils';
@@ -110,6 +111,68 @@ export function taskUuidOf(path: string): UUID | null {
 export function compareByMtimeDesc(a: TaskNode, b: TaskNode): number {
     // Ties would otherwise reorder between renders, which makes the tree jump.
     return compareInstantsDesc(a.mtime, b.mtime) || a.uuid.localeCompare(b.uuid);
+}
+
+// Where a status puts a task among its siblings in the task tree, first to last: the work under
+// way, the work to take on, then the work over with. On hold comes before Backlog, being work begun
+// and paused -- it resumes to In progress, never to To do -- where a task in the backlog may never
+// begin. Done and Canceled share a place, so the task closed last comes first whichever way it
+// closed.
+const STATUS_RANK: Record<StatusKind, number> = {
+    in_progress: 0,
+    waiting: 1,
+    blocked: 2,
+    todo: 3,
+    on_hold: 4,
+    backlog: 5,
+    done: 6,
+    canceled: 6,
+};
+
+// The work under way, which lifts every task above it to its place.
+const UNDER_WAY: ReadonlySet<StatusKind> = new Set(['in_progress', 'waiting', 'blocked']);
+
+// The status a task is drawn with (`statusIcon`): Backlog for one naming none, and To do, as not
+// yet finished, for one naming a status there is none of.
+function drawnStatus(node: TaskNode): StatusKind {
+    const kind: unknown = node.metadata?.task?.status?.kind ?? 'backlog';
+    return typeof kind === 'string' && Object.hasOwn(STATUS_RANK, kind) ? kind as StatusKind : 'todo';
+}
+
+// The forest as the task tree draws it: every list of siblings, the roots included, in the order
+// their statuses give, and newest change first within one place.
+//
+// A task with work under way anywhere below it takes the place of the most active of that work, so
+// a project whose step is in progress is drawn among the tasks in progress. Work below that is not
+// under way moves it nowhere: an On hold project stays on hold whatever is left to do in it. A task
+// done or canceled keeps its own place, as it keeps its own urgency, though what is under way below
+// it still lifts the tasks above it.
+//
+// A copy: the store's forest keeps the order the lists beside the tree take.
+export function inStatusOrder(forest: Forest<TaskNode>): Forest<TaskNode> {
+    const place = new Map<string, number>();
+    // Places the task `id` and everything below it, and gives the place of the work under way
+    // there, the most active first, or Infinity for none.
+    function visit(id: string): number {
+        const status = drawnStatus(forest.byId.get(id) as TaskNode);
+        const own = STATUS_RANK[status];
+        let below = Infinity;
+        for (const child of forest.childrenOf.get(id) ?? []) {
+            below = Math.min(below, visit(child));
+        }
+        place.set(id, status === 'done' || status === 'canceled' ? own : Math.min(own, below));
+        return Math.min(UNDER_WAY.has(status) ? own : Infinity, below);
+    }
+    for (const root of forest.roots) {
+        visit(root);
+    }
+    const ordered: Forest<TaskNode> = {
+        byId: forest.byId,
+        childrenOf: new Map([...forest.childrenOf].map(([id, children]) => [id, [...children]])),
+        roots: [...forest.roots],
+    };
+    sortForest(ordered, (a, b) => ((place.get(a.id) ?? 0) - (place.get(b.id) ?? 0)) || compareByMtimeDesc(a, b));
+    return ordered;
 }
 
 // The directory a task's file covers: the one beside it named by its UUID alone. A readable name

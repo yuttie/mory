@@ -7,6 +7,7 @@ import {
     TASKS_DIR,
     buildTaskPath,
     compareByMtimeDesc,
+    inStatusOrder,
     isTaskPath,
     taskPolicy,
     taskUuidOf,
@@ -275,5 +276,104 @@ describe('a file in the task tree that is not Markdown', () => {
         expect(shapeOf([image, entry(`.tasks/${uuid(1)}/${uuid(2)}.md`)])).toEqual([
             { uuid: uuid(1), children: [{ uuid: uuid(2) }] },
         ]);
+    });
+});
+
+describe('inStatusOrder', () => {
+    // A task named `name`, in `status` (none, if omitted), last changed on the `day`th.
+    function task(path: string, name: string, status?: unknown, day = 1): ListEntry2 {
+        return {
+            ...entry(path, `2020-01-${String(day).padStart(2, '0')}T00:00:00+00:00`),
+            metadata: { tags: [], task: status === undefined ? {} : { status: { kind: status } } },
+            title: name,
+        };
+    }
+
+    // The titles as the tree draws them, a parent's followed by its children's.
+    function drawn(entries: ListEntry2[]): unknown[] {
+        const ordered = inStatusOrder(build(entries));
+        return toNestedForest<TaskNode, unknown>(ordered, ordered.roots, (node, kids) =>
+            kids === undefined ? node.title : { [node.title as string]: kids });
+    }
+
+    it('puts the work under way first, then the work to take on, then the work over with', () => {
+        const statuses = ['done', 'backlog', 'on_hold', 'todo', 'blocked', 'waiting', 'in_progress', 'canceled'];
+        expect(drawn(statuses.map((status, n) => task(`.tasks/${uuid(n + 1)}.md`, status, status)))).toEqual([
+            'in_progress', 'waiting', 'blocked', 'todo', 'on_hold', 'backlog', 'done', 'canceled',
+        ]);
+    });
+
+    it('draws the newest change first within one place, and Done and Canceled as one', () => {
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Old to do', 'todo', 1),
+            task(`.tasks/${uuid(2)}.md`, 'New to do', 'todo', 3),
+            task(`.tasks/${uuid(3)}.md`, 'Done long ago', 'done', 1),
+            task(`.tasks/${uuid(4)}.md`, 'Canceled lately', 'canceled', 2),
+            task(`.tasks/${uuid(5)}.md`, 'Done just now', 'done', 3),
+        ])).toEqual(['New to do', 'Old to do', 'Done just now', 'Canceled lately', 'Done long ago']);
+    });
+
+    it('places a task naming no status in the backlog, and one naming no known status with To do', () => {
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Unsorted'),
+            task(`.tasks/${uuid(2)}.md`, 'Parked', 'on_hold'),
+            task(`.tasks/${uuid(3)}.md`, 'Misspelt', 'finished'),
+            task(`.tasks/${uuid(4)}.md`, 'Not a name', 'constructor'),
+            task(`.tasks/${uuid(5)}.md`, 'Waiting', 'waiting'),
+        ])).toEqual(['Waiting', 'Misspelt', 'Not a name', 'Parked', 'Unsorted']);
+    });
+
+    it('lifts a task to the place of the work under way anywhere below it, at every level', () => {
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Waiting alone', 'waiting'),
+            task(`.tasks/${uuid(2)}.md`, 'Project', 'todo'),
+            task(`.tasks/${uuid(2)}/${uuid(3)}.md`, 'Phase to do', 'todo'),
+            task(`.tasks/${uuid(2)}/${uuid(4)}.md`, 'Phase under way', 'backlog'),
+            task(`.tasks/${uuid(2)}/${uuid(4)}/${uuid(5)}.md`, 'Step', 'in_progress'),
+        ])).toEqual([
+            { Project: [{ 'Phase under way': ['Step'] }, 'Phase to do'] },
+            'Waiting alone',
+        ]);
+    });
+
+    it('leaves a task where it is for work below it that is not under way', () => {
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Paused project', 'on_hold'),
+            task(`.tasks/${uuid(1)}/${uuid(2)}.md`, 'Step left to do', 'todo'),
+            task(`.tasks/${uuid(3)}.md`, 'Backlog project', 'backlog'),
+            task(`.tasks/${uuid(3)}/${uuid(4)}.md`, 'Step taken on', 'todo'),
+            task(`.tasks/${uuid(5)}.md`, 'To do', 'todo'),
+        ])).toEqual([
+            'To do',
+            { 'Paused project': ['Step left to do'] },
+            { 'Backlog project': ['Step taken on'] },
+        ]);
+    });
+
+    it('keeps a closed task in its own place, though the work under way below it lifts the tasks above', () => {
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Waiting alone', 'waiting'),
+            task(`.tasks/${uuid(2)}.md`, 'Project', 'todo'),
+            task(`.tasks/${uuid(2)}/${uuid(3)}.md`, 'Closed phase', 'done'),
+            task(`.tasks/${uuid(2)}/${uuid(3)}/${uuid(4)}.md`, 'Step', 'in_progress'),
+            task(`.tasks/${uuid(2)}/${uuid(5)}.md`, 'Open phase', 'todo'),
+        ])).toEqual([
+            { Project: ['Open phase', { 'Closed phase': ['Step'] }] },
+            'Waiting alone',
+        ]);
+    });
+
+    it('leaves the forest it was given in its own order', () => {
+        const forest = build([
+            task(`.tasks/${uuid(1)}.md`, 'Older under way', 'in_progress', 1),
+            task(`.tasks/${uuid(2)}.md`, 'Newer to do', 'todo', 2),
+            task(`.tasks/${uuid(2)}/${uuid(3)}.md`, 'Older step', 'blocked', 1),
+            task(`.tasks/${uuid(2)}/${uuid(4)}.md`, 'Newer step', 'todo', 2),
+        ]);
+        const ordered = inStatusOrder(forest);
+        expect(ordered.roots).toEqual([uuid(1), uuid(2)]);
+        expect(ordered.childrenOf.get(uuid(2))).toEqual([uuid(3), uuid(4)]);
+        expect(forest.roots).toEqual([uuid(2), uuid(1)]);
+        expect(forest.childrenOf.get(uuid(2))).toEqual([uuid(4), uuid(3)]);
     });
 });
