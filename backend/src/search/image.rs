@@ -159,6 +159,9 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     inspect_dimensions(&input, deadline).await?;
     let mut command = Command::new("magick");
     apply_resource_limits(&mut command);
+    // What the pixel cache spills to disk is ImageMagick's own file, which a process killed at the
+    // deadline leaves behind, as large as the disk limit lets it grow; here it goes with the rest.
+    command.env("MAGICK_TEMPORARY_PATH", directory.path());
     let command = command
         .arg("-limit")
         .arg("width")
