@@ -2,13 +2,12 @@ import { expect, test } from '@playwright/test';
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
-function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
+function note(title: string): string {
     return [
         '---',
         'task:',
         '  status:',
         '    kind: todo',
-        ...(tags.length > 0 ? [`tags: [${tags.join(', ')}]`] : []),
         '---',
         '',
         `# ${title}`,
@@ -19,11 +18,9 @@ function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
 const PROJECT = uuid(1);
 const PHASE = uuid(2);
 const STEP = uuid(3);
-// A second task with a child, so it stays at the top of the tree beside Project.
+// A second task with a child, beside Project at the top.
 const OTHER = uuid(4);
 const CHORE = uuid(5);
-// A root task with no children, which the tree files under its tag.
-const ERRAND = uuid(6);
 
 const NOTES = {
     [`.tasks/${PROJECT}.md`]: note('Project'),
@@ -31,7 +28,6 @@ const NOTES = {
     [`.tasks/${PROJECT}/${PHASE}/${STEP}.md`]: note('Step'),
     [`.tasks/${OTHER}.md`]: note('Other'),
     [`.tasks/${OTHER}/${CHORE}.md`]: note('Chore'),
-    [`.tasks/${ERRAND}.md`]: note('Errand', { tags: ['work'] }),
 };
 
 function tree(page: Page): Locator {
@@ -88,7 +84,7 @@ async function settled(page: Page): Promise<void> {
     )), { intervals: [50] }).toBe(true);
 }
 
-// The tree with Project and Phase open, and Other and the tag group closed. Nothing is selected: a
+// The tree with Project and Phase open, and Other closed. Nothing is selected: a
 // selected task opens the tree to itself whenever it moves, which would hide what a drop opens.
 async function openTree(page: Page): Promise<void> {
     await page.goto('/tasks-next/_/descendants/status');
@@ -141,42 +137,6 @@ test('dims the tasks the dragged one cannot go under, and refuses a drop on them
     // Long enough for a move to have been asked for, were one going to be.
     await page.waitForTimeout(300);
     expect(repository.renames).toEqual([]);
-});
-
-test('moves a task to the top when dropped on the group of its tag', async ({ context, page }) => {
-    const repository = await mockBackend(context, {
-        ...NOTES,
-        [`.tasks/${PROJECT}/${PHASE}.md`]: note('Phase', { tags: ['work'] }),
-        // Gives the tree a group of another tag.
-        [`.tasks/${uuid(7)}.md`]: note('Laundry', { tags: ['home'] }),
-    });
-    await openTree(page);
-
-    await pickUp(page, row(page, 'Phase'));
-    // Moved to the top, Phase would be filed under its own tag, not under whichever was chosen.
-    await expect(row(page, 'home')).toHaveCSS('opacity', '0.4');
-    await expect(row(page, 'work')).toHaveCSS('opacity', '1');
-    await moveOver(page, row(page, 'work'));
-    await expect(row(page, 'work')).toHaveCSS('outline-style', 'solid');
-    await page.mouse.up();
-
-    await expect.poll(() => repository.renames).toEqual([
-        { from: `.tasks/${PROJECT}/${PHASE}.md`, to: `.tasks/${PHASE}.md` },
-        { from: `.tasks/${PROJECT}/${PHASE}/${STEP}.md`, to: `.tasks/${PHASE}/${STEP}.md` },
-    ]);
-    // With Step under it, Phase is drawn at the top rather than in the group.
-    await expect(row(page, 'Phase')).toHaveAttribute('aria-level', '1');
-});
-
-test('refuses its own group to a task already at the top', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
-    await openTree(page);
-    await row(page, 'work').locator('.v-list-item__prepend button').click();
-    await settled(page);
-
-    await pickUp(page, row(page, 'Errand'));
-    await expect(row(page, 'work')).toHaveCSS('opacity', '0.4');
-    await page.mouse.up();
 });
 
 test('selects nothing when the task is let go where it was picked up', async ({ context, page }) => {
@@ -285,12 +245,9 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
 });
 
 test('scrolls the tree while the task is held near its edge, to a task out of sight', async ({ context, page }) => {
-    // Enough tasks under Project for Other to be out of sight below them, and no tag group below
-    // Other, so it is the last row.
+    // Enough tasks under Project for Other, the last row, to be out of sight below them.
     const items = Object.fromEntries(Array.from({ length: 40 }, (_, n) => [`.tasks/${PROJECT}/${uuid(100 + n)}.md`, note(`Item ${n}`)]));
-    const notes: Record<string, string> = { ...NOTES, ...items };
-    delete notes[`.tasks/${ERRAND}.md`];
-    const repository = await mockBackend(context, notes);
+    const repository = await mockBackend(context, { ...NOTES, ...items });
     await openTree(page);
     const scroller = tree(page).locator('.entry-tree');
     const scrolled = () => scroller.evaluate((element) => element.scrollTop);

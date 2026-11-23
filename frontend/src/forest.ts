@@ -214,30 +214,3 @@ export function toNestedForest<N extends ForestNode, T>(
         .map((id) => toNested(forest, id, make))
         .filter((item): item is T => item !== undefined);
 }
-
-// Gather `ids` under synthetic grouping roots -- the task tree's tag groups, and whatever a note
-// tree eventually groups by. Nodes are grouped by `keyOf`; group order is `compareKeys`; members
-// keep the order they were given in, which is already the forest's sibling order.
-export function groupRoots<N extends ForestNode, T>(
-    forest: Forest<N>,
-    ids: string[],
-    keyOf: (node: N) => string,
-    compareKeys: (a: string, b: string) => number,
-    makeGroup: (key: string, members: T[]) => T,
-    makeMember: (node: N) => T,
-): T[] {
-    const groups = new Map<string, T[]>();
-    for (const node of nodesOf(forest, ids)) {
-        const key = keyOf(node);
-        const members = groups.get(key);
-        if (members === undefined) {
-            groups.set(key, [makeMember(node)]);
-        }
-        else {
-            members.push(makeMember(node));
-        }
-    }
-    return Array.from(groups.keys())
-        .sort(compareKeys)
-        .map((key) => makeGroup(key, groups.get(key) as T[]));
-}

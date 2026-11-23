@@ -2,13 +2,12 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
-function note(title: string, { tags = [], status = 'todo' }: { tags?: string[]; status?: string } = {}): string {
+function note(title: string, { status = 'todo' }: { status?: string } = {}): string {
     return [
         '---',
         'task:',
         '  status:',
         `    kind: ${status}`,
-        ...(tags.length > 0 ? [`tags: [${tags.join(', ')}]`] : []),
         '---',
         '',
         `# ${title}`,
@@ -19,16 +18,15 @@ function note(title: string, { tags = [], status = 'todo' }: { tags?: string[]; 
 const LAUNCH = uuid(1);
 const SHIP = uuid(3);
 
-// Launch holds Ship, which holds the release's two steps; the childless ones are filed under the
-// groups their tags make.
+// Launch holds Ship, which holds the release's two steps, and two tasks stand alone beside it.
 const NOTES = {
     [`.tasks/${LAUNCH}.md`]: note('Launch'),
     [`.tasks/${LAUNCH}/${uuid(2)}.md`]: note('Write the announcement'),
     [`.tasks/${LAUNCH}/${SHIP}.md`]: note('Ship'),
     [`.tasks/${LAUNCH}/${SHIP}/${uuid(4)}.md`]: note('Build the release'),
     [`.tasks/${LAUNCH}/${SHIP}/${uuid(5)}.md`]: note('Write release notes', { status: 'done' }),
-    [`.tasks/${uuid(6)}.md`]: note('Water the plants', { tags: ['home'] }),
-    [`.tasks/${uuid(7)}.md`]: note('Plan the release party', { tags: ['home'] }),
+    [`.tasks/${uuid(6)}.md`]: note('Water the plants'),
+    [`.tasks/${uuid(7)}.md`]: note('Plan the release party'),
 };
 
 function tree(page: Page): Locator {
@@ -110,7 +108,7 @@ function hiddenCount(page: Page): Locator {
 test('finds tasks by title and opens the tasks above them', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.goto('/tasks-next');
-    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
 
     await search(page).fill('RELEASE');
     await expect(rows(page)).toHaveText([
@@ -118,7 +116,6 @@ test('finds tasks by title and opens the tasks above them', async ({ context, pa
         'Ship',
         'Build the release',
         'Write release notes',
-        'home',
         'Plan the release party',
     ]);
     await expect(tree(page).locator('mark')).toHaveText(['release', 'release', 'release']);
@@ -144,11 +141,11 @@ test('searches once typing pauses, and gives the tree back at once when cleared'
     await page.clock.pauseAt(Date.now() + 60_000);
 
     await search(page).fill('');
-    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
 
     await search(page).pressSequentially('build');
     await page.clock.runFor(249);
-    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
     await page.clock.runFor(1);
     await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
 });
@@ -161,14 +158,14 @@ test('marks the titles of the tasks found alone', async ({ context, page }) => {
         [`.tasks/${uuid(11)}/${uuid(12)}.md`]: note('Write release notes'),
         [`.tasks/${uuid(13)}.md`]: note('Release notes', { status: 'done' }),
         [`.tasks/${uuid(13)}/${uuid(14)}.md`]: note('Proofread the release notes'),
-        [`.tasks/${uuid(15)}.md`]: note('Send the release notes', { tags: ['release'] }),
+        [`.tasks/${uuid(15)}.md`]: note('Send the release notes'),
     });
     await page.addInitScript(() => {
         localStorage.setItem('task-tree-hidden-statuses', JSON.stringify(['done']));
     });
     await page.goto('/tasks-next');
     await search(page).fill('release notes');
-    await expect(rows(page)).toHaveCount(6);
+    await expect(rows(page)).toHaveCount(5);
     // By the whole title: a mark holding "release" is text of its own.
     const marks = (name: string) => tree(page).getByRole('treeitem')
         .filter({ has: page.locator('.v-list-item-title', { hasText: new RegExp(`^\\s*${name}\\s*$`) }) })
@@ -176,7 +173,7 @@ test('marks the titles of the tasks found alone', async ({ context, page }) => {
     for (const name of ['Write release notes', 'Proofread the release notes', 'Send the release notes']) {
         await expect(marks(name)).toHaveText(['release', 'notes']);
     }
-    for (const name of ['Release plan', 'Release notes', 'release']) {
+    for (const name of ['Release plan', 'Release notes']) {
         await expect(marks(name)).toHaveCount(0);
     }
 });
@@ -186,14 +183,14 @@ test('searches for the word an input method gives, not for what it composes', as
     test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
     await mockBackend(context, NOTES);
     await page.goto('/tasks-next');
-    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
     await search(page).focus();
     const devtools = await context.newCDPSession(page);
     await devtools.send('Input.imeSetComposition', { text: 'build', selectionStart: 5, selectionEnd: 5 });
     await expect(search(page)).toHaveValue('build');
     // Well past the pause after which typed text is searched for.
     await page.waitForTimeout(750);
-    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
 
     await devtools.send('Input.insertText', { text: 'build' });
     await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
@@ -202,8 +199,8 @@ test('searches for the word an input method gives, not for what it composes', as
 test('gives the tree back as it was once the search is cleared', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.goto('/tasks-next');
-    await toggle(page, 'home');
-    await expect(rows(page)).toHaveText(['Launch', 'home', 'Water the plants', 'Plan the release party']);
+    await toggle(page, 'Launch');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Water the plants', 'Plan the release party']);
 
     await search(page).fill('build');
     await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
@@ -213,7 +210,7 @@ test('gives the tree back as it was once the search is cleared', async ({ contex
 
     await page.getByRole('button', { name: 'Clear Search tasks' }).click();
     await expect(search(page)).toHaveValue('');
-    await expect(rows(page)).toHaveText(['Launch', 'home', 'Water the plants', 'Plan the release party']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Water the plants', 'Plan the release party']);
 });
 
 // What a new search finds is shown, though it keeps the branches the last one did.
@@ -256,11 +253,11 @@ test('leaves out the tasks of the statuses unticked, and remembers them', async 
     await page.goto('/tasks-next');
     await toggle(page, 'Launch');
     await toggle(page, 'Ship');
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'Water the plants', 'Plan the release party']);
 
     await statuses(page).click();
     await status(page, 'Done').click();
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Water the plants', 'Plan the release party']);
     await expect(hiddenCount(page)).toHaveText('1');
     await expect(hiddenCount(page)).toHaveAccessibleName('1 status hidden');
     await expect(statuses(page)).toHaveAccessibleName('Choose which statuses are shown, 1 status hidden');
@@ -276,7 +273,7 @@ test('leaves out the tasks of the statuses unticked, and remembers them', async 
     await statuses(page).click();
     await status(page, 'Show all').click();
     // Closed, as the tree opens nothing of itself on a new page.
-    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
 });
 
 test('shows or hides a group of statuses at once', async ({ context, page }) => {
@@ -290,7 +287,7 @@ test('shows or hides a group of statuses at once', async ({ context, page }) => 
     // Its statuses named as well as drawn.
     await expect(closed).toContainText('Done, Canceled');
     await closed.click();
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Water the plants', 'Plan the release party']);
     await expect(hiddenCount(page)).toHaveText('2');
     await expect(statuses(page)).toHaveAccessibleName('Choose which statuses are shown, 2 statuses hidden');
     await expect(closed.getByRole('checkbox')).not.toBeChecked();
@@ -308,7 +305,7 @@ test('shows or hides a group of statuses at once', async ({ context, page }) => 
     await expect(closed.getByRole('checkbox')).toBeChecked();
     await expect(closed.getByRole('checkbox')).not.toHaveAttribute('aria-checked', 'mixed');
     await expect(hiddenCount(page)).toBeHidden();
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'Water the plants', 'Plan the release party']);
 
     // To do is in a group as every status is, so the groups between them hide every task.
     await closed.click();
@@ -328,7 +325,7 @@ test('starts from what the switch for completed tasks hid', async ({ context, pa
     await page.goto('/tasks-next');
     await toggle(page, 'Launch');
     await toggle(page, 'Ship');
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Water the plants', 'Plan the release party']);
     await expect(hiddenCount(page)).toHaveText('2');
     expect(await page.evaluate(() => localStorage.getItem('hide-completed-in-tree-view'))).toBeNull();
 });

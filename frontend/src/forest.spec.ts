@@ -6,7 +6,6 @@ import {
     childNodes,
     descendants,
     flatten,
-    groupRoots,
     nodesOf,
     sortForest,
     subtree,
@@ -144,37 +143,6 @@ describe('toNested', () => {
 
     it('returns undefined for an id the forest does not hold', () => {
         expect(toNested(sample(), 'nope', make)).toBeUndefined();
-    });
-});
-
-describe('groupRoots', () => {
-    it('gathers nodes under synthetic groups, ordered by the key comparator', () => {
-        const forest = buildForest([node('p', null), node('q', null), node('r', null)]);
-        const grouped = groupRoots<Node, { group: string; members: string[] }>(
-            forest,
-            ['p', 'q', 'r'],
-            (n) => (n.id === 'r' ? 'B' : 'A'),
-            (a, b) => a.localeCompare(b),
-            (key, members) => ({ group: key, members: members.flatMap((m) => m.members) }),
-            (n) => ({ group: '', members: [n.id] }),
-        );
-        expect(grouped).toEqual([
-            { group: 'A', members: ['p', 'q'] },
-            { group: 'B', members: ['r'] },
-        ]);
-    });
-
-    it('keeps members in the order they were given, which is the forest order', () => {
-        const forest = buildForest([node('b', null), node('a', null)], byIdDesc);
-        const grouped = groupRoots<Node, string[]>(
-            forest,
-            forest.roots,
-            () => 'all',
-            (a, b) => a.localeCompare(b),
-            (_key, members) => members.flat(),
-            (n) => [n.id],
-        );
-        expect(grouped).toEqual([['b', 'a']]);
     });
 });
 

@@ -30,10 +30,6 @@ function task(title: string | null, children?: TaskTreeItem[], status: unknown =
     };
 }
 
-function group(tag: string, members: TaskTreeItem[]): TaskTreeItem {
-    return { ...task(tag, members), uuid: `tag-group-${tag}`, metadata: { tag_group: tag } };
-}
-
 // The tree as titles, children nested under their parent's.
 function titles(items: TaskTreeItem[]): unknown[] {
     return items.map((item) => item.children === undefined ? item.title : [item.title, titles(item.children)]);
@@ -128,8 +124,9 @@ describe('filterTaskTree', () => {
                 task('Write release notes'),
             ]),
         ]),
-        group('home', [task('Water the plants'), task('Write to the landlord')]),
-        group('work', [task('Expense report')]),
+        task('Water the plants'),
+        task('Write to the landlord'),
+        task('Expense report'),
     ];
 
     it('hands back the tree it was given when there is nothing to search for', () => {
@@ -141,7 +138,7 @@ describe('filterTaskTree', () => {
     it('keeps the tasks found and everything above them', () => {
         expect(titles(filterTaskTree(tree, { query: 'write', hiddenStatuses: [] }).items)).toEqual([
             ['Launch', ['Write the announcement', ['Ship', ['Write release notes']]]],
-            ['home', ['Write to the landlord']],
+            'Write to the landlord',
         ]);
     });
 
@@ -163,7 +160,7 @@ describe('filterTaskTree', () => {
             task('Finished project', [
                 task('Last step', undefined, { kind: 'done' }),
             ], { kind: 'done' }),
-            group('home', [task('Done chore', undefined, { kind: 'done' })]),
+            task('Done chore', undefined, { kind: 'done' }),
         ];
         expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done', 'canceled'] }).items)).toEqual([
             ['Done project', ['Open step']],
@@ -196,17 +193,11 @@ describe('filterTaskTree', () => {
         expect(titles(filterTaskTree(both, { query: 'write', hiddenStatuses: ['done'] }).items)).toEqual(['Write the draft']);
     });
 
-    // Told by its id, as a task's frontmatter may hold any key.
-    it('keeps a task whose note claims to be a tag group as a task', () => {
-        const claimant = { ...task('Write the claim'), metadata: { tag_group: 'home', task: { status: { kind: 'todo' } } } } as TaskTreeItem;
-        expect(titles(filterTaskTree([claimant], { query: 'claim', hiddenStatuses: [] }).items)).toEqual(['Write the claim']);
-    });
-
     it('tells the tasks found from those kept for what is under them', () => {
         const nested = [
             task('Release plan', [task('Write release notes')]),
             task('Release notes', [task('Proofread the release notes')], { kind: 'done' }),
-            group('release', [task('Send the release notes')]),
+            task('Send the release notes'),
         ];
         expect([...filterTaskTree(nested, { query: 'release notes', hiddenStatuses: ['done'] }).found]).toEqual([
             'Write release notes',
@@ -218,10 +209,6 @@ describe('filterTaskTree', () => {
     it('hands back a leaf it keeps as it was', () => {
         const leaf = task('Write the draft');
         expect(filterTaskTree([leaf], { query: 'draft', hiddenStatuses: [] }).items[0]).toBe(leaf);
-    });
-
-    it('never keeps a tag group for its own name', () => {
-        expect(filterTaskTree(tree, { query: 'home', hiddenStatuses: [] }).items).toEqual([]);
     });
 });
 

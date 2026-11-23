@@ -633,15 +633,13 @@ test('edits the selected task from the toolbar, and closes back to its list', as
     await expect(page).toHaveURL(url(PROJECT, 'schedule'));
 });
 
-// All tasks is no task, and neither is a tag group.
-for (const selection of ['_', 'tag-group-Untagged']) {
-    test(`has no task to edit from the toolbar with ${selection} selected`, async ({ context, page }) => {
-        await mockBackend(context, NOTES);
-        await page.goto(`/tasks-next/${selection}/descendants/status`);
-        await expect(listed(page, 'Errand')).toBeVisible();
-        await expect(page.locator('.item-view .v-toolbar').getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
-    });
-}
+// All tasks is no task.
+test('has no task to edit from the toolbar with all tasks selected', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    await expect(listed(page, 'Errand')).toBeVisible();
+    await expect(page.locator('.item-view .v-toolbar').getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+});
 
 // A row's own button edits its task where the list is, as its "+" adds one under it there.
 test('edits a task from its row in the tree, over the list as it is', async ({ context, page }) => {
@@ -672,15 +670,6 @@ test('gives focus back to the row a task was edited from', async ({ context, pag
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
     await expect(project).toBeFocused();
-});
-
-// A tag group is no task to edit.
-test('offers no editor on a tag group row', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
-    await page.goto('/tasks-next/_/descendants/status');
-    await expect(row(page, 'Untagged')).toBeVisible();
-    await expect(row(page, 'Project').getByRole('button', { name: 'Edit task', includeHidden: true })).toHaveCount(1);
-    await expect(row(page, 'Untagged').getByRole('button', { name: 'Edit task', includeHidden: true })).toHaveCount(0);
 });
 
 // The editor was a tab beside the list, and its addresses are in bookmarks and history.

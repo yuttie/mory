@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
 import { canHaveChildNote, childNotePath } from '@/note-forest';
-import { isTagGroupId } from '@/task-forest';
 
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
@@ -74,9 +73,8 @@ const routes: Array<RouteRecordRaw> = [
                 path: ':selectedNodeId/selected/:viewMode',
                 redirect: to => {
                     const { selectedNodeId, viewMode } = to.params;
-                    // All tasks and a tag group had an empty editor there, for a new task, and have
-                    // none to open.
-                    const empty = selectedNodeId === '_' || isTagGroupId(String(selectedNodeId));
+                    // All tasks had an empty editor there, for a new task, and has none to open.
+                    const empty = selectedNodeId === '_';
                     return {
                         name: 'TasksNextWithParams',
                         params: { selectedNodeId, viewMode },

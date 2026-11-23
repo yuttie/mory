@@ -1,9 +1,9 @@
 // Which rows the task tree draws under a search and a status filter: the tasks both let through,
-// and every task and tag group above one, so a task found is still seen where it lives rather than
+// and every task above one, so a task found is still seen where it lives rather than
 // torn from its parents.
 
 import type { StatusKind } from '@/task';
-import { type TaskTreeItem, isTagGroupId } from '@/task-forest';
+import type { TaskTreeItem } from '@/task-forest';
 
 export interface TaskTreeFilter {
     // Words a task's title must each hold, in any case and any order.
@@ -126,7 +126,6 @@ export interface FilteredTaskTree {
     found: ReadonlySet<string>;
 }
 
-// A tag group is only a heading for its members, so it is kept for them and never for its own name.
 // A kept task whose subtasks are all left out is made a leaf, as v-treeview would otherwise give it
 // a chevron that opens on nothing.
 export function filterTaskTree(items: TaskTreeItem[], filter: TaskTreeFilter): FilteredTaskTree {
@@ -140,9 +139,7 @@ export function filterTaskTree(items: TaskTreeItem[], filter: TaskTreeFilter): F
     const matches = matcher(terms);
     function keep(item: TaskTreeItem): TaskTreeItem | null {
         const children = item.children?.map(keep).filter((child) => child !== null) ?? [];
-        if (!isTagGroupId(item.uuid)
-            && !hidden.has(item.metadata?.task?.status?.kind ?? 'backlog')
-            && matches(item.title)) {
+        if (!hidden.has(item.metadata?.task?.status?.kind ?? 'backlog') && matches(item.title)) {
             found.add(item.uuid);
         }
         if (children.length > 0) {
