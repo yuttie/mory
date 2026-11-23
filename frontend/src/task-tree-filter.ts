@@ -1,6 +1,6 @@
 // Which rows the task tree draws under a search and a status filter: the tasks both let through,
-// and every task above one, so a task found is still seen where it lives rather than
-// torn from its parents.
+// and every task above one, so a task found is still seen where it lives rather than torn from its
+// parents.
 
 import type { StatusKind } from '@/task';
 import type { TaskTreeItem } from '@/task-forest';
