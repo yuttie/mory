@@ -39,7 +39,14 @@ pub async fn describe(
     source: &[u8],
 ) -> Result<ImageDescription, ProviderError> {
     if source.len() > MAX_SOURCE_BYTES {
-        return Err(item_failure("image exceeds the source-byte limit"));
+        return Err(failure(
+            Failure::TooLarge,
+            format!(
+                "image is {} bytes, over the {} MiB moried reads",
+                source.len(),
+                MAX_SOURCE_BYTES / (1024 * 1024),
+            ),
+        ));
     }
     let normalized = normalize(source).await?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(normalized);
@@ -153,6 +160,12 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     let mut command = Command::new("magick");
     apply_resource_limits(&mut command);
     let command = command
+        .arg("-limit")
+        .arg("width")
+        .arg(MAX_DIMENSION.to_string())
+        .arg("-limit")
+        .arg("height")
+        .arg(MAX_DIMENSION.to_string())
         .arg(format!("{}[0]", input.display()))
         .arg("-auto-orient")
         .arg("-strip")
@@ -193,18 +206,14 @@ fn apply_resource_limits(command: &mut Command) {
         // with its alpha, 410 MB for a CMYK JPEG turned upright, whose turned copy is a second cache.
         .arg("-limit")
         .arg("disk")
-        .arg("1GiB")
-        .arg("-limit")
-        .arg("width")
-        .arg(MAX_DIMENSION.to_string())
-        .arg("-limit")
-        .arg("height")
-        .arg(MAX_DIMENSION.to_string());
+        .arg("1GiB");
 }
 
 async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), ProviderError> {
     // The limits above decide where pixels go, not whether an image is decoded at all, so they
     // would let a decompression bomb fill the disk. Ping reads only enough to refuse one first.
+    // ImageMagick's own width and height limits are left out here, as they would refuse the image
+    // as it reads the header, which would not tell it apart from a broken one.
     let mut command = Command::new("magick");
     command.arg("identify");
     apply_resource_limits(&mut command);
@@ -247,14 +256,22 @@ fn remaining_preprocess_time(deadline: Instant) -> Result<Duration, ProviderErro
 }
 
 fn validate_dimensions(width: u64, height: u64) -> Result<(), ProviderError> {
+    if width == 0 || height == 0 {
+        return Err(item_failure("image has no pixels"));
+    }
     let pixels = width.checked_mul(height);
-    if width == 0
-        || height == 0
-        || width > MAX_DIMENSION
+    if width > MAX_DIMENSION
         || height > MAX_DIMENSION
         || pixels.is_none_or(|value| value > MAX_DECODED_PIXELS)
     {
-        return Err(item_failure("image exceeds the decoded-pixel limit"));
+        return Err(failure(
+            Failure::TooLarge,
+            format!(
+                "image is {width} by {height} pixels, over the {} MP or {MAX_DIMENSION} pixels \
+                 a side moried decodes",
+                MAX_DECODED_PIXELS / 1_000_000,
+            ),
+        ));
     }
     Ok(())
 }
@@ -347,7 +364,26 @@ mod tests {
         assert!(validate_dimensions(10_000, 5_000).is_err());
         assert!(validate_dimensions(MAX_DIMENSION + 1, 1).is_err());
         assert!(validate_dimensions(u64::MAX, 2).is_err());
-        assert!(validate_dimensions(0, 100).is_err());
+        assert_eq!(validate_dimensions(10_000, 5_000).unwrap_err().failure, Failure::TooLarge);
+        assert_eq!(validate_dimensions(0, 100).unwrap_err().failure, Failure::Item);
+    }
+
+    #[tokio::test]
+    async fn refuses_an_image_over_the_bound_as_too_large_before_decoding_it() {
+        // A whole web page captured at once, as one note holds: 46 MP, taller than 20,000.
+        let generated = std::process::Command::new("magick")
+            .args(["-size", "1637x28108", "xc:white", "png:-"])
+            .output()
+            .unwrap();
+        assert!(generated.status.success());
+
+        let error = normalize(&generated.stdout).await.unwrap_err();
+
+        assert_eq!(error.failure, Failure::TooLarge);
+        assert_eq!(
+            error.message,
+            "image is 1637 by 28108 pixels, over the 40 MP or 20000 pixels a side moried decodes",
+        );
     }
 
     #[tokio::test]

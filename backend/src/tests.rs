@@ -1049,7 +1049,8 @@ async fn items_given_up_before_a_fix_are_tried_once_more() {
                 ('embedded', 'h', 'm', 1, 't', x'00', 1.0, 'ready', 1, NULL, 1);
             INSERT INTO search_image_description VALUES
                 ('cut-off', 'm', 'p', 'pp', 'd', NULL, NULL, 'failed', 1, NULL, 1),
-                ('described', 'm', 'p', 'pp', 'd', 'a', '', 'ready', 1, NULL, 1);
+                ('described', 'm', 'p', 'pp', 'd', 'a', '', 'ready', 1, NULL, 1),
+                ('too-large', 'm', 'p', 'pp', 'd', NULL, NULL, 'too_large', 1, NULL, 1);
         ")
         .execute(&mut conn)
         .await
@@ -1073,6 +1074,8 @@ async fn items_given_up_before_a_fix_are_tried_once_more() {
             pair("described", "ready"),
             pair("embedded", "ready"),
             pair("given-up", "pending"),
+            // No fix but a larger bound lets it through, and that is no generation's.
+            pair("too-large", "too_large"),
         ],
     );
 

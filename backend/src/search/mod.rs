@@ -47,7 +47,7 @@ const MAX_PROVIDER_BACKOFF: Duration = Duration::from_secs(60 * 60);
 const FAILED_IMAGE_COUNT_SQL: &str =
     "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
      WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
-       AND d.state = 'failed'
+       AND d.state IN ('failed', 'too_large')
        AND EXISTS (
            SELECT 1 FROM entry e WHERE e.blob_id = d.blob_id
              AND e.path NOT LIKE '.mory/%' AND e.path != '.mory'
@@ -98,7 +98,8 @@ impl SearchConfig {
 /// the larger output budget for image descriptions, which had been cut off at 800 tokens.
 const FAILURE_GENERATION: i64 = 1;
 
-/// Makes the items given up before `FAILURE_GENERATION` due again.
+/// Makes the items given up before `FAILURE_GENERATION` due again. An image too large to decode
+/// is left given up: what refused it is the bound, which no generation changes.
 pub async fn retry_earlier_failures(conn: &mut sqlx::SqliteConnection) -> Result<()> {
     let generation: Option<String> =
         sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'failure_generation';")
@@ -732,7 +733,11 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Image description provider failure: {error}");
-                let state = if error.retryable() { "pending" } else { "failed" };
+                let state = match error.failure {
+                    Failure::TooLarge => "too_large",
+                    _ if error.retryable() => "pending",
+                    _ => "failed",
+                };
                 let (last_attempt, next_retry) = failure_timestamps(&error);
                 sqlx::query(
                     "INSERT INTO search_image_description (
@@ -1456,7 +1461,7 @@ impl ProviderBackoff {
             },
             // Already stopped, or a failure of the item alone, which says nothing about the
             // provider either way.
-            Failure::Admin | Failure::Item => None,
+            Failure::Admin | Failure::Item | Failure::TooLarge => None,
         }
     }
 }

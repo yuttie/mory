@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 pub enum Failure {
     /// This item: its request fails every time, while other items may succeed. It is given up.
     Item,
+    /// This image, for being larger than moried decodes. It is given up for good: unlike an item
+    /// failure, a new failure generation does not try it again, since no fix but a larger bound
+    /// lets it through, and it is never sent to the provider.
+    TooLarge,
     /// Nobody: a rate limit, an outage or a dropped connection clears up on its own. Requests
     /// pause, and the item is retried.
     Temporary,
@@ -28,7 +32,7 @@ pub struct ProviderError {
 impl ProviderError {
     /// Whether the item should be kept to try again rather than given up.
     pub fn retryable(&self) -> bool {
-        self.failure != Failure::Item
+        !matches!(self.failure, Failure::Item | Failure::TooLarge)
     }
 }
 
@@ -278,6 +282,7 @@ mod tests {
         }
         assert!(failure(Failure::Admin, "missing API key").retryable());
         assert!(!failure(Failure::Item, "rejected input").retryable());
+        assert!(!failure(Failure::TooLarge, "46 MP").retryable());
     }
 
     async fn respond_once(response: &'static str) -> reqwest::Response {
