@@ -84,6 +84,10 @@ export const useFilesStore = defineStore('files', () => {
     // absent, unvalidated, or invalidated by a mutation. Nothing is ever persisted or served
     // as current while this is `null`.
     const validatedCommitIdRef: ShallowRef<string | null> = shallowRef(null);
+    // `mapSchema`, published with the listing, for what records something worked out from it: the
+    // same commit listed under another schema may say something new of its files, which is what
+    // a schema is bumped for.
+    const listedSchemaRef: ShallowRef<number | undefined> = shallowRef(undefined);
 
     const isLoadingRef = shallowRef(false);
     const errorRef: ShallowRef<unknown> = shallowRef(null);
@@ -179,6 +183,7 @@ export const useFilesStore = defineStore('files', () => {
         // As `applyEntryDelta` records it: a delta listed under another schema than its base's
         // leaves rows of neither.
         mapSchema = response.kind === 'full' || response.schema === schema ? response.schema : undefined;
+        listedSchemaRef.value = mapSchema;
 
         if (response.commit === response.head) {
             validatedCommitIdRef.value = response.commit;
@@ -279,6 +284,7 @@ export const useFilesStore = defineStore('files', () => {
     async function clear(): Promise<void> {
         entryMap = new Map();
         mapCommit = null;
+        listedSchemaRef.value = undefined;
         publish();
         errorRef.value = null;
         invalidate();
@@ -383,6 +389,9 @@ export const useFilesStore = defineStore('files', () => {
         // shared listing — the constraint this store exists to enforce.
         entries: computed(() => entriesRef.value),
         commitId: computed(() => validatedCommitIdRef.value),
+        /// The schema moried listed the files under, which can change while `commitId` does not;
+        /// `undefined` from a moried too old to say one.
+        schema: computed(() => listedSchemaRef.value),
         isLoading: computed(() => isLoadingRef.value),
         error: computed(() => errorRef.value),
 
