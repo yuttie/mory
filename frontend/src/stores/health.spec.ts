@@ -273,6 +273,16 @@ describe('a check only if stale', () => {
         expect(stores.files.refresh).toHaveBeenCalledTimes(1);
     });
 
+    it('asks nothing while held, and asks once released', async () => {
+        const health = useHealthStore();
+        health.hold(true);
+        await health.checkIfStale();
+        expect(stores.files.refresh).not.toHaveBeenCalled();
+        health.hold(false);
+        await vi.waitFor(() => expect(health.status).toBe('ok'));
+        expect(stores.calendars.loadConfiguration).toHaveBeenCalledTimes(1);
+    });
+
     it('runs nothing without a session', async () => {
         reactive(stores.app).hasToken = false;
         const health = useHealthStore();

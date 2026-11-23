@@ -903,13 +903,9 @@ async function refreshIndexingStops(): Promise<void> {
 
 // The checks follow the listing by themselves, so a note fixed or broken in this tab shows at once;
 // this reads what else they need, on load, on login and on returning to the tab, whenever the store
-// finds its last check stale. Never under the open settings: they edit a subscription by its place
-// in the list the calendars store holds, and a check reads .mory/calendars.yaml into that store
-// again, which could change the list, or empty it, under the edit. Closing them asks again.
+// finds its last check stale.
 function refreshHealth(): void {
-    if (!configDialogIsVisible.value) {
-        void healthStore.checkIfStale();
-    }
+    void healthStore.checkIfStale();
 }
 
 function onVisibilityChange() {
@@ -1154,10 +1150,11 @@ watch(() => appStore.hasToken, () => {
     refreshHealth();
 });
 
+// Never a check under the open settings: they edit a subscription by its place in the list the
+// calendars store holds, and a check reads .mory/calendars.yaml into that store again, which could
+// change the list, or empty it, under the edit. Closing them asks again.
 watch(configDialogIsVisible, (visible) => {
-    if (!visible) {
-        refreshHealth();
-    }
+    healthStore.hold(visible);
 });
 
 watch(() => route.name, () => {

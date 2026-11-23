@@ -165,6 +165,8 @@ export const useHealthStore = defineStore('health', () => {
     let session = 0;
     let running: Promise<void> | null = null;
     let requested = false;
+    // While held, `checkIfStale` asks for nothing.
+    let held = false;
 
     /// Reads what the checks need again, now, or once the check under way ends: it may have read a
     /// file before the fix that asked for this one, and one asked for meanwhile would otherwise be
@@ -191,7 +193,7 @@ export const useHealthStore = defineStore('health', () => {
     /// under way, for what asks without knowing whether anything changed: loading the app, logging
     /// in, returning to the tab.
     function checkIfStale(): Promise<void> {
-        if (!app.hasToken) {
+        if (!app.hasToken || held) {
             return Promise.resolve();
         }
         if (running !== null) {
@@ -201,6 +203,15 @@ export const useHealthStore = defineStore('health', () => {
             return Promise.resolve();
         }
         return check();
+    }
+
+    /// Holds what `checkIfStale` asks for while `hold` is true, as the open settings need, and asks
+    /// again once it ends: what changed meanwhile is unknown.
+    function hold(hold: boolean): void {
+        held = hold;
+        if (!hold) {
+            void checkIfStale();
+        }
     }
 
     // Each store keeps what it last read, and reading again is what makes a fix show up here.
@@ -292,5 +303,6 @@ export const useHealthStore = defineStore('health', () => {
         notice,
         check,
         checkIfStale,
+        hold,
     };
 });
