@@ -20,7 +20,9 @@ const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 // pixel for a progressive CMYK JPEG, so at this bound ImageMagick peaks at about 320 MB resident
 // and spills at most 530 MB to disk, an RGBA PNG; it took under a second on one core here.
 const MAX_DECODED_PIXELS: u64 = 40_000_000;
-const MAX_DIMENSION: u64 = 20_000;
+// JPEG's own limit. A side holds no memory the pixel bound does not count, and a long screenshot
+// within it is scaled down to the 2048 square like any other image.
+const MAX_DIMENSION: u64 = 65_535;
 const PREPROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 // The transcription of a dense screenshot or a photographed slide is most of an answer, and a
 // reasoning model spends part of this budget before writing any of it. At 800, 75 of 358 images
@@ -373,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn refuses_an_image_over_the_bound_as_too_large_before_decoding_it() {
-        // A whole web page captured at once, as one note holds: 46 MP, taller than 20,000.
+        // A whole web page captured at once, as one note holds: 46 MP.
         let generated = std::process::Command::new("magick")
             .args(["-size", "1637x28108", "xc:white", "png:-"])
             .output()
@@ -385,7 +387,7 @@ mod tests {
         assert_eq!(error.failure, Failure::TooLarge);
         assert_eq!(
             error.message,
-            "image is 1637 by 28108 pixels, over the 40 MP or 20000 pixels a side moried decodes",
+            "image is 1637 by 28108 pixels, over the 40 MP or 65535 pixels a side moried decodes",
         );
     }
 
@@ -402,6 +404,28 @@ mod tests {
         let normalized = normalize(&generated.stdout).await.unwrap();
 
         assert!(normalized.starts_with(&[0xff, 0xd8, 0xff]));
+    }
+
+    #[tokio::test]
+    async fn scales_down_an_image_taller_than_the_old_side_bound() {
+        // A long screenshot within the pixel bound, which 20,000 pixels a side refused.
+        let generated = std::process::Command::new("magick")
+            .args(["-size", "1000x28000", "xc:white", "png:-"])
+            .output()
+            .unwrap();
+        assert!(generated.status.success());
+
+        let normalized = normalize(&generated.stdout).await.unwrap();
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("normalized.jpg");
+        std::fs::write(&path, normalized).unwrap();
+        let identified = std::process::Command::new("magick")
+            .args(["identify", "-format", "%w %h"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8(identified.stdout).unwrap(), "73 2048");
     }
 
     #[tokio::test]

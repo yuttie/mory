@@ -95,8 +95,9 @@ impl SearchConfig {
 /// Bumping this gives every passage and image that was given up another attempt, once, on the
 /// next start. An item failure is kept for good, since its request fails every time, so a fix
 /// that would let such requests succeed reaches none of the items it already failed. 1 came with
-/// the larger output budget for image descriptions, which had been cut off at 800 tokens.
-const FAILURE_GENERATION: i64 = 1;
+/// the larger output budget for image descriptions, which had been cut off at 800 tokens, and 2
+/// with sides up to 65,535 pixels, which had refused an image over 20,000 pixels a side.
+const FAILURE_GENERATION: i64 = 2;
 
 /// Makes the items given up before `FAILURE_GENERATION` due again. An image too large to decode
 /// is left given up: what refused it is the bound, which no generation changes.
