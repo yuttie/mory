@@ -355,6 +355,22 @@ describe('inStatusOrder', () => {
         ]);
     });
 
+    it('lifts a task to the most active work under way below it, though its own is under way too', () => {
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Waiting alone', 'waiting', 3),
+            task(`.tasks/${uuid(2)}.md`, 'Blocked project', 'blocked', 1),
+            task(`.tasks/${uuid(2)}/${uuid(3)}.md`, 'Step waiting', 'waiting', 2),
+            task(`.tasks/${uuid(2)}/${uuid(4)}.md`, 'Step started', 'in_progress', 1),
+            task(`.tasks/${uuid(5)}.md`, 'Project', 'todo', 2),
+            task(`.tasks/${uuid(5)}/${uuid(6)}.md`, 'Blocked phase', 'blocked'),
+            task(`.tasks/${uuid(5)}/${uuid(6)}/${uuid(7)}.md`, 'Step', 'in_progress'),
+        ])).toEqual([
+            { Project: [{ 'Blocked phase': ['Step'] }] },
+            { 'Blocked project': ['Step started', 'Step waiting'] },
+            'Waiting alone',
+        ]);
+    });
+
     it('leaves a task where it is for work below it that is not under way', () => {
         expect(drawn([
             task(`.tasks/${uuid(1)}.md`, 'Paused project', 'on_hold'),
@@ -373,11 +389,13 @@ describe('inStatusOrder', () => {
         expect(drawn([
             task(`.tasks/${uuid(1)}.md`, 'Waiting alone', 'waiting'),
             task(`.tasks/${uuid(2)}.md`, 'Project', 'todo'),
-            task(`.tasks/${uuid(2)}/${uuid(3)}.md`, 'Closed phase', 'done'),
+            task(`.tasks/${uuid(2)}/${uuid(3)}.md`, 'Done phase', 'done'),
             task(`.tasks/${uuid(2)}/${uuid(3)}/${uuid(4)}.md`, 'Step', 'in_progress'),
             task(`.tasks/${uuid(2)}/${uuid(5)}.md`, 'Open phase', 'todo'),
+            task(`.tasks/${uuid(2)}/${uuid(6)}.md`, 'Canceled phase', 'canceled'),
+            task(`.tasks/${uuid(2)}/${uuid(6)}/${uuid(7)}.md`, 'Step still waiting', 'waiting'),
         ])).toEqual([
-            { Project: ['Open phase', { 'Closed phase': ['Step'] }] },
+            { Project: ['Open phase', { 'Done phase': ['Step'] }, { 'Canceled phase': ['Step still waiting'] }] },
             'Waiting alone',
         ]);
     });
