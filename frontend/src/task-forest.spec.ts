@@ -323,6 +323,25 @@ describe('inStatusOrder', () => {
         ])).toEqual(['Waiting', 'Misspelt', 'Not a name', 'Parked', 'Unsorted']);
     });
 
+    // As `statusIcon` draws each: a status without a kind names none, and a kind that is not text
+    // names no status, whatever text it would turn into.
+    it('places a task whose frontmatter holds no status of the right shape as its icon draws it', () => {
+        const shaped = (n: number, name: string, metadata: ListEntry2['metadata']): ListEntry2 =>
+            ({ ...task(`.tasks/${uuid(n)}.md`, name), metadata });
+        expect(drawn([
+            task(`.tasks/${uuid(1)}.md`, 'Waiting', 'waiting'),
+            task(`.tasks/${uuid(2)}.md`, 'Parked', 'on_hold'),
+            shaped(3, 'No frontmatter', null),
+            shaped(4, 'Empty task block', { tags: [], task: null }),
+            shaped(5, 'Task as text', { tags: [], task: 'in_progress' }),
+            shaped(6, 'Status as text', { tags: [], task: { status: 'in_progress' } }),
+            shaped(7, 'Kind as a list', { tags: [], task: { status: { kind: ['in_progress'] } } }),
+        ])).toEqual([
+            'Waiting', 'Kind as a list', 'Parked',
+            'No frontmatter', 'Empty task block', 'Task as text', 'Status as text',
+        ]);
+    });
+
     it('lifts a task to the place of the work under way anywhere below it, at every level', () => {
         expect(drawn([
             task(`.tasks/${uuid(1)}.md`, 'Waiting alone', 'waiting'),
