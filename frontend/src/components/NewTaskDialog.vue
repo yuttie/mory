@@ -23,7 +23,6 @@
             v-bind:task-path="taskPath"
             v-bind:known-tags="tasks.knownTags"
             v-bind:known-contacts="tasks.knownContacts"
-            v-bind:selected-tag="placedUnder === null ? tag : undefined"
             v-on:save="onSave"
             v-on:cancel="isOpen = false"
             v-on:change-parent="onChooseParent"
@@ -82,10 +81,6 @@ import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
 const props = defineProps<{
     // The task a draft starts under when the dialog opens, or `null` for the top.
     initialParent?: UUID | null;
-    // The tag a draft at the top starts with, as the task view gives one started from a tag group:
-    // `null` for the Untagged group, which has none to give. Under a task it is no group's
-    // heading, so the editor is told of it only at the top.
-    tag?: string | null;
 }>();
 
 // Composables

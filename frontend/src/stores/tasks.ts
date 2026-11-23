@@ -11,7 +11,6 @@ import {
     childNodes,
     descendants,
     flatten,
-    groupRoots,
     nodesOf,
     toNestedForest,
 } from '@/forest';
@@ -22,9 +21,7 @@ import {
     TASKS_DIR,
     buildTaskPath,
     childTaskPath,
-    isTagGroupId,
-    tagGroupId,
-    tagNameOf,
+    inStatusOrder,
     taskDirectoryOf,
     taskPolicy,
 } from '@/task-forest';
@@ -42,10 +39,6 @@ import { tagsOf } from '@/tags';
 // response can contradict. A task created here appears the moment the write is visible in the
 // listing, and cannot be erased by a response describing an earlier commit.
 
-// Root tasks with no children are grouped under a virtual node per tag, so that a flat pile of
-// unrelated tasks reads as a set of lists rather than one long root.
-const UNTAGGED = 'Untagged';
-
 // A save that landed, though the listing could not be brought to show it. No failed save: one tried
 // again would be checked against the version read before it, find this one there, and be refused
 // as a change made elsewhere. `written` is the ETag the save left, as `save` resolves to.
@@ -57,51 +50,6 @@ export class SavedUnlisted extends Error {
         );
         this.name = 'SavedUnlisted';
     }
-}
-
-export { isTagGroupId, tagGroupId, tagNameOf };
-
-// The catch-all gathers tasks by the absence of a tag, so its name is not a tag to give a task
-// created from it: written into the frontmatter, "Untagged" would become one.
-export function isUntaggedGroupId(id: string): boolean {
-    return id === tagGroupId(UNTAGGED);
-}
-
-function firstTagOf(node: TaskNode): string {
-    const [first] = tagsOf(node.metadata);
-    return first || UNTAGGED;
-}
-
-// Alphabetical, with the catch-all last: it is where a task lands by omission, not by choice.
-function compareTagNames(a: string, b: string): number {
-    if (a === b) {
-        return 0;
-    }
-    if (a === UNTAGGED) {
-        return 1;
-    }
-    if (b === UNTAGGED) {
-        return -1;
-    }
-    return a.localeCompare(b);
-}
-
-// A tag group is not a file, so its node is invented. `mtime` is a fixed empty string rather than
-// the current time: it is compared and rendered like any other node's, and a value that changed on
-// every recompute made the node look new each time it was read.
-function tagGroupNode(tag: string): TaskNode {
-    return {
-        id: tagGroupId(tag),
-        parent: null,
-        uuid: tagGroupId(tag),
-        name: null,
-        path: `.tags/${tag}`,
-        size: 0,
-        mime_type: 'application/x-tag-group',
-        metadata: { tag_group: tag },
-        title: tag,
-        mtime: '',
-    };
 }
 
 function toItem(node: TaskNode, children: TaskTreeItem[] | undefined): TaskTreeItem {
@@ -127,68 +75,19 @@ export const useTasksStore = defineStore('tasks', () => {
         return index;
     });
 
-    // Roots that own a subtree stay top-level; the rest are what the tag groups gather.
-    const leafRootIds = computed(() => forest.value.roots.filter(
-        (id) => (forest.value.childrenOf.get(id)?.length ?? 0) === 0,
-    ));
-    const parentRootIds = computed(() => forest.value.roots.filter(
-        (id) => (forest.value.childrenOf.get(id)?.length ?? 0) > 0,
-    ));
-
-    const tagGroupItems = computed<TaskTreeItem[]>(() => groupRoots<TaskNode, TaskTreeItem>(
-        forest.value,
-        leafRootIds.value,
-        firstTagOf,
-        compareTagNames,
-        (tag, members) => ({ ...tagGroupNode(tag), children: members }),
-        (node) => ({ ...node }),
-    ));
-
-    const tagGroupById = computed(() => {
-        const index = new Map<string, TaskTreeItem>();
-        for (const item of tagGroupItems.value) {
-            index.set(item.uuid, item);
-        }
-        return index;
-    });
-
-    // --- Accessors. Tag-group aware, so a view can treat a virtual node like any other. ---
-
     function node(id: string): TaskNode | undefined {
-        if (isTagGroupId(id)) {
-            return tagGroupById.value.get(id);
-        }
         return forest.value.byId.get(id);
     }
 
     function childrenOf(id: string): TaskNode[] {
-        if (isTagGroupId(id)) {
-            return tagGroupById.value.get(id)?.children ?? [];
-        }
         return childNodes(forest.value, id);
     }
 
     function parentOf(id: string): string | null {
-        if (isTagGroupId(id)) {
-            return null;
-        }
-        const current = forest.value.byId.get(id);
-        if (current === undefined) {
-            return null;
-        }
-        if (current.parent !== null) {
-            return current.parent;
-        }
-        // A childless root is displayed inside its tag group, so that is its parent in the tree
-        // the user actually sees -- which is what expanding to a selected node walks.
-        if ((forest.value.childrenOf.get(id)?.length ?? 0) === 0) {
-            return tagGroupId(firstTagOf(current));
-        }
-        return null;
+        return forest.value.byId.get(id)?.parent ?? null;
     }
 
-    // The tasks above one, root first. Structural, unlike `parentOf`: a tag group only arranges the
-    // tree and is no task's ancestor.
+    // The tasks above one, root first.
     //
     // Given `below`, only the ones under it: a list of `below`'s descendants shows `below` and
     // everything above it on every item alike. A `below` the task is not under keeps them all.
@@ -215,7 +114,7 @@ export const useTasksStore = defineStore('tasks', () => {
         for (const task of forest.value.byId.values()) {
             byId.set(task.id, urgencyOf(task.metadata?.task ?? {}, task.metadata?.tags ?? [], taskSettings.settings, now.value, zone));
         }
-        // What a tag group, or an id the listing no longer holds, has: no task, so no dates.
+        // What an id the listing no longer holds has: no task, so no dates.
         const none = urgencyOf({}, [], taskSettings.settings, now.value, zone);
         return { byId, none };
     });
@@ -235,7 +134,7 @@ export const useTasksStore = defineStore('tasks', () => {
     }
 
     function progress(id: string): number | undefined {
-        if (childrenOf(id).length === 0 || isTagGroupId(id)) {
+        if (childrenOf(id).length === 0) {
             return undefined;
         }
         const leaves = flattenDescendants(id).filter((task) => childrenOf(task.uuid).length === 0);
@@ -280,18 +179,13 @@ export const useTasksStore = defineStore('tasks', () => {
     }
 
     // The parent the task `id` moves to when dropped on the task tree's row `target`: the task
-    // dropped on, or none for the tag group the task is filed under once at the top. `undefined`
-    // where the drop would change nothing or cannot be made: on the task itself or one under it, on
-    // the parent it has, or on another tag's group, since a move gives a task no tag and it would
-    // land in its own. A task with tasks of its own under it is drawn at the top rather than in its
-    // group, but its group is still where the top is for it.
+    // dropped on. `undefined` where the drop would change nothing or cannot be made: on the task
+    // itself or one under it, or on the parent it has. No row stands for the top, so a task goes
+    // there from the editor's parent dialog.
     function parentForDrop(id: UUID, target: string): UUID | null | undefined {
         const current = forest.value.byId.get(id);
         if (current === undefined) {
             return undefined;
-        }
-        if (isTagGroupId(target)) {
-            return current.parent !== null && target === tagGroupId(firstTagOf(current)) ? null : undefined;
         }
         if (!forest.value.byId.has(target)) {
             return undefined;
@@ -494,15 +388,12 @@ export const useTasksStore = defineStore('tasks', () => {
         isLoading: computed(() => files.isLoading),
         hasData: computed(() => forest.value.byId.size > 0),
 
-        // The structural forest, without the tag grouping: what "choose a parent" browses.
-        tree: computed<TaskTreeItem[]>(
-            () => toNestedForest(forest.value, forest.value.roots, toItem),
-        ),
-        // The forest as the task tree shows it: real parent tasks, then a node per tag.
-        treeWithTagGroups: computed<TaskTreeItem[]>(() => [
-            ...toNestedForest(forest.value, parentRootIds.value, toItem),
-            ...tagGroupItems.value,
-        ]),
+        // The forest as the task tree, and every dialog choosing a parent, draws it: in the order
+        // the statuses give, where the lists take the forest's own.
+        tree: computed<TaskTreeItem[]>(() => {
+            const ordered = inStatusOrder(forest.value);
+            return toNestedForest(ordered, ordered.roots, toItem);
+        }),
 
         allTasks,
         knownTags,

@@ -147,12 +147,12 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-//   1 Parent          (root with children -> stays a real root)
-//   +- 2 Child
-//   3 Alpha    #work  (childless root -> grouped under its first tag)
+//   1 Parent   #work
+//   +- 2 Child #work
+//   3 Alpha    #work
 //   4 Beta     #home
 //   5 Gamma    #work
-//   6 Delta    (no tags -> Untagged)
+//   6 Delta
 const sample: Spec[] = [
     { path: `.tasks/${uuid(1)}.md`, title: 'Parent', tags: ['work'], day: 1 },
     { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Child', tags: ['work'], day: 2 },
@@ -202,9 +202,34 @@ describe('the derived forest', () => {
             .toEqual(['Alpha', 'Beta', 'Child', 'Delta', 'Gamma', 'Parent']);
     });
 
-    it('exposes the structural tree, newest first, without tag groups', async () => {
+    it('exposes the tree, newest first', async () => {
         const { store } = await storeWith(sample);
         expect(titles(store.tree)).toEqual(['Delta', 'Gamma', 'Beta', 'Alpha', { Parent: ['Child'] }]);
+    });
+
+    it('orders the tree by status, and leaves the lists beside it newest first', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, title: 'Started', status: 'in_progress', day: 1 },
+            { path: `.tasks/${uuid(1)}/${uuid(3)}.md`, title: 'Waiting step', status: 'waiting', day: 1 },
+            { path: `.tasks/${uuid(1)}/${uuid(4)}.md`, title: 'Newer step', status: 'todo', day: 2 },
+            { path: `.tasks/${uuid(2)}.md`, title: 'Newer', status: 'todo', day: 2 },
+        ]);
+        expect(titles(store.tree)).toEqual([{ Started: ['Waiting step', 'Newer step'] }, 'Newer']);
+        expect(store.allTasks.map((t) => t.title)).toEqual(['Newer', 'Started', 'Newer step', 'Waiting step']);
+        expect(store.flattenDescendants(uuid(1)).map((t) => t.title)).toEqual(['Newer step', 'Waiting step']);
+    });
+
+    it('moves a task in the tree as its status changes', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, title: 'Older', status: 'todo', day: 1 },
+            { path: `.tasks/${uuid(2)}.md`, title: 'Newer', status: 'todo', day: 2 },
+        ]);
+        expect(titles(store.tree)).toEqual(['Newer', 'Older']);
+        apiMocks.getNote.mockResolvedValueOnce({ data: '---\ntask:\n  status:\n    kind: todo\n---\n' });
+
+        await store.setStatus(`.tasks/${uuid(1)}.md`, { kind: 'in_progress' });
+
+        expect(titles(store.tree)).toEqual(['Older', 'Newer']);
     });
 
     it('resolves a path to its uuid', async () => {
@@ -249,107 +274,16 @@ describe('known tags and contacts', () => {
     });
 });
 
-describe('tag grouping', () => {
-    it('keeps a root with children at the top level and groups the childless ones by first tag', async () => {
+describe('accessors', () => {
+    it('reports the parent a task has, and none at the top', async () => {
         const { store } = await storeWith(sample);
-        expect(titles(store.treeWithTagGroups)).toEqual([
-            { Parent: ['Child'] },
-            { home: ['Beta'] },
-            { work: ['Gamma', 'Alpha'] },
-            { Untagged: ['Delta'] },
-        ]);
-    });
-
-    it('sorts groups alphabetically but always puts Untagged last', async () => {
-        const { store } = await storeWith([
-            { path: `.tasks/${uuid(1)}.md`, title: 'z', tags: ['zebra'] },
-            { path: `.tasks/${uuid(2)}.md`, title: 'u' },
-            { path: `.tasks/${uuid(3)}.md`, title: 'a', tags: ['apple'] },
-        ]);
-        expect(store.treeWithTagGroups.map((i) => i.title)).toEqual(['apple', 'zebra', 'Untagged']);
-    });
-
-    it('groups by the first text tag, and a task with none under Untagged', async () => {
-        const { store } = await storeWith([
-            { path: `.tasks/${uuid(1)}.md`, title: 'number', tags: [2024, 'home'] as never },
-            { path: `.tasks/${uuid(2)}.md`, title: 'string', tags: 'work' as never },
-            { path: `.tasks/${uuid(3)}.md`, title: 'mapping', tags: { work: 1 } as never },
-        ]);
-        expect(titles(store.treeWithTagGroups)).toEqual([
-            { home: ['number'] },
-            { Untagged: ['string', 'mapping'] },
-        ]);
-    });
-
-    it('groups by the first tag only', async () => {
-        const { store } = await storeWith([
-            { path: `.tasks/${uuid(1)}.md`, title: 'multi', tags: ['second', 'first'] },
-        ]);
-        expect(store.treeWithTagGroups.map((i) => i.title)).toEqual(['second']);
-    });
-
-    it('moves a task out of its tag group as soon as it gains a child', async () => {
-        const withChild: Spec[] = [
-            { path: `.tasks/${uuid(3)}.md`, title: 'Alpha', tags: ['work'] },
-            { path: `.tasks/${uuid(3)}/${uuid(7)}.md`, title: 'New child', tags: ['work'] },
-        ];
-        const { store } = await storeWith(withChild);
-        expect(titles(store.treeWithTagGroups)).toEqual([{ Alpha: ['New child'] }]);
-    });
-
-    it('gives a tag group a stable identity across recomputes', async () => {
-        const { store } = await storeWith(sample);
-        const first = store.treeWithTagGroups.find((i) => i.title === 'work');
-        const second = store.treeWithTagGroups.find((i) => i.title === 'work');
-        // `mtime` used to be `new Date().toISOString()`, so a group looked new on every read.
-        expect(first?.mtime).toBe(second?.mtime);
-        expect(first?.uuid).toBe(second?.uuid);
-    });
-});
-
-describe('tag-aware accessors', () => {
-    it('resolves a tag group id to a virtual node', async () => {
-        const { store, tagGroupId, isTagGroupId, tagNameOf } = await storeWith(sample);
-        const id = tagGroupId('work');
-        expect(isTagGroupId(id)).toBe(true);
-        expect(tagNameOf(id)).toBe('work');
-        expect(store.node(id)).toMatchObject({
-            uuid: id,
-            title: 'work',
-            mime_type: 'application/x-tag-group',
-            metadata: { tag_group: 'work' },
-        });
-    });
-
-    it('tells the catch-all group apart from a real tag', async () => {
-        const { tagGroupId, isUntaggedGroupId } = await storeWith(sample);
-        expect(isUntaggedGroupId(tagGroupId('Untagged'))).toBe(true);
-        expect(isUntaggedGroupId(tagGroupId('work'))).toBe(false);
-    });
-
-    it('lists the members of a tag group as its children', async () => {
-        const { store, tagGroupId } = await storeWith(sample);
-        expect(store.childrenOf(tagGroupId('work')).map((t) => t.title)).toEqual(['Gamma', 'Alpha']);
-        expect(store.childrenOf(tagGroupId('nope'))).toEqual([]);
-    });
-
-    // What expanding the tree to a selected node walks, so it has to follow the tree the user
-    // actually sees rather than the structural one.
-    it('reports the tag group of a childless root as its parent', async () => {
-        const { store, tagGroupId } = await storeWith(sample);
-        expect(store.parentOf(uuid(3))).toBe(tagGroupId('work'));
-        expect(store.parentOf(uuid(6))).toBe(tagGroupId('Untagged'));
-    });
-
-    it('leaves a real parent and a tag group itself alone', async () => {
-        const { store, tagGroupId } = await storeWith(sample);
-        expect(store.parentOf(uuid(2))).toBe(uuid(1));   // child of a real task
-        expect(store.parentOf(uuid(1))).toBeNull();      // root with children
-        expect(store.parentOf(tagGroupId('work'))).toBeNull();
+        expect(store.parentOf(uuid(2))).toBe(uuid(1));
+        expect(store.parentOf(uuid(1))).toBeNull();
+        expect(store.parentOf(uuid(3))).toBeNull();
         expect(store.parentOf('unknown')).toBeNull();
     });
 
-    it('resolves an ordinary uuid through the same accessors', async () => {
+    it('resolves a uuid to its task and the tasks under it', async () => {
         const { store } = await storeWith(sample);
         expect(store.node(uuid(1))?.title).toBe('Parent');
         expect(store.node('unknown')).toBeUndefined();
@@ -386,10 +320,9 @@ describe('ancestorsOf', () => {
         expect(store.ancestorsOf(uuid(7), uuid(7)).map((t) => t.title)).toEqual(['Parent', 'Child']);
     });
 
-    it('does not count a tag group as an ancestor', async () => {
-        const { store, tagGroupId } = await storeWith(sample);
+    it('lists none for a task at the top, or one not listed', async () => {
+        const { store } = await storeWith(sample);
         expect(store.ancestorsOf(uuid(3))).toEqual([]);
-        expect(store.ancestorsOf(tagGroupId('work'))).toEqual([]);
         expect(store.ancestorsOf('unknown')).toEqual([]);
     });
 });
@@ -722,33 +655,6 @@ describe('parentForDrop', () => {
         expect(store.parentForDrop(uuid(2), uuid(1))).toBeUndefined();
     });
 
-    it('moves a task to the top when dropped on the group of its first tag', async () => {
-        const { store, tagGroupId } = await storeWith([
-            ...sample,
-            { path: `.tasks/${uuid(1)}/${uuid(7)}.md`, title: 'Untagged child', day: 7 },
-        ]);
-        expect(store.parentForDrop(uuid(2), tagGroupId('work'))).toBeNull();
-        expect(store.parentForDrop(uuid(7), tagGroupId('Untagged'))).toBeNull();
-    });
-
-    it('refuses the group of another tag, which the task would not land in', async () => {
-        const { store, tagGroupId } = await storeWith([
-            ...sample,
-            { path: `.tasks/${uuid(1)}/${uuid(7)}.md`, title: 'Tagged twice', tags: ['home', 'work'], day: 7 },
-        ]);
-        expect(store.parentForDrop(uuid(2), tagGroupId('home'))).toBeUndefined();
-        expect(store.parentForDrop(uuid(2), tagGroupId('Untagged'))).toBeUndefined();
-        // Filed by its first tag only.
-        expect(store.parentForDrop(uuid(7), tagGroupId('work'))).toBeUndefined();
-        expect(store.parentForDrop(uuid(7), tagGroupId('home'))).toBeNull();
-    });
-
-    it('refuses its group to a task already at the top, with tasks under it or not', async () => {
-        const { store, tagGroupId } = await storeWith(sample);
-        expect(store.parentForDrop(uuid(3), tagGroupId('work'))).toBeUndefined();
-        expect(store.parentForDrop(uuid(1), tagGroupId('work'))).toBeUndefined();
-    });
-
     it('takes a task named with a readable prefix', async () => {
         const { store } = await storeWith([
             ...sample,
@@ -813,12 +719,11 @@ describe('move', () => {
         expect(store.parentOf(uuid(9))).toBe(uuid(8));
     });
 
-    it('moves a task back out to the root, into the tag group it then belongs to', async () => {
-        const { store, repo, tagGroupId } = await storeWith(sample);
+    it('moves a task back out to the top', async () => {
+        const { store, repo } = await storeWith(sample);
         await store.move(uuid(2), null);
         expect(repo.paths()).toContain(`.tasks/${uuid(2)}.md`);
         expect(store.node(uuid(2))?.parent).toBeNull();
-        expect(store.parentOf(uuid(2))).toBe(tagGroupId('work'));
     });
 
     it('renames the parent before its descendants, so nothing is stranded', async () => {
@@ -954,10 +859,8 @@ describe('own urgency', () => {
         expect(store.ownUrgency(uuid(1)).level).not.toBe('overdue');
     });
 
-    it('gives a tag group, or a task no longer listed, no urgency', async () => {
-        const { store, tagGroupId } = await storeWith(sample);
-        for (const id of [tagGroupId('work'), uuid(99)]) {
-            expect(store.ownUrgency(id)).toMatchObject({ level: 'none', actionable: true });
-        }
+    it('gives a task no longer listed no urgency', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.ownUrgency(uuid(99))).toMatchObject({ level: 'none', actionable: true });
     });
 });

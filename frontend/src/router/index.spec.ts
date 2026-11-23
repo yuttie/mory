@@ -156,9 +156,4 @@ describe('the task view\'s addresses', () => {
         await router.push('/tasks-next/_/selected/status');
         expect(router.currentRoute.value.fullPath).toBe('/tasks-next/_/descendants/status');
     });
-
-    it('takes the old address of a tag group\'s empty editor to the group\'s list alone', async () => {
-        await router.push('/tasks-next/tag-group-errands/selected/schedule');
-        expect(router.currentRoute.value.fullPath).toBe('/tasks-next/tag-group-errands/descendants/schedule');
-    });
 });

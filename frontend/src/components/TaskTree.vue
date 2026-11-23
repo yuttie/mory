@@ -12,19 +12,16 @@
         v-on:drop="onDrop"
     >
         <template v-slot:prepend="{ item }">
-            <v-icon v-if="item.metadata?.tag_group">
-                {{ mdiTag }}
-            </v-icon>
             <!-- A folder for the subtasks the task holds, not the ones the row shows, which a
                  search or the statuses shown may leave out. -->
-            <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
+            <v-icon v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
                 {{ statusIcon(item.metadata?.task?.status?.kind, tasks.childrenOf(item.uuid).length > 0) }}
             </v-icon>
         </template>
         <template v-slot:title="{ item }">
             <span
                 v-bind:title="item.title ?? undefined"
-                v-bind:class="{ 'text-disabled': !item.metadata?.tag_group && !tasks.ownUrgency(item.uuid).actionable }"
+                v-bind:class="{ 'text-disabled': !tasks.ownUrgency(item.uuid).actionable }"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
             >
                 <template v-if="highlight !== undefined && highlight.length > 0 && found?.has(item.uuid)">
@@ -46,9 +43,8 @@
             <span v-if="tasks.progress(item.uuid) !== undefined" class="task-progress mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
             <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
                  but the browser would still follow the link, reloading the app, unless prevented. -->
-            <!-- A tag group is no task to edit. -->
             <v-icon-btn
-                v-if="showEdit && !item.metadata?.tag_group"
+                v-if="showEdit"
                 v-bind:icon="mdiPencil"
                 variant="text"
                 title="Edit task"
@@ -59,7 +55,7 @@
                 v-if="showAddChild"
                 variant="text"
                 class="add-child-btn"
-                v-bind:title="item.metadata?.tag_group ? 'Add task' : 'Add child task'"
+                title="Add child task"
                 v-on:click.stop.prevent="$emit('add-child-task', item.uuid)"
             ></v-icon-btn>
         </template>
@@ -70,13 +66,12 @@
 import {
     mdiPencil,
     mdiPlus,
-    mdiTag,
 } from '@mdi/js';
 
 import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
-import { isTagGroupId, useTasksStore } from '@/stores/tasks';
+import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 const tasks = useTasksStore();
 const taskSettings = useTaskSettingsStore();
@@ -103,7 +98,7 @@ defineProps<{
     // `move`, as `showAddChild` is.
     movable?: boolean;
     // Search terms to mark in the titles of the rows `found` holds, so a row shown for its own
-    // title stands apart from one shown for what is under it, as a tag group always is.
+    // title stands apart from one shown for what is under it.
     highlight?: string[];
     found?: ReadonlySet<string>;
 }>();
@@ -112,8 +107,6 @@ defineProps<{
 const emit = defineEmits<{
     (e: 'update:open', value: UUID[]): void;
     (e: 'update:active', value: UUID | undefined): void;
-    // For a tag group, the group's id: the new task is a root task carrying that tag, since a
-    // group is not a task to nest it under.
     (e: 'add-child-task', value: UUID): void;
     // The task the row is, to open in its editor, where choosing the row may go elsewhere.
     (e: 'edit-task', value: UUID): void;
@@ -122,9 +115,10 @@ const emit = defineEmits<{
 }>();
 
 // Methods
-// A tag group only arranges the tree: it is no task, and there is nothing to move.
-function canDrag(id: UUID): boolean {
-    return !isTagGroupId(id);
+// Every row is a task, and any task can move. Declared once, as a function made in the template
+// would be a new prop on every render.
+function canDrag(): boolean {
+    return true;
 }
 
 function canDrop(id: UUID, target: string): boolean {

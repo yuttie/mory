@@ -177,13 +177,13 @@
                     </v-menu>
                 </div>
                 <div
-                    v-if="filteredForestWithTags.length === 0 && store.treeWithTagGroups.length > 0"
+                    v-if="filteredForest.length === 0 && store.tree.length > 0"
                     class="text-medium-emphasis pa-4"
                 >
                     No tasks match.
                 </div>
                 <TaskTree
-                    v-bind:items="filteredForestWithTags"
+                    v-bind:items="filteredForest"
                     v-bind:active="activeNodeId"
                     v-bind:route-for="treeRouteFor"
                     v-bind:open="treeOpenNodes"
@@ -222,16 +222,16 @@
                     <!-- The selected task, in its editor over its list. A link, matched with its
                          query as a task in the list is, or it would be the current page on the
                          list itself; never drawn as current even so, as the dialog it opens covers
-                         it. All tasks and a tag group are no task to edit, and it stays in its
-                         place for them, so the buttons after it do not move with the selection. -->
+                         it. All tasks is no task to edit, and the button stays in its place for it,
+                         so the buttons after it do not move with the selection. -->
                     <v-btn
                         title="Edit"
                         color="primary"
                         variant="outlined"
                         class="toolbar-button ml-3"
-                        v-bind:to="listRoot === undefined ? undefined : taskRoute(listRoot, descendantsViewMode)"
+                        v-bind:to="activeNodeId === undefined ? undefined : taskRoute(activeNodeId, descendantsViewMode)"
                         exact
-                        v-bind:disabled="listRoot === undefined"
+                        v-bind:disabled="activeNodeId === undefined"
                         v-bind:active="false"
                     >
                         <v-icon>{{ mdiPencil }}</v-icon>
@@ -248,9 +248,8 @@
                         <v-icon>{{ mdiPlus }}</v-icon>
                         <span class="toolbar-label">Add</span>
                     </v-btn>
-                    <!-- Under the selected task, or with the selected group's tag, as Add
-                         puts one. A phone has no room for it beside the view modes, so
-                         there it is in the menu. -->
+                    <!-- Under the selected task, as Add puts one. A phone has no room for it
+                         beside the view modes, so there it is in the menu. -->
                     <v-btn
                         v-if="!$vuetify.display.xs"
                         title="Quick add"
@@ -302,7 +301,7 @@
                         v-if="descendantsViewMode === 'schedule'"
                         v-bind:candidates="filteredSelectedNodeDescendants"
                         v-bind:route-for="listRouteFor"
-                        v-bind:list-root="listRoot"
+                        v-bind:list-root="activeNodeId"
                     />
                     <!-- Status view -->
                     <TaskStatusView
@@ -310,7 +309,7 @@
                         v-bind:task-statuses="taskStatuses"
                         v-bind:known-contacts="store.knownContacts"
                         v-bind:route-for="listRouteFor"
-                        v-bind:list-root="listRoot"
+                        v-bind:list-root="activeNodeId"
                         v-on:status-change="onTaskStatusChange"
                     />
                     <!-- Eisenhower Matrix view -->
@@ -318,7 +317,7 @@
                         v-else-if="descendantsViewMode === 'eisenhower'"
                         v-bind:eisenhower-quadrants="eisenhowerQuadrants"
                         v-bind:route-for="listRouteFor"
-                        v-bind:list-root="listRoot"
+                        v-bind:list-root="activeNodeId"
                     />
                 </div>
             </div>
@@ -377,13 +376,11 @@
         <NewTaskDialog
             ref="newTaskDialogRef"
             v-model="newTaskDialogIsVisible"
-            v-bind:initial-parent="newTaskStart.parent"
-            v-bind:tag="newTaskStart.tag"
+            v-bind:initial-parent="newTaskStart"
         />
         <QuickAddTasksDialog
             v-model="quickAddDialogIsVisible"
-            v-bind:initial-parent="quickAddStart.parent"
-            v-bind:tag="quickAddStart.tag"
+            v-bind:initial-parent="quickAddStart"
         />
 
         <!-- Parent Selection Dialog -->
@@ -443,7 +440,7 @@ import {
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 import { taskRoute, tasksRoute } from '@/task-route';
-import { SavedUnlisted, isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
+import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
 import { useZoneStore } from '@/stores/zone';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
@@ -482,9 +479,9 @@ const treeSearch = ref('');
 // leaves the tree as it was before it.
 const searchOpenNodes = ref<string[]>([]);
 const newTaskDialogIsVisible = ref(false);
-// Where the next new task starts: from Add, under the selected task or with the selected group's
-// tag; from a row's own button, under that row's task or with its group's tag.
-const newTaskStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
+// The task the next new task starts under, or `null` for the top: from Add, the selected task;
+// from a row's own button, that row's task.
+const newTaskStart = ref<UUID | null>(null);
 const error = ref<string | null>(null);
 // The statuses the tree leaves out, by name rather than by those it shows, so a status added
 // later is shown until it is unticked.
@@ -499,8 +496,8 @@ const saving = ref(false);
 const moving = ref(false);
 const quickAddDialogIsVisible = ref(false);
 // Where the next outline starts, as `newTaskStart` for a single task: from Quick add, under the
-// selected task or with the selected group's tag; from the editor, under the task it holds.
-const quickAddStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
+// selected task; from the editor, under the task it holds.
+const quickAddStart = ref<UUID | null>(null);
 const itemViewMenuIsVisible = ref(false);
 // Statuses dropped in the status view and still being written, by task. The task is drawn where it
 // was dropped until the listing shows the write, rather than jumping back to its old column.
@@ -522,12 +519,12 @@ const descendantsViewMode = computed<'schedule' | 'status' | 'eisenhower'>(() =>
     return 'schedule';
 });
 
-// The task open in the editor over the list, which the address names. A tag group is no task to
-// edit, and a task the listing does not hold has no path to read it from: not yet, while the first
-// listing is on its way, and the editor opens once it lands.
+// The task open in the editor over the list, which the address names. A task the listing does not
+// hold has no path to read it from: not yet, while the first listing is on its way, and the editor
+// opens once it lands.
 const editedNode = computed<TaskNode | undefined>(() => {
     const id = route.query.task;
-    return typeof id === 'string' && !isTagGroupId(id) ? store.node(id) : undefined;
+    return typeof id === 'string' ? store.node(id) : undefined;
 });
 
 // The edited task's path, kept after the editor closes: the dialog still draws it while it fades.
@@ -553,47 +550,13 @@ const activeNodeId = computed<string | undefined>(() => {
     return selectedNode.value?.uuid;
 });
 
-const isTagGroupSelected = computed<boolean>(() => {
-    return activeNodeId.value !== undefined && isTagGroupId(activeNodeId.value);
-});
-
-// The tasks above the selected node, root first. A tag group has none.
+// The tasks above the selected node, root first.
 const selectedNodeAncestors = computed<TaskNode[]>(() => {
     return selectedNode.value ? store.ancestorsOf(selectedNode.value.uuid) : [];
 });
 
-// The task whose descendants the item view lists. A tag group's members are no task's descendants.
-const listRoot = computed<UUID | undefined>(() => {
-    return isTagGroupSelected.value ? undefined : activeNodeId.value;
-});
-
-const selectedTagName = computed<string | null>(() => {
-    if (activeNodeId.value && isTagGroupSelected.value) {
-        return tagNameOf(selectedNode.value.uuid);
-    }
-    return null;
-});
-
-// The tag a task created from the selected group starts with: `null` for the Untagged group, which
-// has none to give, and `undefined` when no group is selected.
-const newTaskTag = computed<string | null | undefined>(() => {
-    if (activeNodeId.value === undefined || !isTagGroupId(activeNodeId.value)) {
-        return undefined;
-    }
-    if (isUntaggedGroupId(activeNodeId.value)) {
-        return null;
-    }
-    return selectedTagName.value ?? undefined;
-});
-
-// The task a new one is created under: the selected task, or none when a tag group or nothing is
-// selected.
-const newTaskParent = computed<UUID | null>(() => {
-    if (selectedNode.value === undefined || isTagGroupSelected.value) {
-        return null;
-    }
-    return selectedNode.value.uuid;
-});
+// The task a new one is created under: the selected task, or none when nothing is selected.
+const newTaskParent = computed<UUID | null>(() => selectedNode.value?.uuid ?? null);
 
 // Utility function to sort tasks by due date/deadline
 function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
@@ -706,16 +669,16 @@ function onSearchCompositionEnd() {
 const treeTerms = computed<string[]>(() => searchTerms(treeSearch.value));
 
 const filteredTree = computed(() => {
-    return filterTaskTree(store.treeWithTagGroups, { query: treeSearch.value, hiddenStatuses: hiddenTreeStatuses.value });
+    return filterTaskTree(store.tree, { query: treeSearch.value, hiddenStatuses: hiddenTreeStatuses.value });
 });
 
 // The rows alone, for what depends on them and not on which of them were found.
-const filteredForestWithTags = computed(() => filteredTree.value.items);
+const filteredForest = computed(() => filteredTree.value.items);
 
 // A search opens every branch it keeps, each being there for a task found under it. So does the
 // next search, and a change to the notes that changes which branches it keeps. Otherwise a branch
 // closed meanwhile stays closed, when a save only reorders the branches too.
-const searchBranches = computed<string[]>(() => treeTerms.value.length > 0 ? branchIds(filteredForestWithTags.value) : []);
+const searchBranches = computed<string[]>(() => treeTerms.value.length > 0 ? branchIds(filteredForest.value) : []);
 watch(() => [treeSearch.value, ...[...searchBranches.value].sort()].join('\n'), () => {
     searchOpenNodes.value = searchBranches.value;
 });
@@ -763,14 +726,10 @@ function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNod
     });
 }
 
-// What the list beside the tree holds: the list root's descendants, a tag group's members, or every task.
-// Taken from `listRoot`, so the items' paths start below the task the list is really under.
+// What the list beside the tree holds: the selected task's descendants, or every task.
 const selectedNodeDescendants = computed<TaskNode[]>(() => {
-    if (listRoot.value !== undefined) {
-        return store.flattenDescendants(listRoot.value);
-    }
-    if (isTagGroupSelected.value && selectedTagName.value) {
-        return store.childrenOf(tagGroupId(selectedTagName.value));
+    if (activeNodeId.value !== undefined) {
+        return store.flattenDescendants(activeNodeId.value);
     }
     return store.allTasks;
 });
@@ -994,15 +953,12 @@ function onViewModeChange(newViewMode: string) {
 
 // Methods
 function newTask() {
-    newTaskStart.value = { parent: newTaskParent.value, tag: newTaskTag.value };
+    newTaskStart.value = newTaskParent.value;
     newTaskDialogIsVisible.value = true;
 }
 
 function onAddChildTask(id: UUID) {
-    // A tag group is not a directory. Its task is a root task, which the group's tag files under it.
-    newTaskStart.value = isTagGroupId(id)
-        ? { parent: null, tag: isUntaggedGroupId(id) ? null : tagNameOf(id) }
-        : { parent: id };
+    newTaskStart.value = id;
     newTaskDialogIsVisible.value = true;
 }
 
@@ -1010,7 +966,7 @@ function onAddChildTask(id: UUID) {
 function onAddSubtask() {
     if (editedNode.value) {
         rememberFocusInEditor();
-        newTaskStart.value = { parent: editedNode.value.uuid };
+        newTaskStart.value = editedNode.value.uuid;
         newTaskDialogIsVisible.value = true;
     }
 }
@@ -1023,7 +979,7 @@ function onEditTask(id: UUID) {
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.
 function openQuickAdd() {
     itemViewMenuIsVisible.value = false;
-    quickAddStart.value = { parent: newTaskParent.value, tag: newTaskTag.value };
+    quickAddStart.value = newTaskParent.value;
     quickAddDialogIsVisible.value = true;
 }
 
@@ -1031,7 +987,7 @@ function openQuickAdd() {
 function onQuickAddSubtasks() {
     if (editedNode.value) {
         rememberFocusInEditor();
-        quickAddStart.value = { parent: editedNode.value.uuid };
+        quickAddStart.value = editedNode.value.uuid;
         quickAddDialogIsVisible.value = true;
     }
 }

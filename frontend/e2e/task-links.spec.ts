@@ -2,13 +2,12 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
-function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
+function note(title: string): string {
     return [
         '---',
         'task:',
         '  status:',
         '    kind: todo',
-        ...(tags.length > 0 ? [`tags: [${tags.join(', ')}]`] : []),
         '---',
         '',
         `# ${title}`,
@@ -17,22 +16,20 @@ function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
 }
 
 const PROJECT = uuid(1);
-// Gives Project a child, so the tree keeps it at the top rather than filing it under Untagged.
 const STEP = uuid(2);
-// A root task with no children, which the tree files under its tag rather than at the top.
 const ERRAND = uuid(3);
 
 const NOTES = {
     [`.tasks/${PROJECT}.md`]: note('Project'),
     [`.tasks/${PROJECT}/${STEP}.md`]: note('Step'),
-    [`.tasks/${ERRAND}.md`]: note('Errand', { tags: ['work'] }),
+    [`.tasks/${ERRAND}.md`]: note('Errand'),
 };
 
 function tree(page: Page): Locator {
     return page.locator('.task-tree-container');
 }
 
-// Strict, so a task drawn twice, at the top and under a tag, fails rather than passes on either.
+// Strict, so a task drawn twice fails rather than passes on either.
 function row(page: Page, name: string): Locator {
     return tree(page).getByRole('treeitem', { name });
 }
@@ -70,12 +67,6 @@ test.describe('the tree', () => {
         await page.getByRole('button', { name: 'Schedule' }).click();
         await expect(page).toHaveURL(url('_', 'schedule'));
         await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule`);
-    });
-
-    test('links a tag group to the tasks filed under it', async ({ context, page }) => {
-        await mockBackend(context, NOTES);
-        await page.goto('/tasks-next/_/descendants/schedule');
-        await expect(row(page, 'work')).toHaveAttribute('href', '/tasks-next/tag-group-work/descendants/schedule');
     });
 
     // The root of the path is what clears the selection.

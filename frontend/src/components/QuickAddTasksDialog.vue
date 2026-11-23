@@ -203,9 +203,6 @@ const SYNTAX: [string, string][] = [
 const props = defineProps<{
     // The task the outline goes under when the dialog opens, or `null` for the top.
     initialParent?: UUID | null;
-    // The tag the tasks at the top start with, as Add gives a task the tag group selected in the
-    // task view: without it they would land in another group than the one they were added from.
-    tag?: string | null;
 }>();
 
 const isOpen = defineModel<boolean>({ required: true });
@@ -241,28 +238,14 @@ const placedUnder = computed<UUID | null>(() => {
     return parent.value !== null && tasks.node(parent.value) !== undefined ? parent.value : null;
 });
 
-// Only at the top: a task under another is in no tag group.
-const topTag = computed<string | null>(() => placedUnder.value === null ? props.tag ?? null : null);
-
-// The tag group stands where a parent would, as the task tree draws it.
 const parentTitle = computed<string>(() => {
     if (placedUnder.value === null) {
-        return topTag.value === null ? 'Top level' : `#${topTag.value}`;
+        return 'Top level';
     }
     return tasks.node(placedUnder.value)?.title || 'Untitled';
 });
 
-const outline = computed(() => {
-    const read = parseOutline(text.value, zones.zone);
-    const tag = topTag.value;
-    if (tag !== null) {
-        // First, since a task's group is its first tag.
-        for (const task of read.tasks) {
-            task.fields.tags = [tag, ...task.fields.tags.filter((other) => other !== tag)];
-        }
-    }
-    return read;
-});
+const outline = computed(() => parseOutline(text.value, zones.zone));
 
 const count = computed(() => countTasks(outline.value.tasks));
 
