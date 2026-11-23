@@ -36,3 +36,40 @@ test('points at the drawer from the app bar on a phone', async ({ context, page 
 
     await expect(page).toHaveURL(/\/health$/);
 });
+
+// One check of a commit is every page's: a second page shows the record the first made without
+// reading what a check reads, and takes the check the first makes of a fix.
+test('shares one check between pages, and clears the notice of one for a fix made in another', async ({ context, page }) => {
+    const repository = await mockBackend(context, { 'broken.md': BROKEN, 'fine.md': '# Fine\n' });
+    await page.goto('/note/broken.md');
+    await expect(page.getByRole('link', { name: '1 health error' })).toBeVisible();
+
+    // Asked by either page, or by the service worker for one: the first has nothing to ask.
+    const checked: string[] = [];
+    context.on('request', (request) => {
+        const { pathname } = new URL(request.url());
+        if (pathname.endsWith('/v2/imported-events') || pathname.endsWith('/.mory/calendars.yaml')) {
+            checked.push(pathname);
+        }
+    });
+    const other = await context.newPage();
+    await other.goto('/files');
+    await expect(other.getByRole('link', { name: '1 health error' })).toBeVisible();
+    // Past the listing the page asks for as it loads, which tells it the record is current.
+    await other.waitForLoadState('networkidle');
+    expect(checked).toEqual([]);
+
+    await page.bringToFront();
+    await expect(page.getByRole('progressbar')).toBeHidden();
+    await page.keyboard.press('e');
+    await expect(page.locator('.cm-content')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText('---\ntags: [fixed]\n---\n# Broken\n');
+    await page.keyboard.press('ControlOrMeta+s');
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual(['broken.md']);
+    // A view that lists the files, which learns of the save's commit.
+    await page.getByRole('link', { name: 'Files' }).click();
+
+    await expect(page.getByRole('link', { name: '1 health error' })).toHaveCount(0);
+    await expect(other.getByRole('link', { name: '1 health error' })).toHaveCount(0);
+});
