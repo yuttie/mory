@@ -116,11 +116,10 @@ import { storeToRefs } from 'pinia';
 
 import AppBarContent from '@/components/AppBarContent.vue';
 import { routeForMime } from '@/file-route';
-import type { HealthCheck, HealthProblem, HealthSeverity } from '@/health';
+import { statusOf } from '@/health';
+import type { HealthCheck, HealthProblem, HealthStatus } from '@/health';
 import { useFilesStore } from '@/stores/files';
 import { useHealthStore } from '@/stores/health';
-
-type Status = HealthSeverity | 'ok';
 
 const files = useFilesStore();
 const health = useHealthStore();
@@ -128,19 +127,11 @@ const { checking, listingError, sections } = storeToRefs(health);
 
 const entryOf = computed(() => new Map(files.entries.map((entry) => [entry.path, entry])));
 
-function statusOf(checks: readonly HealthCheck[]): Status {
-    const problems = checks.flatMap((item) => item.problems);
-    if (problems.some((problem) => problem.severity === 'error')) {
-        return 'error';
-    }
-    return problems.length > 0 ? 'warning' : 'ok';
-}
-
-function iconOf(status: Status): string {
+function iconOf(status: HealthStatus): string {
     return { error: mdiAlertCircle, warning: mdiAlert, ok: mdiCheckCircle }[status];
 }
 
-function colorOf(status: Status): string {
+function colorOf(status: HealthStatus): string {
     return { error: 'error', warning: 'warning', ok: 'success' }[status];
 }
 
@@ -177,8 +168,8 @@ function routeOf(path: string) {
     return routeForMime(path, entryOf.value.get(path)?.mime_type ?? 'text/markdown');
 }
 
-// The button's loading state stops a click but not Enter or Space on it; the store ignores a
-// check asked for while one runs.
+// The button's loading state stops a click but not Enter or Space on it; the store runs a check
+// asked for while one runs once that one ends.
 function check(): void {
     void health.check();
 }

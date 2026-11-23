@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
+import { mdiAlertCircleOutline, mdiAlertOutline } from '@mdi/js';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
-import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, taskChecks } from '@/health';
-import type { HealthCheck } from '@/health';
+import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, statusOf, taskChecks } from '@/health';
+import type { HealthCheck, HealthSeverity, HealthStatus } from '@/health';
 import { planMonthOf } from '@/plans';
 import { useAppStore } from '@/stores/app';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
@@ -19,6 +20,27 @@ export interface HealthSection {
     checks: HealthCheck[];
 }
 
+/// What to show of the checks outside their page, where only a failing one is worth a word.
+export interface HealthNotice {
+    severity: HealthSeverity;
+    icon: string;
+    /// How many checks fail with each severity, as the page labels them ERROR and WARNING, such as
+    /// "2 health errors, 1 warning": checks rather than problems, since one misspelt key repeated in
+    /// 300 notes is one thing to fix.
+    text: string;
+}
+
+/// How long a check that reached moried stays current for `checkIfStale`.
+///
+/// A check is a handful of small requests: the listing's changes since the commit held,
+/// `.mory/calendars.yaml`, `.mory/tasks.yaml`, each listed month's plan, which nearly always
+/// answers 304, and one day of the subscribed feeds, which moried serves from the copy of each it
+/// keeps for an hour. The task settings and the plans are read again at every commit anyway. Every
+/// few minutes is often enough to find the rest -- a commit made elsewhere, the calendar
+/// configuration, a feed gone bad -- on coming back to the tab, and seldom enough that flicking
+/// between tabs asks for nothing again.
+export const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
 // The checks the Health page lists, kept here rather than in the page so whether any of them
 // fails can be told without the page being open: a broken note no view happens to show is exactly
 // what nobody would think to open the page for.
@@ -30,6 +52,11 @@ export const useHealthStore = defineStore('health', () => {
     const plans = usePlansStore();
 
     const checking = ref(false);
+    // When the last check that reached moried ended, or `null` if none has in this session: until
+    // one has, the stores hold only what the views happened to read, and a verdict on that would be
+    // a verdict on nothing.
+    const checkedAt = ref<number | null>(null);
+    const checked = computed(() => checkedAt.value !== null);
     // Why the last check could not refresh the listing, and so read nothing else either.
     const listingError = ref<string | null>(null);
     // What could not be read at all, which no store holds a problem for.
@@ -85,27 +112,95 @@ export const useHealthStore = defineStore('health', () => {
         },
     ]);
 
+    const allChecks = computed(() => sections.value.flatMap((section) => section.checks));
+
+    /// The worst of every check, or `null` until a check has reached moried: an OK before then
+    /// would be a guess.
+    const status = computed((): HealthStatus | null => checked.value ? statusOf(allChecks.value) : null);
+
+    /// How many checks fail with each severity, which is what the page lists, rather than how many
+    /// problems they hold.
+    const failingChecks = computed(() => {
+        const counts: Record<HealthSeverity, number> = { error: 0, warning: 0 };
+        for (const item of allChecks.value) {
+            const itemStatus = statusOf([item]);
+            if (itemStatus !== 'ok') {
+                counts[itemStatus] += 1;
+            }
+        }
+        return counts;
+    });
+
+    const notice = computed((): HealthNotice | null => {
+        if (status.value === null || status.value === 'ok') {
+            return null;
+        }
+        const { error, warning } = failingChecks.value;
+        const plural = (count: number, noun: string) => `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
+        const text = error === 0
+            ? plural(warning, 'health warning')
+            : `${plural(error, 'health error')}${warning === 0 ? '' : `, ${plural(warning, 'warning')}`}`;
+        return {
+            severity: status.value,
+            icon: status.value === 'error' ? mdiAlertCircleOutline : mdiAlertOutline,
+            text,
+        };
+    });
+
+    // Bumped whenever the session ends, so a check that began in one does not report on the next:
+    // what it found after the token went is the failures of the requests the token was refused for.
+    let session = 0;
+    let running: Promise<void> | null = null;
+    let requested = false;
+
+    /// Reads what the checks need again, now, or once the check under way ends: it may have read a
+    /// file before the fix that asked for this one, and one asked for meanwhile would otherwise be
+    /// lost.
+    function check(): Promise<void> {
+        requested = true;
+        running ??= (async () => {
+            checking.value = true;
+            try {
+                while (requested) {
+                    requested = false;
+                    await run();
+                }
+            }
+            finally {
+                checking.value = false;
+                running = null;
+            }
+        })();
+        return running;
+    }
+
+    /// Checks again unless a check reached moried within `HEALTH_CHECK_INTERVAL_MS`, or one is
+    /// under way, for what asks without knowing whether anything changed: loading the app, logging
+    /// in, returning to the tab.
+    function checkIfStale(): Promise<void> {
+        if (!app.hasToken) {
+            return Promise.resolve();
+        }
+        if (running !== null) {
+            return running;
+        }
+        if (checkedAt.value !== null && Date.now() - checkedAt.value < HEALTH_CHECK_INTERVAL_MS) {
+            return Promise.resolve();
+        }
+        return check();
+    }
+
     // Each store keeps what it last read, and reading again is what makes a fix show up here.
     // Every read but the listing is caught on its own: one that fails leaves the checks on what the
     // others found, and the page says so rather than staying in its checking state.
-    async function check(): Promise<void> {
-        // A second run would clear what the first is about to report, and the first, ending,
-        // would end the second's checking state.
-        if (checking.value) {
+    async function run(): Promise<void> {
+        // Signed out by the run before, whose listing was refused: logging in asks for a check.
+        if (!app.hasToken) {
             return;
         }
-        checking.value = true;
-        listingError.value = null;
+        const started = session;
         today.value = dayjs().format('YYYY-MM-DD');
-        try {
-            await run();
-        }
-        finally {
-            checking.value = false;
-        }
-    }
-
-    async function run(): Promise<void> {
+        listingError.value = null;
         // The listing first, as the cheapest way to learn whether moried answers at all. When it
         // does not -- a laptop waking, moried restarting -- every other read would fail too, and the
         // stores would put their failures in place of what they last read: no categories or lead
@@ -114,9 +209,12 @@ export const useHealthStore = defineStore('health', () => {
             await files.refresh();
         }
         catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 401) {
-                // Logging in again checks again.
-                app.invalidateToken(() => void check());
+            if (started !== session) {
+                rerunIfSignedIn();
+            }
+            else if (axios.isAxiosError(error) && error.response?.status === 401) {
+                // Logging in again asks for a check, as every login does.
+                app.invalidateToken(() => void checkIfStale());
             }
             else {
                 listingError.value = String(error);
@@ -134,8 +232,21 @@ export const useHealthStore = defineStore('health', () => {
             taskSettings.load(),
             readPlans(),
         ]);
+        if (started !== session) {
+            rerunIfSignedIn();
+            return;
+        }
         calendarsReadError.value = readError;
         feedErrors.value = unloaded;
+        checkedAt.value = Date.now();
+    }
+
+    // For a check whose session ended while it ran. A login since then found it under way and so
+    // asked for none of its own.
+    function rerunIfSignedIn(): void {
+        if (app.hasToken) {
+            requested = true;
+        }
     }
 
     // The listed months, after the listing that names them. A month that fails is in
@@ -145,10 +256,28 @@ export const useHealthStore = defineStore('health', () => {
         await plans.loadMonths(months).catch(() => undefined);
     }
 
+    // Signing out, or a session expiring, leaves nothing checked: the next session's verdict is its
+    // own check's, not one the last session left behind. At once, rather than at the next flush, so
+    // that a check under way knows of it before it reports.
+    watch(() => app.hasToken, (hasToken) => {
+        if (!hasToken) {
+            session += 1;
+            checkedAt.value = null;
+            listingError.value = null;
+            calendarsReadError.value = null;
+            feedErrors.value = [];
+        }
+    }, { flush: 'sync' });
+
     return {
         checking,
+        checked,
         listingError,
         sections,
+        status,
+        failingChecks,
+        notice,
         check,
+        checkIfStale,
     };
 });

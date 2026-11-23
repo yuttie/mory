@@ -88,6 +88,7 @@
                         v-if="indexingStops.length > 0"
                         v-bind:stops="indexingStops"
                     />
+                    <HealthProblemsItem />
                     <v-menu location="right">
                         <template v-slot:activator="{ props }">
                             <v-list-item
@@ -318,6 +319,7 @@
                         v-bind:stops="indexingStops"
                         location="bottom"
                     />
+                    <HealthProblemsItem />
                     <v-menu location="right">
                         <template v-slot:activator="{ props }">
                             <v-list-item
@@ -530,6 +532,13 @@
                 title="Indexing stopped"
                 v-on:click="mobileDrawer = true"
             ></v-icon-btn>
+            <v-icon-btn
+                v-if="$vuetify.display.smAndDown && healthStore.notice !== null"
+                v-bind:icon="healthStore.notice.icon"
+                v-bind:color="healthStore.notice.severity"
+                v-bind:title="healthStore.notice.text"
+                v-on:click="mobileDrawer = true"
+            />
         </v-app-bar>
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
@@ -624,6 +633,7 @@ import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import ConfigDialog from '@/components/ConfigDialog.vue';
 import FileSearchDialog from '@/components/FileSearchDialog.vue';
+import HealthProblemsItem from '@/components/HealthProblemsItem.vue';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import NewTaskDialog from '@/components/NewTaskDialog.vue';
 import QuickAddTasksDialog from '@/components/QuickAddTasksDialog.vue';
@@ -632,11 +642,13 @@ import { requestEventAlarms } from '@/event-alarms';
 import { isTemplatePath } from '@/file-kinds';
 import { canHaveChildNote } from '@/note-forest';
 import { useFilesStore } from '@/stores/files';
+import { useHealthStore } from '@/stores/health';
 import { jwtDecode } from 'jwt-decode';
 
 // Composables
 const appStore = useAppStore();
 const fileStore = useFilesStore();
+const healthStore = useHealthStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -792,6 +804,7 @@ onMounted(() => {
 
     loadTemplates();
     refreshIndexingStops();
+    refreshHealth();
     document.addEventListener('visibilitychange', onVisibilityChange);
     navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
 
@@ -888,9 +901,21 @@ async function refreshIndexingStops(): Promise<void> {
     }
 }
 
+// The checks follow the listing by themselves, so a note fixed or broken in this tab shows at once;
+// this reads what else they need, on load, on login and on returning to the tab, whenever the store
+// finds its last check stale. Never under the open settings: they edit a subscription by its place
+// in the list the calendars store holds, and a check reads .mory/calendars.yaml into that store
+// again, which could change the list, or empty it, under the edit. Closing them asks again.
+function refreshHealth(): void {
+    if (!configDialogIsVisible.value) {
+        void healthStore.checkIfStale();
+    }
+}
+
 function onVisibilityChange() {
     if (document.visibilityState === 'visible') {
         refreshIndexingStops();
+        refreshHealth();
     }
 }
 
@@ -1126,6 +1151,13 @@ watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
 
 watch(() => appStore.hasToken, () => {
     refreshIndexingStops();
+    refreshHealth();
+});
+
+watch(configDialogIsVisible, (visible) => {
+    if (!visible) {
+        refreshHealth();
+    }
 });
 
 watch(() => route.name, () => {

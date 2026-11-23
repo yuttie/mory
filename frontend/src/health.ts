@@ -39,6 +39,17 @@ export interface HealthCheck {
     problems: HealthProblem[];
 }
 
+/// What checks come to: the worst severity among their problems, or `ok` when they have none.
+export type HealthStatus = HealthSeverity | 'ok';
+
+export function statusOf(checks: readonly HealthCheck[]): HealthStatus {
+    const problems = checks.flatMap((item) => item.problems);
+    if (problems.some((problem) => problem.severity === 'error')) {
+        return 'error';
+    }
+    return problems.length > 0 ? 'warning' : 'ok';
+}
+
 /// Describes a value from the frontmatter as it was written, whatever its type.
 function describeValue(value: unknown): string {
     if (typeof value === 'string') {

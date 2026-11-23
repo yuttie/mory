@@ -352,7 +352,12 @@ for (const view of ['Calendar', 'Home']) {
         const start = `${year}-${month}-${day}`;
         let requests = 0;
         await context.route(`${API_URL}v2/imported-events**`, async (route) => {
-            requests += 1;
+            // The view's window, not the one day the health check asks the feeds about as the app
+            // loads, whichever view is open.
+            const params = new URL(route.request().url()).searchParams;
+            if (params.get('start') !== params.get('end')) {
+                requests += 1;
+            }
             await route.fulfill({ json: {
                 calendars: [{ id: 'work', name: 'Work', error: null }],
                 events: [{ calendar: 'work', uid: 'standup', recurrence_id: start, name: 'Imported standup', start }],
