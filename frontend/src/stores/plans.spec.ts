@@ -81,6 +81,24 @@ describe('monthly plan store', () => {
         expect(store.readAt('2026-07')).toBeNull();
         expect(store.readAt('2026-10')).toBeNull();
     });
+    it('reads for a commit only the months the reload at that commit has not read', async () => {
+        repository.set('.mory/plans/2026-07.yaml', { content: YAML.stringify({ '2026-07-05': [{ task: A, origin: 'planned' }] }), etag: 'v' });
+        files.entries = [{ path: '.mory/plans/2026-07.yaml' }];
+        const store = usePlansStore();
+        await store.loadMonths(['2026-07']);
+        // Set past the stores of the tests before, which would each read their months again.
+        files.commitId = 'c2';
+        // The store's own reload at the commit, queued before the read for it, which waits for it.
+        void store.loadMonths(['2026-07']);
+        await store.loadMonthsAt('c2', ['2026-07', '2026-08']);
+        const read = () => files.readVersion.mock.calls.map(([path]) => path);
+        expect(read()).toEqual(['.mory/plans/2026-07.yaml', '.mory/plans/2026-07.yaml', '.mory/plans/2026-08.yaml']);
+        files.readVersion.mockRejectedValueOnce({ isAxiosError: true, message: 'Network Error' });
+        await expect(store.loadMonthsAt('c3', ['2026-07'])).rejects.toThrow('2026-07');
+        await store.loadMonthsAt('c3', ['2026-07']);
+        expect(read()).toHaveLength(5);
+        expect(store.readAt('2026-07')).toBe('c2');
+    });
     it('keeps what it holds of months a commit leaves as they were', async () => {
         repository.set('.mory/plans/2026-10.yaml', { content: YAML.stringify({ '2026-10-05': [{ task: A, origin: 'planned' }] }), etag: 'october' });
         const store = usePlansStore();

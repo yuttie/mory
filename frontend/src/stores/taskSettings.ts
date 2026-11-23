@@ -58,6 +58,15 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
         });
         return loading;
     }
+    /// Reads the file unless the last read began at `commit` and reached it, once a read under way
+    /// has ended: what needs the settings as of a commit, as the health checks do, nearly always
+    /// finds them read by the reload at each commit below.
+    async function loadAt(commit: string): Promise<void> {
+        await loading;
+        if (readAt.value !== commit) {
+            await load();
+        }
+    }
     // Git timestamps have second precision and cannot identify a settings version.
     watch(() => files.commitId, () => {
         void load();
@@ -98,7 +107,7 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
         }
         statusColors.value = readStatusColors(YAML.parse(edited)).colors;
     }
-    return { settings, statusColors, resolvedStatusColors, problems, readAt, load, saveStatusColors };
+    return { settings, statusColors, resolvedStatusColors, problems, readAt, load, loadAt, saveStatusColors };
 });
 
 /// A problem for each key of `lead_time_by_tag` that YAML reads as something other than text, such

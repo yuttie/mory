@@ -17,8 +17,8 @@ const stores = vi.hoisted(() => ({
         reloadConfiguration: vi.fn(),
         feedReports: vi.fn(),
     },
-    taskSettings: { problems: [] as string[], readAt: null as string | null, load: vi.fn() },
-    plans: { errors: {} as Record<string, string>, loadMonths: vi.fn(), readAt: vi.fn() },
+    taskSettings: { problems: [] as string[], readAt: null as string | null, load: vi.fn(), loadAt: vi.fn() },
+    plans: { errors: {} as Record<string, string>, loadMonths: vi.fn(), loadMonthsAt: vi.fn(), readAt: vi.fn() },
 }));
 vi.mock('@/stores/app', async () => {
     const { reactive } = await import('vue');
@@ -162,7 +162,14 @@ beforeEach(() => {
     stores.taskSettings.load.mockImplementation(async () => {
         reactive(stores.taskSettings).readAt = stores.files.commitId;
     });
+    // Each store reads again at every commit, so what is asked for at one has nearly always been.
+    stores.taskSettings.loadAt.mockImplementation(async (commit: string) => {
+        if (stores.taskSettings.readAt !== commit) {
+            await stores.taskSettings.load();
+        }
+    });
     stores.plans.loadMonths.mockResolvedValue(undefined);
+    stores.plans.loadMonthsAt.mockImplementation((_: string, months: string[]) => stores.plans.loadMonths(months));
     stores.plans.readAt.mockImplementation(() => stores.files.commitId);
 });
 afterEach(() => {
@@ -613,8 +620,8 @@ describe('a check', () => {
         expect(health.notice).toBeNull();
         expect(stores.calendars.reloadConfiguration).not.toHaveBeenCalled();
         expect(stores.calendars.feedReports).not.toHaveBeenCalled();
-        expect(stores.taskSettings.load).not.toHaveBeenCalled();
-        expect(stores.plans.loadMonths).not.toHaveBeenCalled();
+        expect(stores.taskSettings.loadAt).not.toHaveBeenCalled();
+        expect(stores.plans.loadMonthsAt).not.toHaveBeenCalled();
         expect(localStorage.getItem(KEY)).toBeNull();
     });
 
@@ -685,7 +692,28 @@ describe('a check', () => {
         });
         const health = tab();
         await health.check();
-        expect(stores.plans.loadMonths).toHaveBeenCalledWith(['2026-11']);
+        expect(stores.plans.loadMonthsAt).toHaveBeenCalledWith('c1', ['2026-11']);
+    });
+
+    // Their stores read them again at each commit, which nearly always leaves nothing to read.
+    it('takes the task settings and the plans as their stores read them at the commit', async () => {
+        reactive(stores.files).entries = [entry('.mory/plans/2026-11.yaml', null)];
+        const health = tab();
+        await health.checkIfStale();
+        expect(stores.taskSettings.loadAt).toHaveBeenCalledWith('c1');
+        expect(stores.plans.loadMonthsAt).toHaveBeenCalledWith('c1', ['2026-11']);
+        await health.check();
+        expect(stores.taskSettings.loadAt).toHaveBeenCalledTimes(2);
+        expect(stores.taskSettings.load).toHaveBeenCalledTimes(1);
+        // Of a listing not known to be any commit's, read afresh.
+        stores.files.refresh.mockImplementation(async () => {
+            reactive(stores.files).commitId = null;
+            return stores.files.entries;
+        });
+        await health.check();
+        expect(stores.taskSettings.load).toHaveBeenCalledTimes(2);
+        expect(stores.plans.loadMonths).toHaveBeenLastCalledWith(['2026-11']);
+        expect(stores.plans.loadMonthsAt).toHaveBeenCalledTimes(2);
     });
 
     it('waits while held, and runs one held meanwhile once released', async () => {
@@ -766,8 +794,8 @@ describe('a check', () => {
             await release();
             await asked;
             expect(checksRead()).toBe(0);
-            expect(stores.taskSettings.load).not.toHaveBeenCalled();
-            expect(stores.plans.loadMonths).not.toHaveBeenCalled();
+            expect(stores.taskSettings.loadAt).not.toHaveBeenCalled();
+            expect(stores.plans.loadMonthsAt).not.toHaveBeenCalled();
         }
         finally {
             await release();

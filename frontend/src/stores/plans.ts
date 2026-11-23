@@ -89,6 +89,12 @@ export const usePlansStore = defineStore('plans', () => {
     function loadMonths(visible: readonly string[]): Promise<void> {
         return serialize(() => readMonths(visible));
     }
+    /// Reads each of `wanted` unless its last read began at `commit` and reached its file, after
+    /// the reads queued before: what needs the plans as of a commit, as the health checks do,
+    /// nearly always finds them read by the reload at each commit below.
+    function loadMonthsAt(commit: string, wanted: readonly string[]): Promise<void> {
+        return serialize(() => readMonths(wanted.filter((month) => readCommits.get(month) !== commit)));
+    }
     // The months held and listed, and those known only by their error: a refused month is not
     // held, and must still be read again, so that it stops failing once its file is fixed or gone.
     function knownMonths(): string[] {
@@ -266,5 +272,5 @@ export const usePlansStore = defineStore('plans', () => {
             void loadMonths(knownMonths()).catch(() => undefined);
         }
     });
-    return { months, days, errors, readAt, loadMonths, loadAll: () => serialize(loadAll), planTask, moveTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
+    return { months, days, errors, readAt, loadMonths, loadMonthsAt, loadAll: () => serialize(loadAll), planTask, moveTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
 });

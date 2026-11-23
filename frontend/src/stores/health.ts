@@ -506,14 +506,17 @@ export const useHealthStore = defineStore('health', () => {
     }
 
     // Each store keeps what it last read, and reading again is what makes a fix show up. Every read
-    // is caught on its own: one that fails leaves the checks on what the others found.
+    // is caught on its own: one that fails leaves the checks on what the others found. The task
+    // settings and the plans are read again by their own stores at each commit, which a check of
+    // that commit waits for rather than reading them a second time.
     async function read(key: HealthKey, force: boolean): Promise<Read> {
         const months = listedMonths();
+        const { commit } = key;
         const [calendarsRead] = await Promise.all([
             readCalendars(key.day, force),
             // Never rejects: the store reports a file it cannot read among its problems.
-            taskSettings.load(),
-            plans.loadMonths(months).catch(() => undefined),
+            commit === null ? taskSettings.load() : taskSettings.loadAt(commit),
+            (commit === null ? plans.loadMonths(months) : plans.loadMonthsAt(commit, months)).catch(() => undefined),
         ]);
         return {
             ...calendarsRead,
