@@ -1034,6 +1034,58 @@ async fn a_subscription_keeps_its_browser_when_its_zone_column_goes() {
 }
 
 #[tokio::test]
+async fn items_given_up_before_a_fix_are_tried_once_more() {
+    let opts = SqliteConnectOptions::from_str("sqlite::memory:").unwrap();
+    let mut conn = SqliteConnection::connect_with(&opts).await.unwrap();
+    crate::init_cache_database(&mut conn).await.unwrap();
+    // As a cache written before the failure generation was recorded holds them.
+    sqlx::query("DELETE FROM search_state WHERE key = 'failure_generation';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    sqlx::query("
+            INSERT INTO search_embedding VALUES
+                ('given-up', 'h', 'm', 1, 't', NULL, NULL, 'failed', 1, NULL, 1),
+                ('embedded', 'h', 'm', 1, 't', x'00', 1.0, 'ready', 1, NULL, 1);
+            INSERT INTO search_image_description VALUES
+                ('cut-off', 'm', 'p', 'pp', 'd', NULL, NULL, 'failed', 1, NULL, 1),
+                ('described', 'm', 'p', 'pp', 'd', 'a', '', 'ready', 1, NULL, 1);
+        ")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    let states = async |conn: &mut SqliteConnection| -> Vec<(String, String)> {
+        sqlx::query_as(
+            "SELECT passage_id, state FROM search_embedding
+             UNION ALL SELECT blob_id, state FROM search_image_description ORDER BY 1;",
+        )
+        .fetch_all(conn)
+        .await
+        .unwrap()
+    };
+
+    crate::init_cache_database(&mut conn).await.unwrap();
+    let pair = |id: &str, state: &str| (id.to_owned(), state.to_owned());
+    assert_eq!(
+        states(&mut conn).await,
+        [
+            pair("cut-off", "pending"),
+            pair("described", "ready"),
+            pair("embedded", "ready"),
+            pair("given-up", "pending"),
+        ],
+    );
+
+    // What fails again under the fix stays given up.
+    sqlx::query("UPDATE search_image_description SET state = 'failed' WHERE blob_id = 'cut-off';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    crate::init_cache_database(&mut conn).await.unwrap();
+    assert_eq!(states(&mut conn).await[0], pair("cut-off", "failed"));
+}
+
+#[tokio::test]
 async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
     // The first sync runs before moried listens, so a panic in it keeps moried from starting.
     let fixture = RepoFixture::new();

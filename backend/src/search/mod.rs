@@ -92,6 +92,57 @@ impl SearchConfig {
     }
 }
 
+/// Bumping this gives every passage and image that was given up another attempt, once, on the
+/// next start. An item failure is kept for good, since its request fails every time, so a fix
+/// that would let such requests succeed reaches none of the items it already failed. 1 came with
+/// the larger output budget for image descriptions, which had been cut off at 800 tokens.
+const FAILURE_GENERATION: i64 = 1;
+
+/// Makes the items given up before `FAILURE_GENERATION` due again.
+pub async fn retry_earlier_failures(conn: &mut sqlx::SqliteConnection) -> Result<()> {
+    let generation: Option<String> =
+        sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'failure_generation';")
+            .fetch_optional(&mut *conn)
+            .await?;
+    // A later one is left as it is: an earlier build started on the cache, as on going back to it,
+    // would otherwise set it back, and every move between the two would try everything again.
+    if generation
+        .and_then(|generation| generation.parse::<i64>().ok())
+        .is_some_and(|generation| generation >= FAILURE_GENERATION)
+    {
+        return Ok(());
+    }
+    let mut transaction = sqlx::Connection::begin(&mut *conn).await?;
+    let embeddings = sqlx::query(
+        "UPDATE search_embedding SET state = 'pending', next_retry = NULL WHERE state = 'failed';",
+    )
+    .execute(&mut *transaction)
+    .await?
+    .rows_affected();
+    let images = sqlx::query(
+        "UPDATE search_image_description SET state = 'pending', next_retry = NULL
+         WHERE state = 'failed';",
+    )
+    .execute(&mut *transaction)
+    .await?
+    .rows_affected();
+    sqlx::query(
+        "INSERT INTO search_state (key, value) VALUES ('failure_generation', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+    )
+    .bind(FAILURE_GENERATION.to_string())
+    .execute(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
+    if embeddings + images > 0 {
+        tracing::info!(
+            "Retrying {embeddings} passages and {images} images given up before failure \
+             generation {FAILURE_GENERATION}."
+        );
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 struct SnapshotEntry {
     path: String,
@@ -3517,5 +3568,43 @@ mod tests {
         assert!(vectors[1].is_err());
         assert!(vectors[2].is_err());
         assert!(validate_embedding_vectors(vec![vec![1.0, 0.0]], 2, 2).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_cache_a_later_build_retried_is_not_retried_again() {
+        use sqlx::Connection;
+
+        let mut conn = sqlx::SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        crate::init_cache_database(&mut conn).await.unwrap();
+        // As a build that came with a later fix leaves it, for this earlier one to start on.
+        let later = (FAILURE_GENERATION + 1).to_string();
+        sqlx::query("UPDATE search_state SET value = ? WHERE key = 'failure_generation';")
+            .bind(&later)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO search_embedding (
+                passage_id, text_hash, model, dimensions, template, state, last_used
+             ) VALUES ('given-up', 'h', 'm', 1, 't', 'failed', 1);",
+        )
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+        retry_earlier_failures(&mut conn).await.unwrap();
+
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM search_embedding WHERE passage_id = 'given-up';")
+                .fetch_one(&mut conn)
+                .await
+                .unwrap();
+        let generation: String =
+            sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'failure_generation';")
+                .fetch_one(&mut conn)
+                .await
+                .unwrap();
+        assert_eq!(state, "failed");
+        assert_eq!(generation, later);
     }
 }
