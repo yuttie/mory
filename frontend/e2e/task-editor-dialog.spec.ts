@@ -633,13 +633,18 @@ test('edits the selected task from the toolbar, and closes back to its list', as
     await expect(page).toHaveURL(url(PROJECT, 'schedule'));
 });
 
-// All tasks is no task.
-test('has no task to edit from the toolbar with all tasks selected', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
-    await page.goto('/tasks-next/_/descendants/status');
-    await expect(listed(page, 'Errand')).toBeVisible();
-    await expect(page.locator('.item-view .v-toolbar').getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
-});
+// All tasks is no task, and neither is an id the listing does not hold, such as a tag group's in
+// the address the tree gave the group: that lists every task, as All tasks does.
+for (const selection of ['_', 'tag-group-Untagged']) {
+    test(`has no task to edit from the toolbar with ${selection} selected`, async ({ context, page }) => {
+        await mockBackend(context, NOTES);
+        await page.goto(`/tasks-next/${selection}/descendants/status`);
+        await expect(listed(page, 'Errand')).toBeVisible();
+        await expect(listed(page, 'Step')).toBeVisible();
+        await expect(page.locator('.app-bar-current')).toHaveText('All tasks');
+        await expect(page.locator('.item-view .v-toolbar').getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    });
+}
 
 // A row's own button edits its task where the list is, as its "+" adds one under it there.
 test('edits a task from its row in the tree, over the list as it is', async ({ context, page }) => {
