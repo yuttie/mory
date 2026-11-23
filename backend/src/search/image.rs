@@ -18,6 +18,10 @@ const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DECODED_PIXELS: u64 = 40_000_000;
 const MAX_DIMENSION: u64 = 20_000;
 const PREPROCESS_TIMEOUT: Duration = Duration::from_secs(30);
+// The transcription of a dense screenshot or a photographed slide is most of an answer, and a
+// reasoning model spends part of this budget before writing any of it. At 800, 75 of 358 images
+// in the notes were cut off every time, three of them sampled after 38 to 386 reasoning tokens.
+const MAX_OUTPUT_TOKENS: usize = 4_096;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImageDescription {
@@ -56,6 +60,20 @@ pub async fn describe(
     })?;
     let response = serde_json::from_slice::<serde_json::Value>(&body)
         .map_err(|error| item_failure(&format!("invalid image description response: {error}")))?;
+    description_of(&response)
+}
+
+/// Reads the description out of a response, refusing one the model did not finish.
+fn description_of(response: &serde_json::Value) -> Result<ImageDescription, ProviderError> {
+    // A cut-off answer still carries its output text, so without this check it reads as the
+    // invalid JSON it ends in, which names nothing that would tell anyone what to change.
+    if response.get("status").and_then(|value| value.as_str()) == Some("incomplete") {
+        let reason = response
+            .pointer("/incomplete_details/reason")
+            .and_then(|value| value.as_str())
+            .unwrap_or("no reason given");
+        return Err(item_failure(&format!("image description was cut off: {reason}")));
+    }
     let text = response
         .get("output")
         .and_then(|value| value.as_array())
@@ -82,7 +100,7 @@ fn responses_request(model: &str, encoded: String) -> ResponsesRequest<'_> {
     ResponsesRequest {
         model,
         store: false,
-        max_output_tokens: 800,
+        max_output_tokens: MAX_OUTPUT_TOKENS,
         input: vec![InputMessage {
             role: "user",
             content: vec![
@@ -346,6 +364,45 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error.failure, Failure::Item);
+    }
+
+    #[test]
+    fn a_cut_off_description_names_why() {
+        let response = serde_json::json!({
+            "status": "incomplete",
+            "incomplete_details": { "reason": "max_output_tokens" },
+            "output": [{
+                "type": "message",
+                "content": [{ "type": "output_text", "text": "{\"description\": \"A ch" }],
+            }],
+        });
+
+        let error = description_of(&response).unwrap_err();
+
+        assert_eq!(error.failure, Failure::Item);
+        assert_eq!(error.message, "image description was cut off: max_output_tokens");
+    }
+
+    #[test]
+    fn a_completed_description_is_read() {
+        let response = serde_json::json!({
+            "status": "completed",
+            "output": [
+                { "type": "reasoning", "summary": [] },
+                {
+                    "type": "message",
+                    "content": [{
+                        "type": "output_text",
+                        "text": "{\"description\": \"A chart\", \"visible_text\": \"Loss\"}",
+                    }],
+                },
+            ],
+        });
+
+        let description = description_of(&response).unwrap();
+
+        assert_eq!(description.description, "A chart");
+        assert_eq!(description.visible_text, "Loss");
     }
 
     #[test]
