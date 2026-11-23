@@ -15,7 +15,8 @@
         <v-sheet class="sheet pa-4">
             <p class="text-body-2 text-medium-emphasis mb-4">
                 What is verified across the whole repository, whichever view would otherwise report a
-                problem<span v-if="checked">: {{ fileCount.toLocaleString() }} files checked</span>.
+                problem<span v-if="checkedAt !== null">: {{ fileCount.toLocaleString() }} files checked at
+                    {{ dayjs(checkedAt).format('YYYY-MM-DD HH:mm') }}</span>.
             </p>
             <v-alert
                 v-if="listingError !== null"
@@ -125,6 +126,7 @@ import {
     mdiReload,
 } from '@mdi/js';
 
+import dayjs from 'dayjs';
 import { storeToRefs } from 'pinia';
 
 import AppBarContent from '@/components/AppBarContent.vue';
@@ -136,7 +138,7 @@ import { useHealthStore } from '@/stores/health';
 
 const files = useFilesStore();
 const health = useHealthStore();
-const { busy, checked, checking, fileCount, listingError, sections } = storeToRefs(health);
+const { busy, checked, checkedAt, checking, fileCount, listingError, sections } = storeToRefs(health);
 
 const entryOf = computed(() => new Map(files.entries.map((entry) => [entry.path, entry])));
 
@@ -187,9 +189,11 @@ function check(): void {
     void health.check();
 }
 
+// Opening the page shows what was last recorded, and checks only what no tab has checked yet; the
+// button checks again regardless.
 onMounted(() => {
     document.title = `Health | ${import.meta.env.VITE_APP_NAME}`;
-    check();
+    void health.checkIfStale();
 });
 </script>
 

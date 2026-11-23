@@ -290,6 +290,7 @@ export const useHealthStore = defineStore('health', () => {
 
     const sections = computed(() => record.value?.sections ?? []);
     const fileCount = computed(() => record.value?.fileCount ?? 0);
+    const checkedAt = computed(() => record.value?.checkedAt ?? null);
     const checked = computed(() => record.value !== null);
 
     const allChecks = computed(() => sections.value.flatMap((section) => section.checks));
@@ -655,6 +656,7 @@ export const useHealthStore = defineStore('health', () => {
         record,
         sections,
         fileCount,
+        checkedAt,
         status,
         failingChecks,
         notice,

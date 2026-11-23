@@ -217,13 +217,17 @@ describe('the verdict', () => {
         expect(health.notice).toMatchObject({ severity: 'warning', text: '1 health warning' });
     });
 
-    it('says how many files were checked, to every tab', async () => {
+    it('says how many files were checked, and when, to every tab', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 23, 12));
         reactive(stores.files).entries = [...BROKEN, MISNAMED_PLAN];
         const health = tab();
         expect(health.fileCount).toBe(0);
+        expect(health.checkedAt).toBeNull();
         await health.checkIfStale();
         expect(health.fileCount).toBe(3);
-        expect(tab().fileCount).toBe(3);
+        expect(health.checkedAt).toBe(new Date(2026, 10, 23, 12).getTime());
+        expect(tab()).toMatchObject({ fileCount: 3, checkedAt: health.checkedAt });
     });
 
     it('moves its window to the day each check runs on', async () => {
