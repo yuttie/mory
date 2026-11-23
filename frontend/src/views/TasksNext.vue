@@ -376,11 +376,11 @@
         <NewTaskDialog
             ref="newTaskDialogRef"
             v-model="newTaskDialogIsVisible"
-            v-bind:initial-parent="newTaskStart.parent"
+            v-bind:initial-parent="newTaskStart"
         />
         <QuickAddTasksDialog
             v-model="quickAddDialogIsVisible"
-            v-bind:initial-parent="quickAddStart.parent"
+            v-bind:initial-parent="quickAddStart"
         />
 
         <!-- Parent Selection Dialog -->
@@ -479,9 +479,9 @@ const treeSearch = ref('');
 // leaves the tree as it was before it.
 const searchOpenNodes = ref<string[]>([]);
 const newTaskDialogIsVisible = ref(false);
-// Where the next new task starts: from Add, under the selected task; from a row's own button,
-// under that row's task.
-const newTaskStart = ref<{ parent: UUID | null }>({ parent: null });
+// The task the next new task starts under, or `null` for the top: from Add, the selected task;
+// from a row's own button, that row's task.
+const newTaskStart = ref<UUID | null>(null);
 const error = ref<string | null>(null);
 // The statuses the tree leaves out, by name rather than by those it shows, so a status added
 // later is shown until it is unticked.
@@ -497,7 +497,7 @@ const moving = ref(false);
 const quickAddDialogIsVisible = ref(false);
 // Where the next outline starts, as `newTaskStart` for a single task: from Quick add, under the
 // selected task; from the editor, under the task it holds.
-const quickAddStart = ref<{ parent: UUID | null }>({ parent: null });
+const quickAddStart = ref<UUID | null>(null);
 const itemViewMenuIsVisible = ref(false);
 // Statuses dropped in the status view and still being written, by task. The task is drawn where it
 // was dropped until the listing shows the write, rather than jumping back to its old column.
@@ -953,12 +953,12 @@ function onViewModeChange(newViewMode: string) {
 
 // Methods
 function newTask() {
-    newTaskStart.value = { parent: newTaskParent.value };
+    newTaskStart.value = newTaskParent.value;
     newTaskDialogIsVisible.value = true;
 }
 
 function onAddChildTask(id: UUID) {
-    newTaskStart.value = { parent: id };
+    newTaskStart.value = id;
     newTaskDialogIsVisible.value = true;
 }
 
@@ -966,7 +966,7 @@ function onAddChildTask(id: UUID) {
 function onAddSubtask() {
     if (editedNode.value) {
         rememberFocusInEditor();
-        newTaskStart.value = { parent: editedNode.value.uuid };
+        newTaskStart.value = editedNode.value.uuid;
         newTaskDialogIsVisible.value = true;
     }
 }
@@ -979,7 +979,7 @@ function onEditTask(id: UUID) {
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.
 function openQuickAdd() {
     itemViewMenuIsVisible.value = false;
-    quickAddStart.value = { parent: newTaskParent.value };
+    quickAddStart.value = newTaskParent.value;
     quickAddDialogIsVisible.value = true;
 }
 
@@ -987,7 +987,7 @@ function openQuickAdd() {
 function onQuickAddSubtasks() {
     if (editedNode.value) {
         rememberFocusInEditor();
-        quickAddStart.value = { parent: editedNode.value.uuid };
+        quickAddStart.value = editedNode.value.uuid;
         quickAddDialogIsVisible.value = true;
     }
 }
