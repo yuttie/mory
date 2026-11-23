@@ -1150,6 +1150,7 @@ impl SearchManager {
                 indexed: 0,
                 total: 0,
                 failed: 0,
+                failed_images: 0,
             });
         }
         let passage_total: i64 =
@@ -1185,6 +1186,7 @@ impl SearchManager {
                 indexed: 0,
                 total: total as usize,
                 failed: 0,
+                failed_images: 0,
             });
         }
         let indexed: i64 = sqlx::query_scalar(
@@ -1207,9 +1209,8 @@ impl SearchManager {
         .bind(EMBEDDING_TEMPLATE)
         .fetch_one(&mut *snapshot)
         .await?;
-        let failed = embedding_failed + image_failed;
         let status = SemanticStatus {
-            state: if indexed + failed >= total {
+            state: if indexed + embedding_failed + image_failed >= total {
                 "ready"
             } else {
                 "indexing"
@@ -1217,7 +1218,8 @@ impl SearchManager {
             .to_owned(),
             indexed: indexed as usize,
             total: total as usize,
-            failed: failed as usize,
+            failed: embedding_failed as usize,
+            failed_images: image_failed as usize,
         };
         snapshot.commit().await?;
         Ok(status)
@@ -1844,7 +1846,10 @@ pub struct SemanticStatus {
     pub state: String,
     pub indexed: usize,
     pub total: usize,
+    /// Passages whose embedding was given up.
     pub failed: usize,
+    /// Images whose description was given up, which leaves them out of semantic search.
+    pub failed_images: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -2055,6 +2060,7 @@ pub(crate) async fn run_search(
                 indexed: 0,
                 total: 0,
                 failed: 0,
+                failed_images: 0,
             });
         return match grep_at(
             &env::var("MORIED_GIT_DIR").unwrap(),
@@ -2176,6 +2182,7 @@ pub(crate) async fn run_search(
             indexed: 0,
             total: 0,
             failed: 0,
+            failed_images: 0,
         });
 
     let mut warnings = Vec::new();
@@ -2910,6 +2917,7 @@ mod tests {
         assert_eq!(status.indexed, 0);
         assert_eq!(status.total, 0);
         assert_eq!(status.failed, 0);
+        assert_eq!(status.failed_images, 0);
     }
 
     #[tokio::test]
