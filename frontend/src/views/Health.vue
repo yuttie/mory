@@ -23,8 +23,9 @@
                 density="compact"
                 class="mb-4"
             >
-                The file listing cannot be refreshed, so the checks below cover only the
-                {{ files.entries.length.toLocaleString() }} files listed before: {{ listingError }}
+                The file listing cannot be refreshed, so nothing else was read again either: the
+                checks below cover the {{ files.entries.length.toLocaleString() }} files listed
+                before, and the settings and plans as last read: {{ listingError }}
             </v-alert>
             <section
                 v-for="section of sections"
