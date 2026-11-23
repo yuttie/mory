@@ -15,9 +15,19 @@ pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v2";
 pub const DETAIL: &str = "high";
 const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+// What an image may decode to, as production must hold it: a 2 GB machine running moried, Git and
+// the web server besides. A decoder keeps buffers the limits below do not count, up to 8 bytes a
+// pixel for a progressive CMYK JPEG, so at this bound ImageMagick peaks at about 320 MB resident
+// and spills at most 530 MB to disk, an RGBA PNG; it took under a second on one core here.
 const MAX_DECODED_PIXELS: u64 = 40_000_000;
-const MAX_DIMENSION: u64 = 20_000;
+// JPEG's own limit. A side holds no memory the pixel bound does not count, and a long screenshot
+// within it is scaled down to the 2048 square like any other image.
+const MAX_DIMENSION: u64 = 65_535;
 const PREPROCESS_TIMEOUT: Duration = Duration::from_secs(30);
+// The transcription of a dense screenshot or a photographed slide is most of an answer, and a
+// reasoning model spends part of this budget before writing any of it. At 800, 75 of 358 images
+// in the notes were cut off every time, three of them sampled after 38 to 386 reasoning tokens.
+const MAX_OUTPUT_TOKENS: usize = 4_096;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImageDescription {
@@ -31,7 +41,14 @@ pub async fn describe(
     source: &[u8],
 ) -> Result<ImageDescription, ProviderError> {
     if source.len() > MAX_SOURCE_BYTES {
-        return Err(item_failure("image exceeds the source-byte limit"));
+        return Err(failure(
+            Failure::TooLarge,
+            format!(
+                "image is {} bytes, over the {} MiB moried reads",
+                source.len(),
+                MAX_SOURCE_BYTES / (1024 * 1024),
+            ),
+        ));
     }
     let normalized = normalize(source).await?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(normalized);
@@ -56,6 +73,20 @@ pub async fn describe(
     })?;
     let response = serde_json::from_slice::<serde_json::Value>(&body)
         .map_err(|error| item_failure(&format!("invalid image description response: {error}")))?;
+    description_of(&response)
+}
+
+/// Reads the description out of a response, refusing one the model did not finish.
+fn description_of(response: &serde_json::Value) -> Result<ImageDescription, ProviderError> {
+    // A cut-off answer still carries its output text, so without this check it reads as the
+    // invalid JSON it ends in, which names nothing that would tell anyone what to change.
+    if response.get("status").and_then(|value| value.as_str()) == Some("incomplete") {
+        let reason = response
+            .pointer("/incomplete_details/reason")
+            .and_then(|value| value.as_str())
+            .unwrap_or("no reason given");
+        return Err(item_failure(&format!("image description was cut off: {reason}")));
+    }
     let text = response
         .get("output")
         .and_then(|value| value.as_array())
@@ -82,7 +113,7 @@ fn responses_request(model: &str, encoded: String) -> ResponsesRequest<'_> {
     ResponsesRequest {
         model,
         store: false,
-        max_output_tokens: 800,
+        max_output_tokens: MAX_OUTPUT_TOKENS,
         input: vec![InputMessage {
             role: "user",
             content: vec![
@@ -130,7 +161,16 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     inspect_dimensions(&input, deadline).await?;
     let mut command = Command::new("magick");
     apply_resource_limits(&mut command);
+    // What the pixel cache spills to disk is ImageMagick's own file, which a process killed at the
+    // deadline leaves behind, as large as the disk limit lets it grow; here it goes with the rest.
+    command.env("MAGICK_TEMPORARY_PATH", directory.path());
     let command = command
+        .arg("-limit")
+        .arg("width")
+        .arg(MAX_DIMENSION.to_string())
+        .arg("-limit")
+        .arg("height")
+        .arg(MAX_DIMENSION.to_string())
         .arg(format!("{}[0]", input.display()))
         .arg("-auto-orient")
         .arg("-strip")
@@ -159,29 +199,26 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
 
 fn apply_resource_limits(command: &mut Command) {
     command
+        // The pixel cache, in memory and in mapped files, which a mapped page counts toward too;
+        // what does not fit goes to disk.
         .arg("-limit")
         .arg("memory")
-        .arg("256MiB")
+        .arg("128MiB")
         .arg("-limit")
         .arg("map")
-        .arg("512MiB")
+        .arg("128MiB")
+        // About twice the most an image within `MAX_DECODED_PIXELS` spills: 530 MB for an RGBA PNG
+        // with its alpha, 410 MB for a CMYK JPEG turned upright, whose turned copy is a second cache.
         .arg("-limit")
         .arg("disk")
-        .arg("512MiB")
-        .arg("-limit")
-        .arg("area")
-        .arg("40MP")
-        .arg("-limit")
-        .arg("width")
-        .arg("20000")
-        .arg("-limit")
-        .arg("height")
-        .arg(MAX_DIMENSION.to_string());
+        .arg("1GiB");
 }
 
 async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), ProviderError> {
-    // `-limit area` controls when ImageMagick spills pixels to disk; it does not reject a
-    // decompression bomb. Ping reads only enough metadata to enforce the hard bound first.
+    // The limits above decide where pixels go, not whether an image is decoded at all, so they
+    // would let a decompression bomb fill the disk. Ping reads only enough to refuse one first.
+    // ImageMagick's own width and height limits are left out here, as they would refuse the image
+    // as it reads the header, which would not tell it apart from a broken one.
     let mut command = Command::new("magick");
     command.arg("identify");
     apply_resource_limits(&mut command);
@@ -224,14 +261,22 @@ fn remaining_preprocess_time(deadline: Instant) -> Result<Duration, ProviderErro
 }
 
 fn validate_dimensions(width: u64, height: u64) -> Result<(), ProviderError> {
+    if width == 0 || height == 0 {
+        return Err(item_failure("image has no pixels"));
+    }
     let pixels = width.checked_mul(height);
-    if width == 0
-        || height == 0
-        || width > MAX_DIMENSION
+    if width > MAX_DIMENSION
         || height > MAX_DIMENSION
         || pixels.is_none_or(|value| value > MAX_DECODED_PIXELS)
     {
-        return Err(item_failure("image exceeds the decoded-pixel limit"));
+        return Err(failure(
+            Failure::TooLarge,
+            format!(
+                "image is {width} by {height} pixels, over the {} MP or {MAX_DIMENSION} pixels \
+                 a side moried decodes",
+                MAX_DECODED_PIXELS / 1_000_000,
+            ),
+        ));
     }
     Ok(())
 }
@@ -324,7 +369,63 @@ mod tests {
         assert!(validate_dimensions(10_000, 5_000).is_err());
         assert!(validate_dimensions(MAX_DIMENSION + 1, 1).is_err());
         assert!(validate_dimensions(u64::MAX, 2).is_err());
-        assert!(validate_dimensions(0, 100).is_err());
+        assert_eq!(validate_dimensions(10_000, 5_000).unwrap_err().failure, Failure::TooLarge);
+        assert_eq!(validate_dimensions(0, 100).unwrap_err().failure, Failure::Item);
+    }
+
+    #[tokio::test]
+    async fn refuses_an_image_over_the_bound_as_too_large_before_decoding_it() {
+        // A whole web page captured at once, as one note holds: 46 MP.
+        let generated = std::process::Command::new("magick")
+            .args(["-size", "1637x28108", "xc:white", "png:-"])
+            .output()
+            .unwrap();
+        assert!(generated.status.success());
+
+        let error = normalize(&generated.stdout).await.unwrap_err();
+
+        assert_eq!(error.failure, Failure::TooLarge);
+        assert_eq!(
+            error.message,
+            "image is 1637 by 28108 pixels, over the 40 MP or 65535 pixels a side moried decodes",
+        );
+    }
+
+    #[tokio::test]
+    async fn normalizes_an_image_at_the_pixel_bound_within_the_limits() {
+        // An RGBA PNG, which spills the most of any image measured: 530 MB to disk.
+        let generated = std::process::Command::new("magick")
+            .args(["-size", "6324x6324", "xc:#ff000080", "-define", "png:color-type=6", "png:-"])
+            .output()
+            .unwrap();
+        assert!(generated.status.success());
+        assert!(validate_dimensions(6_324, 6_324).is_ok());
+
+        let normalized = normalize(&generated.stdout).await.unwrap();
+
+        assert!(normalized.starts_with(&[0xff, 0xd8, 0xff]));
+    }
+
+    #[tokio::test]
+    async fn scales_down_an_image_taller_than_the_old_side_bound() {
+        // A long screenshot within the pixel bound, which 20,000 pixels a side refused.
+        let generated = std::process::Command::new("magick")
+            .args(["-size", "1000x28000", "xc:white", "png:-"])
+            .output()
+            .unwrap();
+        assert!(generated.status.success());
+
+        let normalized = normalize(&generated.stdout).await.unwrap();
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("normalized.jpg");
+        std::fs::write(&path, normalized).unwrap();
+        let identified = std::process::Command::new("magick")
+            .args(["identify", "-format", "%w %h"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8(identified.stdout).unwrap(), "73 2048");
     }
 
     #[tokio::test]
@@ -346,6 +447,45 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error.failure, Failure::Item);
+    }
+
+    #[test]
+    fn a_cut_off_description_names_why() {
+        let response = serde_json::json!({
+            "status": "incomplete",
+            "incomplete_details": { "reason": "max_output_tokens" },
+            "output": [{
+                "type": "message",
+                "content": [{ "type": "output_text", "text": "{\"description\": \"A ch" }],
+            }],
+        });
+
+        let error = description_of(&response).unwrap_err();
+
+        assert_eq!(error.failure, Failure::Item);
+        assert_eq!(error.message, "image description was cut off: max_output_tokens");
+    }
+
+    #[test]
+    fn a_completed_description_is_read() {
+        let response = serde_json::json!({
+            "status": "completed",
+            "output": [
+                { "type": "reasoning", "summary": [] },
+                {
+                    "type": "message",
+                    "content": [{
+                        "type": "output_text",
+                        "text": "{\"description\": \"A chart\", \"visible_text\": \"Loss\"}",
+                    }],
+                },
+            ],
+        });
+
+        let description = description_of(&response).unwrap();
+
+        assert_eq!(description.description, "A chart");
+        assert_eq!(description.visible_text, "Loss");
     }
 
     #[test]

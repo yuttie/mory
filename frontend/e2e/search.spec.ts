@@ -24,7 +24,7 @@ async function mockBackend(context: BrowserContext, options: BackendOptions = {}
                     commit: COMMIT,
                     head: COMMIT,
                     lexical: { state: 'ready', indexed_commit: COMMIT },
-                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                 },
             });
             return;
@@ -64,7 +64,7 @@ function emptySearchResponse(request: { mode: string }): object {
         commit: COMMIT,
         head: COMMIT,
         lexical: { state: 'ready', indexed_commit: COMMIT },
-        semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+        semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
         warnings: [],
         hits: [],
     };
@@ -140,7 +140,7 @@ test('retries an updating search when the first status response is ready', async
                     commit: COMMIT,
                     head: COMMIT,
                     lexical: { state: 'ready', indexed_commit: COMMIT },
-                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -162,7 +162,7 @@ test('does not repeat a semantic search already covered by ready status', async 
             await route.fulfill({
                 json: {
                     ...emptySearchResponse(request),
-                    semantic: { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                    semantic: { state: 'ready', indexed: 3, total: 3, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -174,8 +174,8 @@ test('does not repeat a semantic search already covered by ready status', async 
                     head: COMMIT,
                     lexical: { state: 'ready', indexed_commit: COMMIT },
                     semantic: statusCalls === 1
-                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0 }
-                        : { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0, failed_images: 0 }
+                        : { state: 'ready', indexed: 3, total: 3, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -323,7 +323,7 @@ test('does not restart a slow search when ready status already covers its respon
                     commit,
                     head: commit,
                     lexical: { state: 'ready', indexed_commit: commit },
-                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -373,7 +373,7 @@ test('keeps polling after a transient status failure while a search awaits index
                     lexical: statusCalls === 1
                         ? { state: 'updating', indexed_commit: null }
                         : { state: 'ready', indexed_commit: COMMIT },
-                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -398,8 +398,8 @@ test('keeps polling after a transient status failure during semantic indexing', 
                 json: {
                     ...emptySearchResponse(request),
                     semantic: searchAttempts === 1
-                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0 }
-                        : { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0, failed_images: 0 }
+                        : { state: 'ready', indexed: 3, total: 3, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -418,8 +418,8 @@ test('keeps polling after a transient status failure during semantic indexing', 
                     head: COMMIT,
                     lexical: { state: 'ready', indexed_commit: COMMIT },
                     semantic: statusCalls === 1
-                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0 }
-                        : { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0, failed_images: 0 }
+                        : { state: 'ready', indexed: 3, total: 3, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -461,7 +461,7 @@ test('does not apply an old indexing retry to a newer Grep search', async ({ con
                         commit: COMMIT,
                         head: COMMIT,
                         lexical: { state: 'updating', indexed_commit: null },
-                        semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                        semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                     },
                 });
                 return;
@@ -472,7 +472,7 @@ test('does not apply an old indexing retry to a newer Grep search', async ({ con
                     commit: COMMIT,
                     head: COMMIT,
                     lexical: { state: 'ready', indexed_commit: COMMIT },
-                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -509,7 +509,7 @@ test('does not rerun Grep when the independent Text index becomes ready', async 
                     lexical: statusCalls === 1
                         ? { state: 'updating', indexed_commit: null }
                         : { state: 'ready', indexed_commit: COMMIT },
-                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0, failed_images: 0 },
                 },
             });
         },
@@ -632,4 +632,31 @@ test('restores the route query when history changes only the mode', async ({ con
     await expect.poll(() => new URL(page.url()).searchParams.get('mode')).toBe('text');
     await expect.poll(() => submitted.at(-1)).toMatchObject({ query: 'committed', mode: 'text' });
     await expect(query).toHaveValue('committed');
+});
+
+test('counts images that could not be described apart from passages', async ({ context, page }) => {
+    let semantic = { state: 'ready', indexed: 2, total: 77, failed: 0, failed_images: 75 };
+    await mockBackend(context, {
+        onStatus: async (route) => {
+            await route.fulfill({
+                json: {
+                    commit: COMMIT,
+                    head: COMMIT,
+                    lexical: { state: 'ready', indexed_commit: COMMIT },
+                    semantic,
+                },
+            });
+        },
+    });
+
+    // As production stood: every passage embedded, and images given up.
+    await page.goto('/search?mode=semantic');
+    await expect(page.getByText('75 images could not be described; coverage is partial.')).toBeVisible();
+    await expect(page.getByText('could not be embedded')).toHaveCount(0);
+
+    semantic = { state: 'ready', indexed: 3, total: 5, failed: 1, failed_images: 1 };
+    await page.goto('/search?mode=hybrid');
+    await expect(page.getByText(
+        '1 passage could not be embedded and 1 image could not be described; coverage is partial.',
+    )).toBeVisible();
 });

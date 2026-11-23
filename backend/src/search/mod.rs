@@ -47,7 +47,7 @@ const MAX_PROVIDER_BACKOFF: Duration = Duration::from_secs(60 * 60);
 const FAILED_IMAGE_COUNT_SQL: &str =
     "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
      WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
-       AND d.state = 'failed'
+       AND d.state IN ('failed', 'too_large')
        AND EXISTS (
            SELECT 1 FROM entry e WHERE e.blob_id = d.blob_id
              AND e.path NOT LIKE '.mory/%' AND e.path != '.mory'
@@ -90,6 +90,59 @@ impl SearchConfig {
                 .filter(|value| !value.is_empty()),
         })
     }
+}
+
+/// Bumping this gives every passage and image that was given up another attempt, once, on the
+/// next start. An item failure is kept for good, since its request fails every time, so a fix
+/// that would let such requests succeed reaches none of the items it already failed. 1 came with
+/// the larger output budget for image descriptions, which had been cut off at 800 tokens, and 2
+/// with sides up to 65,535 pixels, which had refused an image over 20,000 pixels a side.
+const FAILURE_GENERATION: i64 = 2;
+
+/// Makes the items given up before `FAILURE_GENERATION` due again. An image too large to decode
+/// is left given up: what refused it is the bound, which no generation changes.
+pub async fn retry_earlier_failures(conn: &mut sqlx::SqliteConnection) -> Result<()> {
+    let generation: Option<String> =
+        sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'failure_generation';")
+            .fetch_optional(&mut *conn)
+            .await?;
+    // A later one is left as it is: an earlier build started on the cache, as on going back to it,
+    // would otherwise set it back, and every move between the two would try everything again.
+    if generation
+        .and_then(|generation| generation.parse::<i64>().ok())
+        .is_some_and(|generation| generation >= FAILURE_GENERATION)
+    {
+        return Ok(());
+    }
+    let mut transaction = sqlx::Connection::begin(&mut *conn).await?;
+    let embeddings = sqlx::query(
+        "UPDATE search_embedding SET state = 'pending', next_retry = NULL WHERE state = 'failed';",
+    )
+    .execute(&mut *transaction)
+    .await?
+    .rows_affected();
+    let images = sqlx::query(
+        "UPDATE search_image_description SET state = 'pending', next_retry = NULL
+         WHERE state = 'failed';",
+    )
+    .execute(&mut *transaction)
+    .await?
+    .rows_affected();
+    sqlx::query(
+        "INSERT INTO search_state (key, value) VALUES ('failure_generation', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+    )
+    .bind(FAILURE_GENERATION.to_string())
+    .execute(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
+    if embeddings + images > 0 {
+        tracing::info!(
+            "Retrying {embeddings} passages and {images} images given up before failure \
+             generation {FAILURE_GENERATION}."
+        );
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -681,7 +734,11 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Image description provider failure: {error}");
-                let state = if error.retryable() { "pending" } else { "failed" };
+                let state = match error.failure {
+                    Failure::TooLarge => "too_large",
+                    _ if error.retryable() => "pending",
+                    _ => "failed",
+                };
                 let (last_attempt, next_retry) = failure_timestamps(&error);
                 sqlx::query(
                     "INSERT INTO search_image_description (
@@ -1099,6 +1156,7 @@ impl SearchManager {
                 indexed: 0,
                 total: 0,
                 failed: 0,
+                failed_images: 0,
             });
         }
         let passage_total: i64 =
@@ -1134,6 +1192,7 @@ impl SearchManager {
                 indexed: 0,
                 total: total as usize,
                 failed: 0,
+                failed_images: 0,
             });
         }
         let indexed: i64 = sqlx::query_scalar(
@@ -1156,9 +1215,8 @@ impl SearchManager {
         .bind(EMBEDDING_TEMPLATE)
         .fetch_one(&mut *snapshot)
         .await?;
-        let failed = embedding_failed + image_failed;
         let status = SemanticStatus {
-            state: if indexed + failed >= total {
+            state: if indexed + embedding_failed + image_failed >= total {
                 "ready"
             } else {
                 "indexing"
@@ -1166,7 +1224,8 @@ impl SearchManager {
             .to_owned(),
             indexed: indexed as usize,
             total: total as usize,
-            failed: failed as usize,
+            failed: embedding_failed as usize,
+            failed_images: image_failed as usize,
         };
         snapshot.commit().await?;
         Ok(status)
@@ -1403,7 +1462,7 @@ impl ProviderBackoff {
             },
             // Already stopped, or a failure of the item alone, which says nothing about the
             // provider either way.
-            Failure::Admin | Failure::Item => None,
+            Failure::Admin | Failure::Item | Failure::TooLarge => None,
         }
     }
 }
@@ -1793,7 +1852,10 @@ pub struct SemanticStatus {
     pub state: String,
     pub indexed: usize,
     pub total: usize,
+    /// Passages whose embedding was given up.
     pub failed: usize,
+    /// Images whose description was given up, which leaves them out of semantic search.
+    pub failed_images: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -2004,6 +2066,7 @@ pub(crate) async fn run_search(
                 indexed: 0,
                 total: 0,
                 failed: 0,
+                failed_images: 0,
             });
         return match grep_at(
             &env::var("MORIED_GIT_DIR").unwrap(),
@@ -2125,6 +2188,7 @@ pub(crate) async fn run_search(
             indexed: 0,
             total: 0,
             failed: 0,
+            failed_images: 0,
         });
 
     let mut warnings = Vec::new();
@@ -2859,6 +2923,7 @@ mod tests {
         assert_eq!(status.indexed, 0);
         assert_eq!(status.total, 0);
         assert_eq!(status.failed, 0);
+        assert_eq!(status.failed_images, 0);
     }
 
     #[tokio::test]
@@ -3517,5 +3582,43 @@ mod tests {
         assert!(vectors[1].is_err());
         assert!(vectors[2].is_err());
         assert!(validate_embedding_vectors(vec![vec![1.0, 0.0]], 2, 2).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_cache_a_later_build_retried_is_not_retried_again() {
+        use sqlx::Connection;
+
+        let mut conn = sqlx::SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        crate::init_cache_database(&mut conn).await.unwrap();
+        // As a build that came with a later fix leaves it, for this earlier one to start on.
+        let later = (FAILURE_GENERATION + 1).to_string();
+        sqlx::query("UPDATE search_state SET value = ? WHERE key = 'failure_generation';")
+            .bind(&later)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO search_embedding (
+                passage_id, text_hash, model, dimensions, template, state, last_used
+             ) VALUES ('given-up', 'h', 'm', 1, 't', 'failed', 1);",
+        )
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+        retry_earlier_failures(&mut conn).await.unwrap();
+
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM search_embedding WHERE passage_id = 'given-up';")
+                .fetch_one(&mut conn)
+                .await
+                .unwrap();
+        let generation: String =
+            sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'failure_generation';")
+                .fetch_one(&mut conn)
+                .await
+                .unwrap();
+        assert_eq!(state, "failed");
+        assert_eq!(generation, later);
     }
 }

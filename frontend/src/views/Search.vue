@@ -212,8 +212,17 @@ const statusMessage = computed(() => {
     if (['semantic', 'hybrid'].includes(committedMode.value) && current.semantic.state === 'indexing') {
         return `Semantic indexing: ${current.semantic.indexed} of ${current.semantic.total} passages ready`;
     }
-    if (current.semantic.failed > 0 && ['semantic', 'hybrid'].includes(committedMode.value)) {
-        return `${current.semantic.failed} passages could not be embedded; coverage is partial.`;
+    if (['semantic', 'hybrid'].includes(committedMode.value)) {
+        // An image that was not described is missing from semantic search as a passage that was
+        // not embedded is, but what went wrong differs, so they are counted apart.
+        const { failed, failed_images: failedImages } = current.semantic;
+        const gaps = [
+            failed > 0 ? `${failed} ${failed === 1 ? 'passage' : 'passages'} could not be embedded` : '',
+            failedImages > 0 ? `${failedImages} ${failedImages === 1 ? 'image' : 'images'} could not be described` : '',
+        ].filter((gap) => gap !== '');
+        if (gaps.length > 0) {
+            return `${gaps.join(' and ')}; coverage is partial.`;
+        }
     }
     return '';
 });

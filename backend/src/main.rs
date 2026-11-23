@@ -380,6 +380,7 @@ async fn init_cache_database(
         ")
         .execute(&mut *conn)
         .await?;
+    search::retry_earlier_failures(&mut *conn).await?;
     // The `entry` table holds exactly one generation: the listing at the commit recorded in
     // `cache_state.commit_id`. There is no migration mechanism, so a schema change is applied by
     // dropping the table and letting the next sync refill it. `openai_cache` is left alone --
