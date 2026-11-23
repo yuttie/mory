@@ -210,10 +210,13 @@ describe('the derived forest', () => {
     it('orders the tree by status, and leaves the lists beside it newest first', async () => {
         const { store } = await storeWith([
             { path: `.tasks/${uuid(1)}.md`, title: 'Started', status: 'in_progress', day: 1 },
+            { path: `.tasks/${uuid(1)}/${uuid(3)}.md`, title: 'Waiting step', status: 'waiting', day: 1 },
+            { path: `.tasks/${uuid(1)}/${uuid(4)}.md`, title: 'Newer step', status: 'todo', day: 2 },
             { path: `.tasks/${uuid(2)}.md`, title: 'Newer', status: 'todo', day: 2 },
         ]);
-        expect(titles(store.tree)).toEqual(['Started', 'Newer']);
-        expect(store.allTasks.map((t) => t.title)).toEqual(['Newer', 'Started']);
+        expect(titles(store.tree)).toEqual([{ Started: ['Waiting step', 'Newer step'] }, 'Newer']);
+        expect(store.allTasks.map((t) => t.title)).toEqual(['Newer', 'Started', 'Newer step', 'Waiting step']);
+        expect(store.flattenDescendants(uuid(1)).map((t) => t.title)).toEqual(['Newer step', 'Waiting step']);
     });
 
     it('resolves a path to its uuid', async () => {
