@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 
 import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, statusOf, taskChecks } from '@/health';
 import type { HealthCheck, HealthSeverity, HealthStatus } from '@/health';
+import { keepEqual } from '@/keep';
 import { planMonthOf } from '@/plans';
 import { useAppStore } from '@/stores/app';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
@@ -76,40 +77,52 @@ export const useHealthStore = defineStore('health', () => {
         .map((entry) => entry.path)
         .filter((path) => path.startsWith('.mory/plans/')));
 
-    const sections = computed<HealthSection[]>(() => [
-        {
-            id: 'frontmatter',
-            title: 'Frontmatter',
-            checks: guardChecks('frontmatter', 'Frontmatter can be checked', () => frontmatterChecks(files.entries)),
-        },
-        {
-            id: 'events',
-            title: `Events and task dates, ${eventWindow.value.from} to ${eventWindow.value.to}`,
-            checks: guardChecks('events', 'Events and task dates can be checked', () => eventChecks(files.entries, eventWindow.value, {
-                categories: calendars.categoryMap,
-                alarmDefaults: calendars.alarmDefaults,
-            })),
-        },
-        {
-            id: 'tasks',
-            title: 'Tasks',
-            checks: guardChecks('tasks', 'Tasks can be checked', () => taskChecks(files.entries)),
-        },
-        {
-            id: 'settings',
-            title: 'Settings and plans',
-            checks: guardChecks('settings', 'Settings and plans can be checked', () => settingsChecks({
-                calendarsPath: CALENDARS_PATH,
-                feedErrors: feedErrors.value,
-                calendarErrors: calendarsReadError.value === null
-                    ? calendars.errors
-                    : [`${CALENDARS_PATH}: It cannot be read: ${calendarsReadError.value}`, ...calendars.errors],
-                tasksPath: TASK_SETTINGS_PATH,
-                taskSettingsProblems: taskSettings.problems,
-                planPaths: planPaths.value,
-                planErrors: plans.errors,
-            })),
-        },
+    // A section apiece, each worked out again only when what it reads changes: kept computed
+    // wherever the app is open, one section's change must not make the other three run again.
+    const frontmatterSection = computed<HealthSection>(() => ({
+        id: 'frontmatter',
+        title: 'Frontmatter',
+        checks: guardChecks('frontmatter', 'Frontmatter can be checked', () => frontmatterChecks(files.entries)),
+    }));
+
+    const eventSection = computed<HealthSection>(() => ({
+        id: 'events',
+        title: `Events and task dates, ${eventWindow.value.from} to ${eventWindow.value.to}`,
+        checks: guardChecks('events', 'Events and task dates can be checked', () => eventChecks(files.entries, eventWindow.value, {
+            categories: calendars.categoryMap,
+            alarmDefaults: calendars.alarmDefaults,
+        })),
+    }));
+
+    const taskSection = computed<HealthSection>(() => ({
+        id: 'tasks',
+        title: 'Tasks',
+        checks: guardChecks('tasks', 'Tasks can be checked', () => taskChecks(files.entries)),
+    }));
+
+    const settingsSection = computed<HealthSection>(() => ({
+        id: 'settings',
+        title: 'Settings and plans',
+        checks: guardChecks('settings', 'Settings and plans can be checked', () => settingsChecks({
+            calendarsPath: CALENDARS_PATH,
+            feedErrors: feedErrors.value,
+            // The file's own lines, not `calendars.errors`, which also holds the feeds of the
+            // window a view last loaded and so is a new array at every window the calendar draws.
+            calendarErrors: calendarsReadError.value === null
+                ? calendars.configurationErrors
+                : [`${CALENDARS_PATH}: It cannot be read: ${calendarsReadError.value}`, ...calendars.configurationErrors],
+            tasksPath: TASK_SETTINGS_PATH,
+            taskSettingsProblems: taskSettings.problems,
+            planPaths: planPaths.value,
+            planErrors: plans.errors,
+        })),
+    }));
+
+    const sections = computed(() => [
+        frontmatterSection.value,
+        eventSection.value,
+        taskSection.value,
+        settingsSection.value,
     ]);
 
     const allChecks = computed(() => sections.value.flatMap((section) => section.checks));
@@ -237,7 +250,7 @@ export const useHealthStore = defineStore('health', () => {
             return;
         }
         calendarsReadError.value = readError;
-        feedErrors.value = unloaded;
+        keepEqual(feedErrors, unloaded);
         checkedAt.value = Date.now();
     }
 

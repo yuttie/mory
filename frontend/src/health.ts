@@ -535,8 +535,9 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
 /// What the stores report of the files under `.mory/`, each file a check of its own.
 export function settingsChecks(reports: {
     calendarsPath: string;
-    /// The calendar store's errors. Only those of the file, prefixed with its path, are taken: those
-    /// of a feed describe the last window a view loaded, if any, and the feeds are asked afresh.
+    /// What the calendar store reports of the file, each line prefixed with its path. Any other line
+    /// is left out: one of a feed describes the last window a view loaded, if any, and the feeds are
+    /// asked afresh.
     calendarErrors: readonly string[];
     /// One line per feed that could not be read, or why the feeds could not be asked at all.
     feedErrors: readonly string[];
