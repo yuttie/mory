@@ -1235,6 +1235,166 @@ impl SearchManager {
     }
 }
 
+impl SearchManager {
+    /// The images of the listing that semantic search cannot find by what they show, or can find
+    /// only by their layout.
+    async fn image_report(&self) -> Result<ImageReport> {
+        let snapshot = SearchSnapshot::read(&self.cache_db).await?;
+        let commit = snapshot.commit.to_string();
+        let Some(model) = self
+            .config
+            .vision_model
+            .as_ref()
+            .filter(|_| self.config.semantic_enabled)
+        else {
+            return Ok(ImageReport {
+                commit,
+                described: false,
+                undescribed: Vec::new(),
+                shrunk: Vec::new(),
+            });
+        };
+        let mut images = snapshot
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry.path != ".mory"
+                    && !entry.path.starts_with(".mory/")
+                    && image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
+            })
+            .collect::<Vec<_>>();
+        images.sort_by(|a, b| a.path.cmp(&b.path));
+        let mut failures = HashMap::new();
+        let mut ready = HashSet::new();
+        let outcomes = sqlx::query(
+            "SELECT blob_id, state, failure FROM search_image_description
+             WHERE model = ? AND prompt_version = ? AND preprocess = ? AND detail = ?
+               AND state IN ('failed', 'too_large', 'ready');",
+        )
+        .bind(model)
+        .bind(image::PROMPT_VERSION)
+        .bind(image::PREPROCESS_VERSION)
+        .bind(image::DETAIL)
+        .fetch_all(&self.cache_db)
+        .await?;
+        for row in outcomes {
+            let blob_id: String = row.get("blob_id");
+            if row.get::<String, _>("state") == "ready" {
+                ready.insert(blob_id);
+            } else {
+                failures.insert(blob_id, row.get::<Option<String>, _>("failure"));
+            }
+        }
+        // Only an image described is listed as described too small: one still waiting may yet be
+        // given up instead, and the health page says it counts none still waiting.
+        let sizes = self
+            .image_sizes(
+                images
+                    .iter()
+                    .map(|entry| entry.blob_id.as_str())
+                    .filter(|blob| ready.contains(*blob)),
+            )
+            .await?;
+        let mut undescribed = Vec::new();
+        let mut shrunk = Vec::new();
+        for entry in images {
+            if let Some(failure) = failures.get(&entry.blob_id) {
+                undescribed.push(UndescribedImage {
+                    path: entry.path.clone(),
+                    failure: failure.clone(),
+                });
+            } else if let Some(&(width, height)) = sizes.get(entry.blob_id.as_str()) {
+                if image::shrunk_past_reading(width, height) {
+                    let (sent_width, sent_height) = image::sent_size(width, height);
+                    shrunk.push(ShrunkImage {
+                        path: entry.path.clone(),
+                        width,
+                        height,
+                        sent_width,
+                        sent_height,
+                    });
+                }
+            }
+        }
+        Ok(ImageReport {
+            commit,
+            described: true,
+            undescribed,
+            shrunk,
+        })
+    }
+
+    /// The width and height of each of `blobs` its header gives, where it gives one.
+    ///
+    /// Read once a blob and kept, since a blob never changes: reading every image of the notes
+    /// takes their whole content, hundreds of megabytes, where the header is a few bytes of it.
+    async fn image_sizes<'a>(
+        &self,
+        blobs: impl Iterator<Item = &'a str>,
+    ) -> Result<HashMap<String, (u64, u64)>> {
+        let blobs = blobs.collect::<HashSet<_>>();
+        let known = sqlx::query("SELECT blob_id, width, height FROM search_image_size;")
+            .map(|row: SqliteRow| {
+                let width: Option<i64> = row.get("width");
+                let height: Option<i64> = row.get("height");
+                (
+                    row.get::<String, _>("blob_id"),
+                    width.zip(height).map(|(width, height)| (width as u64, height as u64)),
+                )
+            })
+            .fetch_all(&self.cache_db)
+            .await?
+            .into_iter()
+            // The table keeps every blob ever measured, those of images still to be described and
+            // of earlier commits among them.
+            .filter(|(blob_id, _)| blobs.contains(blob_id.as_str()))
+            .collect::<HashMap<_, _>>();
+        let missing = blobs
+            .into_iter()
+            .filter(|blob| !known.contains_key(*blob))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let repo = self.repo.clone();
+        let measured = tokio::task::spawn_blocking(move || {
+            missing
+                .into_iter()
+                .map(|blob_id| {
+                    let size = Oid::from_str(&blob_id).ok().and_then(|oid| {
+                        let repo = repo.lock().unwrap();
+                        let blob = repo.find_blob(oid).ok()?;
+                        let size = imagesize::blob_size(blob.content()).ok()?;
+                        Some((size.width as u64, size.height as u64))
+                    });
+                    (blob_id, size)
+                })
+                .collect::<Vec<_>>()
+        })
+        .await?;
+        if !measured.is_empty() {
+            let mut transaction = self.cache_db_writer.begin().await?;
+            for (blob_id, size) in &measured {
+                // A header that cannot be read is kept as such, so it is not read again; whether
+                // the image can be described is ImageMagick's to say.
+                sqlx::query(
+                    "INSERT OR REPLACE INTO search_image_size (blob_id, width, height)
+                     VALUES (?, ?, ?);",
+                )
+                .bind(blob_id)
+                .bind(size.map(|(width, _)| width as i64))
+                .bind(size.map(|(_, height)| height as i64))
+                .execute(&mut *transaction)
+                .await?;
+            }
+            transaction.commit().await?;
+        }
+        Ok(known
+            .into_iter()
+            .chain(measured)
+            .filter_map(|(blob_id, size)| size.map(|size| (blob_id, size)))
+            .collect())
+    }
+}
+
 fn bounded_embedding_input(text: &str) -> String {
     if text.len() <= MAX_EMBEDDING_INPUT_BYTES {
         return text.to_owned();
@@ -1842,6 +2002,36 @@ pub struct SearchStatusResponse {
     semantic: SemanticStatus,
 }
 
+/// `GET /v2/search/images`: the images semantic search is blind to, in whole or in part.
+#[derive(Debug, Serialize)]
+pub struct ImageReport {
+    /// The commit whose listing the images are of.
+    commit: String,
+    /// Whether images are described at all. Where they are not, none is missing for its own sake.
+    described: bool,
+    /// Images whose description was given up, which semantic search cannot find.
+    undescribed: Vec<UndescribedImage>,
+    /// Images described from a copy scaled down so far that text in them is likely too small to
+    /// have been read. One still waiting to be described is not among them.
+    shrunk: Vec<ShrunkImage>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UndescribedImage {
+    path: String,
+    /// What the provider or ImageMagick said, unless it was given up before moried recorded that.
+    failure: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ShrunkImage {
+    path: String,
+    width: u64,
+    height: u64,
+    sent_width: u64,
+    sent_height: u64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct IndexStatus {
     pub state: String,
@@ -1971,6 +2161,32 @@ pub async fn get_status(extract::State(state): extract::State<AppState>) -> Resp
         semantic,
     })
     .into_response()
+}
+
+/// `GET /v2/search/images`
+///
+/// The images semantic search cannot read, for the health page. The cache is synced first, as for
+/// the listing, so the commit the report names is the one the page checks.
+pub async fn get_images(extract::State(state): extract::State<AppState>) -> Response {
+    if let Err(error) = state.ensure_cache().await {
+        tracing::error!("Image report cache sync failed: {error:?}");
+        return search_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "search_unavailable",
+            "The image report is temporarily unavailable.",
+        );
+    }
+    match state.search.image_report().await {
+        Ok(report) => Json(report).into_response(),
+        Err(error) => {
+            tracing::error!("Image report failed: {error:?}");
+            search_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "search_unavailable",
+                "The image report is temporarily unavailable.",
+            )
+        },
+    }
 }
 
 /// `GET /v2/search/indexing`
@@ -2845,6 +3061,172 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(current, "new");
+    }
+
+    #[tokio::test]
+    async fn reports_the_images_search_cannot_read() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        crate::init_cache_database(&mut pool.acquire().await.unwrap())
+            .await
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Repository::init(directory.path().join("repo")).unwrap();
+        let png = |size: &str| {
+            let generated = std::process::Command::new("magick")
+                .args(["-size", size, "xc:white", "png:-"])
+                .output()
+                .unwrap();
+            assert!(generated.status.success());
+            repo.blob(&generated.stdout).unwrap().to_string()
+        };
+        let page = png("1000x28000");
+        let photo = png("4032x3024");
+        let refused = png("10x10");
+        let huge = png("10x11");
+        let queued = png("1x10241");
+        let listed = [
+            ("page.png", page.as_str()),
+            ("photo.png", photo.as_str()),
+            ("refused.png", refused.as_str()),
+            ("huge.png", huge.as_str()),
+            ("queued.png", queued.as_str()),
+            (".mory/huge.png", page.as_str()),
+            // Described once a blob, and so reported under every path that lists one.
+            ("copies/page.png", page.as_str()),
+            ("copies/refused.png", refused.as_str()),
+        ];
+        for (path, blob) in listed {
+            sqlx::query(
+                "INSERT INTO entry VALUES (?, ?, 0, 'image/png', '{}', NULL, 0, 0, 1, 0, '[]');",
+            )
+            .bind(path)
+            .bind(blob)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?);")
+            .bind("1".repeat(40))
+            .execute(&pool)
+            .await
+            .unwrap();
+        // The page and the photo described, the refused and the huge image given up, and the queued
+        // one, too tall to be read once it is described, still to be tried again.
+        let attempts = [
+            (page.as_str(), "ready", None),
+            (photo.as_str(), "ready", None),
+            (refused.as_str(), "failed", Some("ImageMagick rejected the image")),
+            (huge.as_str(), "too_large", Some("image is 1637 by 28108 pixels, over the bound")),
+            (queued.as_str(), "pending", Some("image description provider returned HTTP 429")),
+        ];
+        for (blob, state, failure) in attempts {
+            sqlx::query(
+                "INSERT INTO search_image_description (
+                    blob_id, model, prompt_version, preprocess, detail, state, last_used, failure
+                 ) VALUES (?, 'vision', ?, ?, ?, ?, 0, ?);",
+            )
+            .bind(blob)
+            .bind(image::PROMPT_VERSION)
+            .bind(image::PREPROCESS_VERSION)
+            .bind(image::DETAIL)
+            .bind(state)
+            .bind(failure)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let manager = SearchManager {
+            config: SearchConfig {
+                index_dir: directory.path().join("index"),
+                semantic_enabled: true,
+                embedding_model: "model".to_owned(),
+                embedding_dimensions: 2,
+                vision_model: Some("vision".to_owned()),
+            },
+            repo: Arc::new(std::sync::Mutex::new(repo)),
+            cache_db: pool.clone(),
+            cache_db_writer: pool.clone(),
+            lexical: RwLock::new(None),
+            status: RwLock::new(ManagerStatus {
+                state: "updating".to_owned(),
+                indexed_commit: None,
+                message: None,
+            }),
+            writer: AsyncMutex::new(()),
+            provider: Arc::new(DeterministicEmbeddingProvider),
+            provider_gate: AsyncMutex::new(()),
+            interactive_waiters: AtomicUsize::new(0),
+            vision_client: reqwest::Client::new(),
+            embedding_backoff: ProviderBackoff::new("Embedding"),
+            image_backoff: ProviderBackoff::new("Image description"),
+            force_rebuild: AtomicBool::new(false),
+            rebuild_requested: Notify::new(),
+        };
+
+        let report = serde_json::to_value(manager.image_report().await.unwrap()).unwrap();
+
+        assert_eq!(
+            report,
+            serde_json::json!({
+                "commit": "1".repeat(40),
+                "described": true,
+                "undescribed": [
+                    { "path": "copies/refused.png", "failure": "ImageMagick rejected the image" },
+                    {
+                        "path": "huge.png",
+                        "failure": "image is 1637 by 28108 pixels, over the bound",
+                    },
+                    { "path": "refused.png", "failure": "ImageMagick rejected the image" },
+                ],
+                "shrunk": [
+                    {
+                        "path": "copies/page.png",
+                        "width": 1000,
+                        "height": 28000,
+                        "sent_width": 73,
+                        "sent_height": 2048,
+                    },
+                    {
+                        "path": "page.png",
+                        "width": 1000,
+                        "height": 28000,
+                        "sent_width": 73,
+                        "sent_height": 2048,
+                    },
+                ],
+            }),
+        );
+        // Each described blob's size is read once, and kept.
+        let kept: Vec<String> =
+            sqlx::query_scalar("SELECT blob_id FROM search_image_size ORDER BY blob_id;")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        let mut described = vec![page.clone(), photo.clone()];
+        described.sort();
+        assert_eq!(kept, described);
+        assert_eq!(
+            serde_json::to_value(manager.image_report().await.unwrap()).unwrap(),
+            report,
+        );
+
+        // A size kept for an image still waiting, as every size is once another vision model is
+        // configured, does not list it either.
+        sqlx::query("INSERT INTO search_image_size VALUES (?, 1, 10241);")
+            .bind(&queued)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(manager.image_report().await.unwrap()).unwrap(),
+            report,
+        );
     }
 
     #[tokio::test]

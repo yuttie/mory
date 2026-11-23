@@ -194,6 +194,7 @@ async fn main() -> Result<()> {
         .route("/imported-events", get(v2::get_imported_events))
         .route("/search", post(search::post_search))
         .route("/search/status", get(search::get_status))
+        .route("/search/images", get(search::get_images))
         .route("/search/indexing", get(search::get_indexing))
         .route("/assess-task", post(v2::post_assess_task))
         .route("/ai-action", post(v2::post_ai_action))
@@ -379,6 +380,16 @@ async fn init_cache_database(
                 failure        TEXT,
                 PRIMARY KEY (blob_id, model, prompt_version, preprocess, detail)
             ) STRICT;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    // NULL for a blob whose header gives no size.
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS search_image_size (
+                blob_id  TEXT PRIMARY KEY,
+                width    INTEGER,
+                height   INTEGER
+            ) STRICT, WITHOUT ROWID;
         ")
         .execute(&mut *conn)
         .await?;
