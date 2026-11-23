@@ -196,11 +196,12 @@ test('searches for the word an input method gives, not for what it composes', as
     await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
 });
 
+// Opened, a branch the search leaves out stays open, and Launch, which it opens, closed.
 test('gives the tree back as it was once the search is cleared', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
+    await mockBackend(context, { ...NOTES, [`.tasks/${uuid(6)}/${uuid(8)}.md`]: note('Buy a watering can') });
     await page.goto('/tasks-next');
-    await toggle(page, 'Launch');
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Water the plants', 'Plan the release party']);
+    await toggle(page, 'Water the plants');
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Buy a watering can', 'Plan the release party']);
 
     await search(page).fill('build');
     await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
@@ -210,7 +211,7 @@ test('gives the tree back as it was once the search is cleared', async ({ contex
 
     await page.getByRole('button', { name: 'Clear Search tasks' }).click();
     await expect(search(page)).toHaveValue('');
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Water the plants', 'Plan the release party']);
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Buy a watering can', 'Plan the release party']);
 });
 
 // What a new search finds is shown, though it keeps the branches the last one did.
