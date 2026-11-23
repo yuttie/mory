@@ -628,9 +628,6 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    // The tag group a new task is started from: its tag, `null` for the Untagged group, which has
-    // none to give, and absent when the draft is not from a group or sits under a task.
-    selectedTag?: string | null;
     // Set while the host writes the task: a save the editor emitted, or a move. It refuses a save,
     // and another move, until then, which the buttons show rather than take a press and drop it.
     writing?: boolean;
@@ -673,9 +670,7 @@ const emit = defineEmits<{
 // Reactive states
 const form = reactive<EditableTask>({
     title: '',
-    // Seeded here because nothing resets the form for a new task: the watcher on `task` skips a
-    // task that stays absent, and the one on `selectedTag` fires only when it changes.
-    tags: props.selectedTag ? [props.selectedTag] : [],
+    tags: [],
     // A new task starts in the backlog: To do is a commitment the author makes by moving it there.
     status: { kind: 'backlog' },
     importance: null,
@@ -756,10 +751,9 @@ const ancestorTitles = computed<string[]>(() => {
 // The form as the task `t` fills it, or as a new task starts it.
 function formOf(t: Task | null | undefined): EditableTask {
     if (!t) {
-        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         return {
             title: '',
-            tags: defaultTags,
+            tags: [],
             status: { kind: 'backlog' },
             importance: null,
             lead_time: '',
@@ -917,21 +911,6 @@ watch(uuid, () => {
     }
 });
 
-// Watch for changes in selectedTag during new task creation
-watch(
-    () => props.selectedTag,
-    (newTag, oldTag) => {
-        // Put under a task, the draft keeps the group's tag: a tag is not taken away unasked.
-        if (task.value || newTag === oldTag || newTag === undefined) {
-            return;
-        }
-        // Back at the top, the group's tag heads the draft again. A draft is started from one
-        // group and stays with it, so there is no other group's tag to take away.
-        const rest = form.tags.filter((tag) => tag !== newTag);
-        form.tags = newTag ? [newTag, ...rest] : rest;
-    }
-);
-
 // Lifecycle hooks
 onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
@@ -957,9 +936,7 @@ useShortcuts(onKeydown, () => rootRef.value?.$el);
 
 // Methods
 function getNewTaskTitle(): string {
-    if (props.selectedTag) {
-        return `New task with tag "${props.selectedTag}"`;
-    } else if (parentTask.value?.title) {
+    if (parentTask.value?.title) {
         return `New subtask of "${parentTask.value.title}"`;
     } else {
         return 'New task';
