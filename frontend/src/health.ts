@@ -562,7 +562,7 @@ export function settingsChecks(reports: {
         {
             id: 'calendar-feeds',
             title: 'Subscribed calendars load',
-            description: 'Each enabled feed in .mory/calendars.yaml can be fetched and read by moried. moried keeps a feed it fetched for an hour by default, so a feed fixed since is seen when that runs out.',
+            description: 'Each enabled feed in .mory/calendars.yaml can be fetched and read by moried. What is found of the feeds stands for an hour while the subscriptions stay as they are, and moried keeps a feed it fetched for an hour by default, so a feed fixed since can take as long to be seen.',
             problems: reports.feedErrors.map((message) => ({ severity: 'error', message })),
         },
         {

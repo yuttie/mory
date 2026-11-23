@@ -13,6 +13,7 @@ const stores = vi.hoisted(() => ({
         categoryMap: new Map(),
         alarmDefaults: {},
         configurationErrors: [] as string[],
+        subscriptions: [] as { id: string; url: string }[],
         reloadConfiguration: vi.fn(),
         feedReports: vi.fn(),
     },
@@ -148,7 +149,7 @@ beforeEach(() => {
     Object.assign(reactive(stores.files), { entries: [], commitId: null, schema: 7 });
     vi.stubGlobal('localStorage', memoryStorage());
     vi.stubGlobal('window', new EventTarget());
-    Object.assign(reactive(stores.calendars), { configurationErrors: [] });
+    Object.assign(reactive(stores.calendars), { configurationErrors: [], subscriptions: [] });
     Object.assign(reactive(stores.taskSettings), { problems: [], readAt: null });
     Object.assign(reactive(stores.plans), { errors: {} });
     stores.files.refresh.mockImplementation(async () => {
@@ -408,6 +409,7 @@ describe('the record', () => {
             JSON.stringify({ ...record, sections: [{ id: 'frontmatter', title: 'Frontmatter' }] }),
             JSON.stringify({ ...record, sections: [{ ...WARNING_SECTIONS[0], checks: [{ ...WARNING_SECTIONS[0].checks[0], problems: [{ severity: 'fatal', message: 'm' }] }] }] }),
             JSON.stringify({ ...record, complete: false }),
+            JSON.stringify({ ...record, feeds: { subscriptions: '[]', askedAt: Date.now(), errors: [3] } }),
         ];
         for (const text of others) {
             localStorage.setItem(KEY, text);
@@ -504,6 +506,81 @@ describe('the record', () => {
         disposePinia(pinias.pop()!);
         window.dispatchEvent(storageEvent(KEY, null));
         expect(health.record).not.toBeNull();
+    });
+});
+
+describe('the feeds', () => {
+    const WORK = { id: 'work', url: 'https://example.invalid/work.ics' };
+
+    it('are asked about once for the commits after while the subscriptions stay as they were', async () => {
+        stores.calendars.feedReports.mockResolvedValue([{ id: 'work', name: 'Work', error: 'HTTP 404' }]);
+        const health = tab();
+        await health.checkIfStale();
+        reactive(stores.files).commitId = 'c2';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c2'));
+        expect(checksRead()).toBe(2);
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(1);
+        expect(health.failingChecks).toEqual({ error: 1, warning: 0 });
+        // A subscription added in the settings, or by hand.
+        stores.calendars.reloadConfiguration.mockImplementation(async () => {
+            reactive(stores.calendars).subscriptions = [WORK];
+        });
+        reactive(stores.files).commitId = 'c3';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c3'));
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(2);
+    });
+
+    it('are asked about again once what was found of them is an hour old, and the record goes with it', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 23, 12));
+        const health = tab();
+        await health.checkIfStale();
+        vi.setSystemTime(new Date(2026, 10, 23, 12, 30));
+        reactive(stores.files).commitId = 'c2';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c2'));
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(1);
+        head = 'c2';
+        vi.setSystemTime(new Date(2026, 10, 23, 13));
+        await health.checkIfStale();
+        expect(checksRead()).toBe(3);
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(2);
+    });
+
+    it('are asked about again the next day, and when asked to check regardless', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 23, 23, 50));
+        const health = tab();
+        await health.checkIfStale();
+        await health.check();
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(2);
+        vi.setSystemTime(new Date(2026, 10, 24, 0, 10));
+        reactive(stores.files).commitId = 'c2';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c2'));
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(3);
+        expect(stores.calendars.feedReports).toHaveBeenLastCalledWith('2026-11-24');
+    });
+
+    it('are taken over from what another tab found of them', async () => {
+        await tab().checkIfStale();
+        head = 'c2';
+        await tab().checkIfStale();
+        expect(checksRead()).toBe(2);
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(1);
+    });
+
+    it('are asked about again after they could not be, or the subscriptions could not be read', async () => {
+        stores.calendars.feedReports.mockRejectedValueOnce(unreached('Request failed with status code 502'));
+        const health = tab();
+        await health.checkIfStale();
+        reactive(stores.files).commitId = 'c2';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c2'));
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(2);
+        stores.calendars.reloadConfiguration.mockRejectedValueOnce(new Error('Nested mappings are not allowed in compact mappings'));
+        reactive(stores.files).commitId = 'c3';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c3'));
+        reactive(stores.files).commitId = 'c4';
+        await vi.waitFor(() => expect(health.record?.commit).toBe('c4'));
+        expect(stores.calendars.feedReports).toHaveBeenCalledTimes(4);
     });
 });
 

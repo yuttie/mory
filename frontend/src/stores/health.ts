@@ -39,6 +39,17 @@ interface HealthKey {
     day: string;
 }
 
+/// What a check found of the subscribed feeds, which is the one thing it reads that can change
+/// without a commit.
+interface FeedsRecord {
+    /// The subscriptions they were asked about, as `.mory/calendars.yaml` read then, or `null`
+    /// where that is not known: the file could not be read, or moried could not be asked.
+    subscriptions: string | null;
+    askedAt: number;
+    /// One line per feed that could not be read, or why none could be asked about.
+    errors: string[];
+}
+
 /// What one check found, and what it was found of. A check reads nothing but what its key names and
 /// runs nothing but its build's code, apart from asking whether each subscribed feed can be
 /// fetched; `RECORD_LIFETIME_MS` bounds how long that goes unasked.
@@ -47,6 +58,8 @@ export interface HealthRecord extends HealthKey {
     checkedAt: number;
     /// How many files the listing held, for the page to say what was checked.
     fileCount: number;
+    /// Taken over from the check before while it stands and the subscriptions are the same.
+    feeds: FeedsRecord;
     /// Whether every read reached what it read, at a commit known to be HEAD's. One that failed for
     /// moried or the network rather than for a file -- a restart, a lost connection, an expired
     /// session -- says nothing of the commit, so the tab that made it shows what it found but
@@ -59,11 +72,12 @@ export interface HealthRecord extends HealthKey {
 /// a check one tab has made of a commit is one no other tab makes again.
 export const HEALTH_RECORD_STORAGE_KEY = 'health-record';
 
-/// How long a record stands even when nothing it was found of has moved, for the one input that
-/// can change without a commit: whether each subscribed feed can be fetched and read. moried keeps
-/// a feed it fetched for `MORIED_ICAL_CACHE_MINUTES`, an hour by default, so asking more often
-/// would mostly be answered from that copy; but it keeps only a feed it could fetch, so a feed that
-/// failed and has since recovered is reported failed until the record runs out.
+/// How long what a check found of the feeds stands, even when nothing else it was found of has
+/// moved: checks of later commits take it over while the subscriptions are as they were, and a
+/// record runs out with it. moried keeps a feed it fetched for `MORIED_ICAL_CACHE_MINUTES`, an hour
+/// by default, and reads and expands every feed again for each ask, so asking more often would
+/// mostly cost it that for its own copy; but it keeps only a feed it could fetch, so a feed that
+/// failed and has since recovered is reported failed until this runs out.
 export const RECORD_LIFETIME_MS = 60 * 60 * 1000;
 
 /// How long a check waits for another tab's to end before checking without it. A check is a few
@@ -115,9 +129,19 @@ function isRecord(value: unknown): value is HealthRecord {
         && typeof record.day === 'string'
         && typeof record.checkedAt === 'number'
         && typeof record.fileCount === 'number'
+        && isFeeds(record.feeds)
         && record.complete === true
         && Array.isArray(record.sections)
         && record.sections.every(isSection);
+}
+
+function isFeeds(value: unknown): value is FeedsRecord {
+    const feeds = value as Partial<FeedsRecord> | null;
+    return typeof feeds === 'object' && feeds !== null
+        && (feeds.subscriptions === null || typeof feeds.subscriptions === 'string')
+        && typeof feeds.askedAt === 'number'
+        && Array.isArray(feeds.errors)
+        && feeds.errors.every((error) => typeof error === 'string');
 }
 
 function isSection(value: unknown): value is HealthSection {
@@ -178,7 +202,7 @@ function isOf(record: HealthRecord | null, key: HealthKey): record is HealthReco
 
 /// Whether `record` is what a check of `key` would find now.
 function isCurrent(record: HealthRecord | null, key: HealthKey, now: number): boolean {
-    return isOf(record, key) && record.complete && now - record.checkedAt < RECORD_LIFETIME_MS;
+    return isOf(record, key) && record.complete && now - record.feeds.askedAt < RECORD_LIFETIME_MS;
 }
 
 /// Runs `task` while no other tab runs one under the same lock, where the browser has locks, so
@@ -446,7 +470,7 @@ export const useHealthStore = defineStore('health', () => {
             }
             checking.value = true;
             try {
-                const reached = await read(key);
+                const { reached, calendarsError, feeds } = await read(key, force);
                 if (started !== session) {
                     rerunIfSignedIn();
                     return;
@@ -456,9 +480,10 @@ export const useHealthStore = defineStore('health', () => {
                     build: BUILD,
                     checkedAt: Date.now(),
                     fileCount: files.entries.length,
+                    feeds,
                     // What was read is of the commit only if the listing is still of it.
                     complete: reached && key.commit !== null && files.commitId === key.commit,
-                    sections: sectionsOf(key.day, feedErrors, calendarsReadError),
+                    sections: sectionsOf(key.day, feeds.errors, calendarsError),
                 };
                 record.value = next;
                 if (next.complete) {
@@ -471,40 +496,62 @@ export const useHealthStore = defineStore('health', () => {
         });
     }
 
-    // What the last `read` could not read at all, which no store holds a problem for.
-    let calendarsReadError: string | null = null;
-    let feedErrors: string[] = [];
+    interface Read {
+        /// Whether every read reached its file at the commit checked: a failure of moried or the
+        /// network says nothing of the files.
+        reached: boolean;
+        /// Why `.mory/calendars.yaml` could not be read at all, which no store holds a problem for.
+        calendarsError: string | null;
+        feeds: FeedsRecord;
+    }
 
     // Each store keeps what it last read, and reading again is what makes a fix show up. Every read
-    // is caught on its own: one that fails leaves the checks on what the others found. Resolves to
-    // whether every read reached its file at `key`'s commit: a failure of moried or the network
-    // says nothing of the files.
-    async function read(key: HealthKey): Promise<boolean> {
+    // is caught on its own: one that fails leaves the checks on what the others found.
+    async function read(key: HealthKey, force: boolean): Promise<Read> {
         const months = listedMonths();
-        const [calendarsError, feeds] = await Promise.all([
-            calendars.reloadConfiguration().then(() => null, (error: unknown) => ({ error })),
-            calendars.feedReports(key.day).then(
-                (reports) => ({
-                    errors: reports
-                        .filter((report) => report.error !== null)
-                        .map((report) => `${report.name || report.id}: ${report.error}`),
-                    failed: false,
-                }),
-                (error: unknown) => ({ errors: [`The subscribed calendars cannot be asked for: ${error}`], failed: true }),
-            ),
+        const [calendarsRead] = await Promise.all([
+            readCalendars(key.day, force),
             // Never rejects: the store reports a file it cannot read among its problems.
             taskSettings.load(),
             plans.loadMonths(months).catch(() => undefined),
         ]);
-        calendarsReadError = calendarsError === null ? null : String(calendarsError.error);
-        feedErrors = feeds.errors;
+        return {
+            ...calendarsRead,
+            reached: calendarsRead.reached
+                && taskSettings.readAt === key.commit
+                && months.every((month) => plans.readAt(month) === key.commit),
+        };
+    }
+
+    // `.mory/calendars.yaml`, then the feeds it subscribes to, unless the check before, this tab's
+    // or one it took from another, asked about the same subscriptions the same day, within
+    // `RECORD_LIFETIME_MS`.
+    async function readCalendars(day: string, force: boolean): Promise<Read> {
+        const failure = await calendars.reloadConfiguration().then(() => null, (error: unknown) => ({ error }));
+        const calendarsError = failure === null ? null : String(failure.error);
         // A file that is not YAML is the file's fault, and moried, which cannot read it either,
         // refuses the feeds for it.
-        const calendarsBroken = calendarsError !== null && !axios.isAxiosError(calendarsError.error);
-        return (calendarsError === null || calendarsBroken)
-            && (!feeds.failed || calendarsBroken)
-            && taskSettings.readAt === key.commit
-            && months.every((month) => plans.readAt(month) === key.commit);
+        const broken = failure !== null && !axios.isAxiosError(failure.error);
+        const subscriptions = failure === null ? JSON.stringify(calendars.subscriptions) : null;
+        const askedAt = Date.now();
+        const before = record.value;
+        if (!force && subscriptions !== null && before !== null
+            && before.day === day
+            && before.feeds.subscriptions === subscriptions
+            && askedAt - before.feeds.askedAt < RECORD_LIFETIME_MS) {
+            return { reached: true, calendarsError, feeds: before.feeds };
+        }
+        try {
+            const reports = await calendars.feedReports(day);
+            const errors = reports
+                .filter((report) => report.error !== null)
+                .map((report) => `${report.name || report.id}: ${report.error}`);
+            return { reached: failure === null || broken, calendarsError, feeds: { subscriptions, askedAt, errors } };
+        }
+        catch (error) {
+            const errors = [`The subscribed calendars cannot be asked for: ${error}`];
+            return { reached: broken, calendarsError, feeds: { subscriptions: null, askedAt, errors } };
+        }
     }
 
     // Worked out once a check has read everything, rather than kept computed: every tab would
