@@ -88,7 +88,6 @@
                         v-if="indexingStops.length > 0"
                         v-bind:stops="indexingStops"
                     />
-                    <HealthProblemsItem />
                     <v-menu location="right">
                         <template v-slot:activator="{ props }">
                             <v-list-item
@@ -261,7 +260,7 @@
                                     title="Config"
                                     v-on:click="openConfigDialog"
                                 />
-                                <v-list-item to="/health" v-bind:prepend-icon="mdiHeartPulse" title="Health"></v-list-item>
+                                <HealthMenuItem />
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
                                 <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
@@ -319,7 +318,6 @@
                         v-bind:stops="indexingStops"
                         location="bottom"
                     />
-                    <HealthProblemsItem />
                     <v-menu location="right">
                         <template v-slot:activator="{ props }">
                             <v-list-item
@@ -490,7 +488,7 @@
                                     title="Config"
                                     v-on:click="openConfigDialog"
                                 />
-                                <v-list-item to="/health" v-bind:prepend-icon="mdiHeartPulse" title="Health"></v-list-item>
+                                <HealthMenuItem />
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
                                 <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
@@ -524,7 +522,7 @@
                 id="app-bar-content"
                 class="app-bar-content"
             />
-            <!-- The drawer is hidden below `md`, so point at the notice it holds. -->
+            <!-- The drawer is hidden below `md`, so point at the indexing notice it holds. -->
             <v-icon-btn
                 v-bind:icon="mdiAlertCircleOutline"
                 v-if="$vuetify.display.smAndDown && indexingStops.length > 0"
@@ -532,13 +530,6 @@
                 title="Indexing stopped"
                 v-on:click="mobileDrawer = true"
             ></v-icon-btn>
-            <v-icon-btn
-                v-if="$vuetify.display.smAndDown && healthStore.notice !== null"
-                v-bind:icon="healthStore.notice.icon"
-                v-bind:color="healthStore.notice.severity"
-                v-bind:title="healthStore.notice.text"
-                v-on:click="mobileDrawer = true"
-            />
         </v-app-bar>
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
@@ -614,7 +605,6 @@ import {
     mdiFolderOutline,
     mdiFormatListChecks,
     mdiForwardburger,
-    mdiHeartPulse,
     mdiHelp,
     mdiHomeOutline,
     mdiInformationOutline,
@@ -633,7 +623,7 @@ import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import ConfigDialog from '@/components/ConfigDialog.vue';
 import FileSearchDialog from '@/components/FileSearchDialog.vue';
-import HealthProblemsItem from '@/components/HealthProblemsItem.vue';
+import HealthMenuItem from '@/components/HealthMenuItem.vue';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import NewTaskDialog from '@/components/NewTaskDialog.vue';
 import QuickAddTasksDialog from '@/components/QuickAddTasksDialog.vue';

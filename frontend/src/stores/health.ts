@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue';
 
-import { mdiAlertCircleOutline, mdiAlertOutline } from '@mdi/js';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -23,8 +22,6 @@ export interface HealthSection {
 
 /// What to show of the checks outside their page, where only a failing one is worth a word.
 export interface HealthNotice {
-    severity: HealthSeverity;
-    icon: string;
     /// How many checks fail with each severity, as the page labels them ERROR and WARNING, such as
     /// "2 health errors, 1 warning": checks rather than problems, since one misspelt key repeated in
     /// 300 notes is one thing to fix.
@@ -119,8 +116,8 @@ function parseRecord(text: string | null): HealthRecord | null {
     }
 }
 
-// Checked as far as what reads a record dereferences, every view's sidebar among them: one key
-// holds what whichever build ran last wrote, and anything else on the origin can write to it.
+// Checked as far as what reads a record dereferences, every view's account menu among them: one
+// key holds what whichever build ran last wrote, and anything else on the origin can write to it.
 function isRecord(value: unknown): value is HealthRecord {
     const record = value as Partial<HealthRecord> | null;
     return typeof record === 'object' && record !== null
@@ -322,11 +319,7 @@ export const useHealthStore = defineStore('health', () => {
         const text = error === 0
             ? plural(warning, 'health warning')
             : `${plural(error, 'health error')}${warning === 0 ? '' : `, ${plural(warning, 'warning')}`}`;
-        return {
-            severity: status.value,
-            icon: status.value === 'error' ? mdiAlertCircleOutline : mdiAlertOutline,
-            text,
-        };
+        return { text };
     });
 
     interface Request {

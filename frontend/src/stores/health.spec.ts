@@ -214,17 +214,17 @@ describe('the verdict', () => {
         const health = tab();
         await health.check();
         expect(health.failingChecks).toEqual({ error: 1, warning: 0 });
-        expect(health.notice).toMatchObject({ severity: 'error', text: '1 health error' });
+        expect(health.notice).toEqual({ text: '1 health error' });
 
         reactive(stores.files).entries = [...BROKEN, MISNAMED_PLAN];
         await health.check();
         expect(health.failingChecks).toEqual({ error: 1, warning: 1 });
-        expect(health.notice).toMatchObject({ severity: 'error', text: '1 health error, 1 warning' });
+        expect(health.notice).toEqual({ text: '1 health error, 1 warning' });
 
         reactive(stores.files).entries = [MISNAMED_PLAN];
         await health.check();
         expect(health.status).toBe('warning');
-        expect(health.notice).toMatchObject({ severity: 'warning', text: '1 health warning' });
+        expect(health.notice).toEqual({ text: '1 health warning' });
     });
 
     it('says how many files were checked, and when, to every tab', async () => {
@@ -350,7 +350,7 @@ describe('the record', () => {
         const health = tab();
         await health.checkIfStale();
         window.dispatchEvent(storageEvent(KEY, JSON.stringify({ ...stored(), sections: WARNING_SECTIONS })));
-        expect(health.notice).toMatchObject({ severity: 'warning', text: '1 health warning' });
+        expect(health.notice).toEqual({ text: '1 health warning' });
     });
 
     // A tab whose listing lags writes what it found of the commit before.
