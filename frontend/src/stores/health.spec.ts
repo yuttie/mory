@@ -7,7 +7,13 @@ import type { ListEntry2 } from '@/api';
 
 const stores = vi.hoisted(() => ({
     app: { hasToken: true, invalidateToken: vi.fn() },
-    files: { entries: [] as ListEntry2[], commitId: null as string | null, schema: 7 as number | undefined, refresh: vi.fn() },
+    files: {
+        entries: [] as ListEntry2[],
+        commitId: null as string | null,
+        schema: 7 as number | undefined,
+        refresh: vi.fn(),
+        searchImages: vi.fn(),
+    },
     calendars: {
         // Read, and empty: without them the category check says it could not verify any.
         categoryMap: new Map(),
@@ -158,6 +164,10 @@ beforeEach(() => {
     });
     stores.calendars.reloadConfiguration.mockResolvedValue([]);
     stores.calendars.feedReports.mockResolvedValue([]);
+    // As a moried that describes no images reports them, of the commit listed as they are asked for.
+    stores.files.searchImages.mockImplementation(async () => (
+        { commit: stores.files.commitId, described: false, undescribed: [], shrunk: [] }
+    ));
     // Reads that reach their files, at the commit listed as they begin.
     stores.taskSettings.load.mockImplementation(async () => {
         reactive(stores.taskSettings).readAt = stores.files.commitId;
@@ -686,6 +696,50 @@ describe('a check', () => {
         expect(problemsOf('calendar-feeds')).toEqual(['Work: HTTP 404']);
         expect(problemsOf('tasks-settings')).toEqual(['Invalid default_lead_time; use whole days or weeks, such as 7d or 2w.']);
         expect(health.failingChecks).toEqual({ error: 3, warning: 0 });
+    });
+
+    it('lists the images semantic search cannot read, where moried describes them', async () => {
+        stores.files.searchImages.mockImplementation(async () => ({
+            commit: stores.files.commitId,
+            described: true,
+            undescribed: [
+                { path: 'scan.png', failure: 'ImageMagick rejected the image' },
+                { path: 'old.png', failure: null },
+            ],
+            shrunk: [{ path: 'page.png', width: 1637, height: 28108, sent_width: 119, sent_height: 2048 }],
+        }));
+        const health = tab();
+        await health.check();
+        const search = health.sections.find((section) => section.id === 'search')!;
+        expect(search.checks.map((item) => item.problems.map(({ path, message }) => ({ path, message })))).toEqual([[
+            { path: 'scan.png', message: 'Not described, so semantic search cannot find it by what it shows: ImageMagick rejected the image.' },
+            { path: 'old.png', message: 'Not described, so semantic search cannot find it by what it shows: the reason was not recorded.' },
+            { path: 'page.png', message: 'Described from 119×2048, scaled down from 1637×28108, so text in it is likely too small to have been read.' },
+        ]]);
+        expect(health.failingChecks).toEqual({ error: 0, warning: 1 });
+    });
+
+    it('checks no images where moried describes none', async () => {
+        const health = tab();
+        await health.check();
+        expect(health.sections.map((section) => section.id)).not.toContain('search');
+        expect(health.status).toBe('ok');
+    });
+
+    it('is not taken as current when moried cannot be asked about the images, or names another commit', async () => {
+        stores.files.searchImages.mockRejectedValue(unreached('Request failed with status code 500'));
+        const health = tab();
+        await health.checkIfStale();
+        const search = health.sections.find((section) => section.id === 'search')!;
+        expect(search.checks[0].problems.map((problem) => problem.message)).toEqual([
+            'moried could not be asked about the images: Error: Request failed with status code 500',
+        ]);
+        expect(localStorage.getItem(KEY)).toBeNull();
+
+        stores.files.searchImages.mockResolvedValue({ commit: 'another', described: false, undescribed: [], shrunk: [] });
+        await health.checkIfStale();
+        expect(localStorage.getItem(KEY)).toBeNull();
+        expect(checksRead()).toBe(2);
     });
 
     it('reads the month of each listed plan once the listing is refreshed', async () => {

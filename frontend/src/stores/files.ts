@@ -4,6 +4,7 @@ import { defineStore } from 'pinia';
 
 import * as api from '@/api';
 import type {
+    ImageSearchReport,
     IndexingResponse,
     ListEntry2,
     SearchRequest,
@@ -374,6 +375,10 @@ export const useFilesStore = defineStore('files', () => {
         return api.getSearchStatus(signal);
     }
 
+    function searchImages(signal?: AbortSignal): Promise<ImageSearchReport> {
+        return api.getSearchImages(signal);
+    }
+
     function indexing(signal?: AbortSignal): Promise<IndexingResponse> {
         return api.getIndexing(signal);
     }
@@ -408,6 +413,7 @@ export const useFilesStore = defineStore('files', () => {
         upload,
         search,
         searchStatus,
+        searchImages,
         indexing,
         exists,
         invalidate,
