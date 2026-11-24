@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
-import { mockBackend, uuid } from './backend';
+import { API_URL, mockBackend, uuid } from './backend';
 
 function note(title: string, status: string): string {
     return ['---', 'task:', '  status:', `    kind: ${status}`, '---', '', `# ${title}`, ''].join('\n');
@@ -118,6 +118,45 @@ test('keeps the parent found by a search drawn once the search is cleared', asyn
     await expect(dialog.locator('.v-list-item--active')).toContainText('Outline');
 });
 
+test('names the parent chosen beside the button, though the tree leaves its row out', async ({ context, page }) => {
+    await mockBackend(context, notes(`.tasks/${PROJECT}/${uuid(2)}/${MOVED}.md`), TIMES);
+    const dialog = await openPicker(page, MOVED);
+    const chosen = dialog.locator('.chosen-parent');
+    await expect(chosen).toHaveText('Under: Draft');
+    await expect(chosen).toHaveAttribute('title', 'Project › Draft');
+
+    await dialog.getByRole('textbox', { name: 'Search tasks' }).fill('finished');
+    await expect(rows(dialog)).toHaveText(['Finished']);
+    await expect(chosen).toHaveText('Under: Draft');
+    await dialog.getByRole('treeitem', { name: 'Finished' }).click();
+    await expect(chosen).toHaveText('Under: Finished');
+
+    await dialog.getByText('Root (No Parent)').click();
+    await expect(chosen).toHaveText('Under: Root');
+    await expect(chosen).toHaveAttribute('title', 'Root (No Parent)');
+    await expect(dialog.getByRole('button', { name: 'Move Here' })).toHaveAccessibleDescription('Under: Root');
+});
+
+// Taken by a sync while the dialog is open, it could not be placed under, and the label would name
+// a task the tree no longer holds.
+test('gives way to the root when the parent chosen is gone', async ({ context, page }) => {
+    await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
+    const dialog = await openPicker(page, MOVED);
+    await dialog.getByRole('treeitem', { name: 'Draft' }).click();
+    const chosen = dialog.locator('.chosen-parent');
+    await expect(chosen).toHaveText('Under: Draft');
+
+    // Deleted as from another device, and synced as the view does on coming back to the window.
+    await page.evaluate(async (url) => {
+        await fetch(url, { method: 'DELETE' });
+        window.dispatchEvent(new Event('focus'));
+    }, `${API_URL}notes/.tasks/${PROJECT}/${uuid(2)}.md`);
+    await expect(dialog.getByRole('treeitem', { name: 'Draft' })).toHaveCount(0);
+    await expect(chosen).toHaveText('Under: Root');
+    // Where the task is already.
+    await expect(dialog.getByRole('button', { name: 'Move Here' })).toBeDisabled();
+});
+
 test('leaves out the statuses it is told to, apart from the task tree', async ({ context, page }) => {
     await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
     const dialog = await openPicker(page, MOVED);
@@ -180,12 +219,23 @@ test('leaves out what the last picker left out', async ({ context, page }) => {
 
 // The tree is drawn at one height, but a phone's window has no room for it with the rest: it gives
 // up what it must, rather than the buttons going off the bottom of a dialog that does not scroll.
-test('keeps its buttons in a window too short for the whole tree', async ({ context, page }) => {
+// Under a parent whose title is longer than the actions have room for.
+test('keeps its buttons in a window too short and narrow for the whole tree', async ({ context, page }) => {
     await page.setViewportSize({ width: 360, height: 640 });
-    await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
+    await mockBackend(context, {
+        ...notes(`.tasks/${PROJECT}/${uuid(2)}/${MOVED}.md`),
+        [`.tasks/${PROJECT}/${uuid(2)}.md`]: note('Draft the chapter on how the whole thing began', 'in_progress'),
+    }, TIMES);
     const dialog = await openPicker(page, MOVED);
     // Where it settles, as it scales in from a size that fits.
     await expect.poll(() => dialog.locator('.v-overlay__content').evaluate((element) => element.getAnimations().length)).toBe(0);
     await expect(dialog.getByRole('button', { name: 'Move Here' })).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeInViewport({ ratio: 1 });
     await expect(dialog.getByRole('treeitem', { name: 'Project' })).toBeInViewport({ ratio: 1 });
+    // Cut short, beside the buttons rather than over them.
+    const chosen = dialog.locator('.chosen-parent');
+    expect(await chosen.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    const label = await chosen.boundingBox();
+    const cancel = await dialog.getByRole('button', { name: 'Cancel' }).boundingBox();
+    expect(label !== null && cancel !== null && label.x + label.width <= cancel.x).toBe(true);
 });

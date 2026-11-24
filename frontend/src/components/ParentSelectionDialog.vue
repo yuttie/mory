@@ -78,16 +78,25 @@
                 </div>
             </v-card-text>
             <v-card-actions>
-                <v-spacer />
+                <!-- A search or the status filter may leave the row chosen out of the tree, and the
+                     button acts on it all the same. -->
+                <span
+                    v-bind:id="chosenId"
+                    class="chosen-parent text-body-2 text-truncate"
+                    v-bind:title="chosenPath"
+                ><span class="text-medium-emphasis">Under:</span> {{ chosenName }}</span>
                 <v-btn
                     variant="text"
                     v-on:click="$emit('update:modelValue', false)"
                 >
                     Cancel
                 </v-btn>
+                <!-- Described by the label, or a screen reader would say only what the button does,
+                     not where. -->
                 <v-btn
                     color="primary"
                     v-bind:disabled="!canChoose"
+                    v-bind:aria-describedby="chosenId"
                     v-on:click="confirm"
                 >
                     {{ mode === 'choose' ? 'Choose' : 'Move Here' }}
@@ -98,7 +107,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, useId } from 'vue';
 import { mdiFolder, mdiCheck } from '@mdi/js';
 
 import TaskTree from './TaskTree.vue';
@@ -136,27 +145,53 @@ const openNodes = ref<UUID[]>([]);
 const treeContainer = ref<HTMLElement | null>(null);
 // How many times the dialog has opened.
 const openings = ref(0);
+// The label's, which describes the button: one of its own for each dialog, as two may be mounted
+// at once.
+const chosenId = useId();
 // The statuses left out, kept apart from the task tree's: the tree may leave out tasks not to be
 // worked on yet, such as the backlog, where the parent looked for may well be.
 const HIDDEN_STATUSES_KEY = 'parent-selection-hidden-statuses';
 const hiddenStatuses = useLocalStorage<string[]>(HIDDEN_STATUSES_KEY, []);
 
-// The tasks from a root down to `uuid`'s parent: empty for a root task, null for one not in the
-// tree.
-function ancestorsOf(items: TaskTreeItem[], uuid: UUID): UUID[] | null {
+// The tasks from a root down to `uuid`, itself included: null for one not in the tree.
+function chainOf(items: TaskTreeItem[], uuid: UUID): TaskTreeItem[] | null {
     for (const item of items) {
         if (item.uuid === uuid) {
-            return [];
+            return [item];
         }
-        const below = ancestorsOf(item.children ?? [], uuid);
+        const below = chainOf(item.children ?? [], uuid);
         if (below !== null) {
-            return [item.uuid, ...below];
+            return [item, ...below];
         }
     }
     return null;
 }
 
+// The tasks from a root down to `uuid`'s parent: empty for a root task, null for one not in the
+// tree.
+function ancestorsOf(items: TaskTreeItem[], uuid: UUID): UUID[] | null {
+    return chainOf(items, uuid)?.slice(0, -1).map((item) => item.uuid) ?? null;
+}
+
 // Computed properties
+// The parent chosen and the tasks above it, root first: empty for none, null for one gone from the
+// tree.
+const chosenChain = computed<TaskTreeItem[] | null>(() => (
+    selectedParent.value === null ? [] : chainOf(props.items, selectedParent.value)
+));
+
+// What the parent chosen is called, said beside the button that places the task there.
+const chosenName = computed<string>(() => {
+    const chosen = chosenChain.value?.at(-1);
+    return chosen === undefined ? 'Root' : chosen.title || 'Untitled';
+});
+
+// Where it is, as tasks in different projects may share a title.
+const chosenPath = computed<string>(() => {
+    const chain = chosenChain.value ?? [];
+    return chain.length === 0 ? 'Root (No Parent)' : chain.map((item) => item.title || 'Untitled').join(' › ');
+});
+
 // The current parent and the tasks above it, root first.
 const parentChain = computed<UUID[]>(() => {
     if (props.parent === null) {
@@ -197,6 +232,15 @@ const { search, terms, filtered, open, openAlso } = useTaskTreeFilter(candidates
 
 // Choosing the parent the task already has would do nothing, and the dialog opens on exactly that.
 const canChoose = computed<boolean>(() => selectedParent.value !== props.parent);
+
+// A parent chosen that leaves the tree while the dialog is open, as a sync may take one, gives way
+// to the root: a move under it would fail, and the callers place a new task at the root instead, so
+// the label and the button say what choosing does.
+watch(chosenChain, (chain) => {
+    if (chain === null) {
+        selectedParent.value = null;
+    }
+});
 
 // Methods  
 function selectParent(parentUuid: UUID | null | undefined): void {
@@ -281,5 +325,12 @@ watch(() => props.modelValue, async (isOpen) => {
 .tree-box {
     flex: 0 1 400px;
     min-height: 120px;
+}
+
+/* Taking the room the buttons leave, and cut short rather than push them out of the dialog: the
+   overflow `text-truncate` hides lets it shrink below its text. */
+.chosen-parent {
+    flex: 1 1 0;
+    padding-inline: 8px;
 }
 </style>
