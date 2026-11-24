@@ -39,6 +39,15 @@ function rows(page: Page): Locator {
     return tree(page).getByRole('treeitem').locator('.v-list-item-title');
 }
 
+// A branch just opened is still growing, and a row in it can move between a press and its release:
+// see task-tree-filter.spec.ts.
+async function settled(page: Page): Promise<void> {
+    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => (
+        element.querySelector('[class*="enter-active"], [class*="leave-active"]') === null
+        && element.getAnimations({ subtree: true }).length === 0
+    )), { intervals: [50] }).toBe(true);
+}
+
 test('draws the tasks under way first and the ones over with last, at every level', async ({ context, page }) => {
     await mockBackend(context, NOTES, {
         // Canceled after the other was done, so it comes first of the two.
@@ -48,6 +57,17 @@ test('draws the tasks under way first and the ones over with last, at every leve
         },
     });
     await page.goto('/tasks-next/_/descendants/status');
+    // The ones over with behind a row after the rest, and in their own order once it is expanded.
+    await expect(rows(page)).toHaveText([
+        'Project',
+        'Awaiting a reply',
+        'Stuck',
+        'Next up',
+        'Paused',
+        'Someday',
+        'Show 2 closed',
+    ]);
+    await row(page, 'Show 2 closed').click();
     await expect(rows(page)).toHaveText([
         'Project',
         'Awaiting a reply',
@@ -57,14 +77,18 @@ test('draws the tasks under way first and the ones over with last, at every leve
         'Someday',
         'Dropped',
         'Finished',
+        'Hide 2 closed',
     ]);
 
     await row(page, 'Project').locator('.v-list-item__prepend button').click();
+    await settled(page);
+    await row(page, 'Show 1 closed').click();
     await expect(rows(page)).toHaveText([
         'Project',
         'Draft',
         'Proofread',
         'Plan',
+        'Hide 1 closed',
         'Awaiting a reply',
         'Stuck',
         'Next up',
@@ -72,6 +96,7 @@ test('draws the tasks under way first and the ones over with last, at every leve
         'Someday',
         'Dropped',
         'Finished',
+        'Hide 2 closed',
     ]);
 });
 

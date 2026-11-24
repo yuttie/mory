@@ -96,6 +96,9 @@ const emit = defineEmits<{
     (e: 'update:active', value: string | undefined): void;
     // The row `id` was dropped on the row `target`, which `canDrop` allowed.
     (e: 'drop', id: string, target: string): void;
+    // The row `id`, which `routeFor` gives nowhere to go, was clicked or entered: what it does is
+    // the parent's to say, as for a row standing for others rather than an entry of its own.
+    (e: 'choose', id: string): void;
 }>();
 
 // Composables
@@ -123,15 +126,21 @@ const draggedItem = computed<Item | undefined>(() => dragged.value === null ? un
 // listening for a click -- so a middle click, a Ctrl-click, "Open link in new tab" and the status
 // bar all behave as they do on any other link. A tree whose rows can be dragged also says which row
 // each is, for a drag to find the one under the pointer.
-function rowProps(item: object): Record<string, unknown> | undefined {
+//
+// The id is the row's key as well. VTreeviewChildren keys no row, so Vue would patch a list by
+// position: rows put in before another, as a fold's tasks are put in before the fold, would take
+// over the elements of the rows after them, and an element of another tag -- a link where a row
+// with nowhere to go had none -- is replaced, losing the focus it held.
+function rowProps(item: object): Record<string, unknown> {
+    const value = (item as Record<string, unknown>)[props.itemValue];
     const to = props.routeFor?.(item as Item) ?? null;
-    const link = to === null ? undefined : { to };
+    const row = { key: value, ...(to === null ? {} : { to }) };
     if (props.canDrag === undefined) {
-        return link;
+        return row;
     }
-    const id = String((item as Record<string, unknown>)[props.itemValue]);
+    const id = String(value);
     return {
-        ...link,
+        ...row,
         'data-tree-id': id,
         // A row that can be picked up is a link made undraggable, or the browser would start a
         // drag of its own to carry off the address, and end this one at the first move.
@@ -153,14 +162,22 @@ function onActivated(id: string | undefined) {
 // VTreeview does not declare it, and the listener reaches the VList it renders only as a passed-on
 // attribute. Should an upgrade declare it without passing it on, the keyboard would stop without a
 // word; the keyboard test in task-links.spec.ts is what notices.
+//
+// A row with nowhere to go is no anchor, so its click is the tree's to report as well as its Enter.
 function onClickActivate({ id, event }: { id: unknown; event?: { type: string } }) {
-    if (props.routeFor === undefined || event?.type !== 'keydown') {
+    if (props.routeFor === undefined) {
         return;
     }
     const item = findItem(props.items, id);
-    const target = item === undefined ? null : props.routeFor(item);
+    if (item === undefined) {
+        return;
+    }
+    const target = props.routeFor(item);
+    if (target === null) {
+        emit('choose', String(id));
+    }
     // Even on the row already shown, since a click on it goes there again too.
-    if (target !== null) {
+    else if (event?.type === 'keydown') {
         router.push(target);
     }
 }
