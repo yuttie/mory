@@ -14,6 +14,7 @@
         autocomplete="off"
         v-on:compositionstart="onCompositionStart"
         v-on:compositionend="onCompositionEnd"
+        v-on:click:clear="onClear"
     />
 </template>
 
@@ -73,6 +74,13 @@ function onCompositionStart() {
 // The word the input method gives is searched as typed text is. Whether the input event carrying
 // it comes before this or after differs between browsers, and either way it is searched for.
 function onCompositionEnd() {
+    composing = false;
+    applySearch(query.value);
+}
+
+// Clearing the field ends a composition under way, but Chrome sends no compositionend for it, and
+// the search would wait for one for good: it would keep what it had, whatever was typed next.
+function onClear() {
     composing = false;
     applySearch(query.value);
 }
