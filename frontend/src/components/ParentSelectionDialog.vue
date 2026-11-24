@@ -42,10 +42,12 @@
                     ref="treeContainer"
                     style="position: relative; border: 1px solid #e0e0e0; border-radius: 4px; max-height: 400px; overflow-y: auto;"
                 >
+                    <!-- Every root is open, so the closed tasks under them all would be drawn too. -->
                     <TaskTree
                         v-bind:items="filteredItems"
                         v-bind:open="openNodes"
                         v-bind:active="selectedParent"
+                        fold-closed
                         v-on:update:open="openNodes = $event"
                         v-on:update:active="selectParent"
                         style="padding: 8px;"
