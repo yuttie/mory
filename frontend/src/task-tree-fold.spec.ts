@@ -149,3 +149,23 @@ describe('how many of its tasks a fold draws', () => {
         expect(shownToReach(fold(FOLD_PAGE, 0), FOLD_PAGE - 1)).toBe(Infinity);
     });
 });
+
+describe('the task kept drawn', () => {
+    const items = [
+        task('open', 'todo', [task('step', 'todo'), ...closedTasks(3).map((child) => ({ ...child, uuid: `step-${child.uuid}` }))]),
+        ...closedTasks(23),
+    ];
+
+    it('draws as many of the tasks it is folded with as reach it, and no fewer than asked for', () => {
+        expect(foldClosed(items, new Map(), 'c12').folds.get('closed:')?.shown).toBe(20);
+        expect(foldClosed(items, new Map(), 'c22').folds.get('closed:')?.shown).toBe(23);
+        expect(foldClosed(items, new Map([['closed:', 23]]), 'c0').folds.get('closed:')?.shown).toBe(23);
+    });
+
+    it('draws no other fold', () => {
+        const folded = foldClosed(items, new Map(), 'step-c1');
+        expect(folded.folds.get('closed:open')?.shown).toBe(3);
+        expect(folded.folds.get('closed:')?.shown).toBe(0);
+        expect(foldClosed(items, new Map(), 'open').folds.get('closed:')?.shown).toBe(0);
+    });
+});

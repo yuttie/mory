@@ -89,7 +89,11 @@ export function shownForMore(row: ClosedFold): number {
 // How many of its tasks the fold `row` draws to reach the one at `index`: as many as the clicks
 // reaching it would draw.
 export function shownToReach(row: ClosedFold, index: number): number {
-    return drawing(row, (Math.floor(index / FOLD_PAGE) + 1) * FOLD_PAGE);
+    return drawing(row, reaching(index));
+}
+
+function reaching(index: number): number {
+    return (Math.floor(index / FOLD_PAGE) + 1) * FOLD_PAGE;
 }
 
 function drawing({ count }: ClosedFold, shown: number): number {
@@ -109,8 +113,12 @@ function isClosed(item: TaskTreeItem): boolean {
 // nothing to fold.
 //
 // `shown` says how many of its tasks each fold draws, by its id; as many as it holds or more draws
-// them all.
-export function foldClosed(items: TaskTreeItem[], shown: ReadonlyMap<string, number>): FoldedTaskTree {
+// them all. The fold the task `keep` is behind, if any, draws at least as many as reach it.
+export function foldClosed(
+    items: TaskTreeItem[],
+    shown: ReadonlyMap<string, number>,
+    keep?: string,
+): FoldedTaskTree {
     const folds = new Map<string, ClosedFold>();
     const foldOf = new Map<string, FoldPlace>();
 
@@ -145,7 +153,10 @@ export function foldClosed(items: TaskTreeItem[], shown: ReadonlyMap<string, num
         }
         closed.forEach(({ row }, index) => behind(row, { fold: id, index }));
         const count = closed.length;
-        const drawn = Math.min(shown.get(id) ?? 0, count);
+        // Only this fold's own tasks are behind it yet, and those of the lists below, folded apart.
+        const place = keep === undefined ? undefined : foldOf.get(keep);
+        const reach = place?.fold === id ? reaching(place.index) : 0;
+        const drawn = Math.min(Math.max(shown.get(id) ?? 0, reach), count);
         const row: ClosedFold = { fold: true, uuid: id, title: foldTitle(count, drawn), count, shown: drawn };
         folds.set(id, row);
         return {

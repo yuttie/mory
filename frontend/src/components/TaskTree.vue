@@ -149,9 +149,18 @@ const emit = defineEmits<{
 // How many of its tasks each fold draws, by its id. Kept while the tree is shown, so a list changed
 // by a save keeps what was drawn of it.
 const shown = ref<ReadonlyMap<string, number>>(new Map());
+// The task chosen when its fold was hidden, which it stays behind until another is chosen.
+const dismissed = ref<UUID | undefined>();
 
 // Computed properties
-const folded = computed(() => props.foldClosed ? fold(props.items, shown.value) : undefined);
+// The task chosen is drawn even when it is closed, wherever it comes to be folded: opened from a
+// list or a link, closed or moved while chosen, pushed to the next page by a task closing before it,
+// found by a search since cleared, or given back by the status filter. Worked out each time rather
+// than kept in `shown`, as a task moved with its parent passes through the top level while their
+// files are renamed one at a time, and would leave a fold it only passed through drawn there.
+const kept = computed<UUID | undefined>(() => props.active === dismissed.value ? undefined : props.active);
+
+const folded = computed(() => props.foldClosed ? fold(props.items, shown.value, kept.value) : undefined);
 
 const rows = computed<TaskTreeRow[]>(() => folded.value?.rows ?? props.items);
 
@@ -161,19 +170,14 @@ const rowRouteFor = computed(() => {
     return routeFor === undefined ? undefined : (row: TaskTreeRow) => isFold(row) ? null : routeFor(row);
 });
 
-// Whether the tree is given the task chosen at all, drawn or behind a fold: the status filter or a
-// search may leave it out, and give it back.
-const holdsActive = computed<boolean>(() => props.active !== undefined && holds(props.items, props.active));
-
-// The task chosen is drawn even when it is closed: when it is opened from a list or a link, when it
-// was chosen among what a search found and the search is cleared, and when the status filter gives
-// it back. Only then, though, not when it closes while chosen, as the status filter takes one away
-// while closed tasks are hidden, nor after its fold is hidden.
-watch([() => props.active, () => props.foldClosed, holdsActive], ([active]) => {
-    if (active !== undefined) {
-        reveal(active);
+// Another task chosen leaves drawn what was drawn for the last, rather than fold it away from
+// around the row just clicked.
+watch(() => props.active, (_active, last) => {
+    if (last !== undefined && last !== dismissed.value) {
+        reveal(last);
     }
-}, { immediate: true });
+    dismissed.value = undefined;
+});
 
 // Methods
 // Draws the task `id` if the tree holds it behind a fold, as it holds the items it was last given:
@@ -186,15 +190,14 @@ function reveal(id: string) {
     }
 }
 
-function holds(items: readonly TaskTreeItem[], id: string): boolean {
-    return items.some((item) => item.uuid === id || holds(item.children ?? [], id));
-}
-
 function showFold(id: string, count: number) {
     shown.value = new Map([...shown.value, [id, count]]);
 }
 
 function hideFold(id: string) {
+    if (props.active !== undefined && folded.value?.foldOf.get(props.active)?.fold === id) {
+        dismissed.value = props.active;
+    }
     const next = new Map(shown.value);
     next.delete(id);
     shown.value = next;
