@@ -18,14 +18,31 @@
             <span
                 class="title-text"
                 v-bind:class="{ strikethrough: canceled }"
-            >{{ value.title || 'Untitled' }}</span>
+            >
+                <HighlightedText
+                    v-bind:text="titles.own"
+                    v-bind:terms="highlight"
+                />
+            </span>
         </div>
+        <!-- Each title marked apart, as a term is found in one title or another and never across
+             the separator between two. -->
         <div
-            v-if="ancestorTitles.length > 0"
+            v-if="titles.ancestors.length > 0"
             class="ancestors"
         >
-            <v-icon>{{ mdiFileTreeOutline }}</v-icon>
-            {{ ancestorTitles.join(' › ') }}
+            <v-icon>{{ mdiFileTreeOutline }}</v-icon> <template
+                v-for="(title, index) of titles.ancestors"
+                v-bind:key="index"
+            >
+                <template v-if="index > 0">
+                    {{ ' › ' }}
+                </template>
+                <HighlightedText
+                    v-bind:text="title"
+                    v-bind:terms="highlight"
+                />
+            </template>
         </div>
         <div
             v-if="tags.length > 0"
@@ -66,7 +83,7 @@ import {
 
 import type { StatusKind, UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
-import { useTasksStore } from '@/stores/tasks';
+import { type RowTitles, useTasksStore } from '@/stores/tasks';
 import { URGENCY_LABEL } from '@/urgency';
 import { usePlansStore } from '@/stores/plans';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
@@ -74,6 +91,7 @@ import { statusColor, statusGround } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 import { tagsOf } from '@/tags';
 
+import HighlightedText from '@/components/HighlightedText.vue';
 import TaskDateCues from '@/components/TaskDateCues.vue';
 
 // Props
@@ -89,6 +107,9 @@ const props = defineProps<{
     // dropped in another column is drawn there before its note is written, and drawn as its new
     // status there.
     status?: StatusKind;
+    // The terms a search of the list found the task by, marked in its title and the titles above
+    // it, as the list matches them against both.
+    highlight?: readonly string[];
 }>();
 
 // Stores
@@ -101,9 +122,7 @@ const progress = computed(() => store.progress(props.value.uuid));
 // Computed properties
 // A list gathers tasks from anywhere in the tree, and a title alone often does not say which
 // project it belongs to: "Write the report" could be under any of them.
-const ancestorTitles = computed<string[]>(() => {
-    return store.ancestorsOf(props.value.uuid, props.listRoot).map((node) => node.title || 'Untitled');
-});
+const titles = computed<RowTitles>(() => store.rowTitles(props.value, props.listRoot));
 
 const tags = computed<string[]>(() => {
     return tagsOf(props.value.metadata);

@@ -10,6 +10,7 @@ import {
     presetState,
     searchTerms,
     titleMatches,
+    titlesMatch,
     togglePreset,
 } from '@/task-tree-filter';
 
@@ -62,6 +63,27 @@ describe('titleMatches', () => {
 
     it('finds nothing in a task with no title', () => {
         expect(titleMatches(null, ['draft'])).toBe(false);
+    });
+});
+
+describe('titlesMatch', () => {
+    it('finds each term in one title or another', () => {
+        expect(titlesMatch(['Budget', 'Annual Report'], ['report', 'BUDGET'])).toBe(true);
+        expect(titlesMatch(['Budget', 'Annual Report'], ['report', 'draft'])).toBe(false);
+    });
+
+    it('never finds a term across two titles', () => {
+        expect(titlesMatch(['Annual', 'Report'], ['alrep'])).toBe(false);
+    });
+
+    it('reads a missing title as empty, and matches anything with no terms', () => {
+        expect(titlesMatch(['Budget', null], ['budget'])).toBe(true);
+        expect(titlesMatch([null], ['budget'])).toBe(false);
+        expect(titlesMatch([], [])).toBe(true);
+    });
+
+    it('finds a title written in decomposed characters by the composed ones typed', () => {
+        expect(titlesMatch(['会議', '\u30AB\u3099イドライン'], ['ガイド', '会議'])).toBe(true);
     });
 });
 

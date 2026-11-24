@@ -327,6 +327,27 @@ describe('ancestorsOf', () => {
     });
 });
 
+describe('rowTitles', () => {
+    it('names a task by its title and those above it under the list\'s root', async () => {
+        const { store } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(2)}/${uuid(7)}.md`, title: 'Grandchild' },
+        ]);
+        const task = store.node(uuid(7))!;
+        expect(store.rowTitles(task)).toEqual({ own: 'Grandchild', ancestors: ['Parent', 'Child'] });
+        expect(store.rowTitles(task, uuid(1))).toEqual({ own: 'Grandchild', ancestors: ['Child'] });
+        expect(store.rowTitles(store.node(uuid(3))!)).toEqual({ own: 'Alpha', ancestors: [] });
+    });
+
+    it('names a task without a title Untitled, above a row or on it', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, title: '' },
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: '' },
+        ]);
+        expect(store.rowTitles(store.node(uuid(2))!)).toEqual({ own: 'Untitled', ancestors: ['Untitled'] });
+    });
+});
+
 describe('parentAt', () => {
     it('finds the task a path sits under, listed or not', async () => {
         const { store } = await storeWith(sample);

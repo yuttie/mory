@@ -196,6 +196,25 @@ test('searches for the word an input method gives, not for what it composes', as
     await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
 });
 
+// Cleared, the field ends the composition without a compositionend, and is searched as one cleared
+// otherwise is: at once, and on every key after.
+test('searches again once cleared while an input method composes', async ({ context, page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next');
+    await search(page).fill('build');
+    await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
+    const devtools = await context.newCDPSession(page);
+    await devtools.send('Input.imeSetComposition', { text: 'er', selectionStart: 2, selectionEnd: 2 });
+    await expect(search(page)).toHaveValue('builder');
+
+    await page.getByRole('button', { name: 'Clear Search tasks' }).click();
+    await expect(search(page)).toHaveValue('');
+    await expect(rows(page)).toHaveText(['Launch', 'Water the plants', 'Plan the release party']);
+    await search(page).pressSequentially('water');
+    await expect(rows(page)).toHaveText(['Water the plants']);
+});
+
 // Opened, a branch the search leaves out stays open, and Launch, which it opens, closed.
 test('gives the tree back as it was once the search is cleared', async ({ context, page }) => {
     await mockBackend(context, { ...NOTES, [`.tasks/${uuid(6)}/${uuid(8)}.md`]: note('Buy a watering can') });

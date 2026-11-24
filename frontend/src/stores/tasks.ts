@@ -52,6 +52,13 @@ export class SavedUnlisted extends Error {
     }
 }
 
+// The titles a task's row in a list names it by.
+export interface RowTitles {
+    own: string;
+    // Of the tasks above it, root first.
+    ancestors: string[];
+}
+
 function toItem(node: TaskNode, children: TaskTreeItem[] | undefined): TaskTreeItem {
     return children === undefined ? { ...node } : { ...node, children };
 }
@@ -95,6 +102,16 @@ export const useTasksStore = defineStore('tasks', () => {
         const chain = nodesOf(forest.value, ancestors(forest.value, id).reverse());
         const belowIndex = chain.findIndex((node) => node.id === below);
         return chain.slice(belowIndex + 1);
+    }
+
+    // The titles a task's row in a list draws: its own, and those of the tasks above it under
+    // `below`, as `ancestorsOf` takes them, a task without one drawn as Untitled. A search of the
+    // list matches these, so that what it finds a row by is drawn on the row.
+    function rowTitles(task: TaskNode, below?: string): RowTitles {
+        return {
+            own: task.title || 'Untitled',
+            ancestors: ancestorsOf(task.uuid, below).map((node) => node.title || 'Untitled'),
+        };
     }
 
     function idByPath(path: string): UUID | undefined {
@@ -408,6 +425,7 @@ export const useTasksStore = defineStore('tasks', () => {
         childrenOf,
         parentOf,
         ancestorsOf,
+        rowTitles,
         idByPath,
         parentAt,
         pathUnder,

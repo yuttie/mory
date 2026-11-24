@@ -58,9 +58,24 @@
                 title="Candidate tasks"
                 subtitle="Drag onto a day to plan work"
             >
+                <template #header>
+                    <TaskSearchField
+                        v-model="searched"
+                        class="candidate-search"
+                        label="Search candidates"
+                        v-bind:delay="250"
+                    />
+                </template>
+                <!-- Above the list, not in its header slot: Sortable would make it draggable. -->
+                <div
+                    v-if="terms.length > 0 && shownCandidates.length === 0"
+                    class="text-medium-emphasis pa-2"
+                >
+                    No candidates match.
+                </div>
                 <draggable
-                    class="task-list"
-                    v-bind:model-value="candidateTasks"
+                    class="task-list candidate-list"
+                    v-bind:model-value="shownCandidates"
                     item-key="uuid"
                     v-bind:group="CANDIDATE_GROUP"
                     v-bind:clone="cloneTask"
@@ -83,6 +98,7 @@
                                 v-bind:value="task"
                                 v-bind:to="routeFor(task)"
                                 v-bind:list-root="listRoot"
+                                v-bind:highlight="terms"
                                 v-on:pointerdown="onPointerDown"
                                 v-on:contextmenu="onContextMenu"
                             >
@@ -263,6 +279,7 @@ import { useTasksStore } from '@/stores/tasks';
 import { usePlansStore } from '@/stores/plans';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { statusGround } from '@/status-color';
+import { searchTerms, titlesMatcher } from '@/task-tree-filter';
 
 const props = defineProps<{
     candidates: TaskNode[];
@@ -349,6 +366,23 @@ const ranked = computed(() => props.candidates
         || compareRanks(a.standing.own, b.standing.own)
         || a.task.uuid.localeCompare(b.task.uuid)));
 const candidateTasks = computed(() => ranked.value.map(({ task }) => task));
+// What the candidates are searched for, once typing pauses, as the task tree is. A search draws
+// anew every row it keeps, to mark it: with 240 candidates, all kept, each key took Firefox 68 to
+// 90 ms and Chrome 40 to 54 ms on a production build, which on every key would stall the typing.
+const searched = ref('');
+const terms = computed(() => searchTerms(searched.value));
+// A candidate is found by the titles its row draws, its own and those of the tasks above it, so
+// that a project's name finds the steps standing in for it.
+const shownCandidates = computed(() => {
+    if (terms.value.length === 0) {
+        return candidateTasks.value;
+    }
+    const matches = titlesMatcher(terms.value);
+    return candidateTasks.value.filter((task) => {
+        const { own, ancestors } = tasks.rowTitles(task, props.listRoot);
+        return matches([own, ...ancestors]);
+    });
+});
 const lenders = computed(() => new Map(ranked.value.map(({ task, standing }) => [task.uuid, standing.lender])));
 // A lender's own start is not the candidate's, so only the dates that rank it are shown.
 const LENT_FIELDS: readonly TaskDateField[] = ['due_by', 'deadline'];
@@ -460,6 +494,7 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .day-columns { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 16px; padding: 8px; overflow: auto; }
 .day { flex-shrink: 0; width: 250px; }
 .candidates { width: 290px; }
+.candidate-search { margin-block: 4px; }
 .lent-dates { font-size: 12px; }
 .today { border: 2px solid rgb(var(--v-theme-primary)); border-radius: 4px; }
 /* As tall as its day at least, so a task dropped below the last entry, or onto an empty day,
@@ -468,6 +503,11 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
     min-height: 100%;
     display: flex;
     flex-direction: column;
+}
+/* At least as tall as the column, the list would overflow it by the height of the message above
+   it saying none match. The candidates take no drop (`put: false`), so it needs no such height. */
+.candidate-list {
+    min-height: 0;
 }
 /* The space between two cards is the upper one's entry's, not a gap of the list's: Sortable takes a
    task held over another, or past either end of the list, and one held over the list itself

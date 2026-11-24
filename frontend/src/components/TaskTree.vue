@@ -36,18 +36,11 @@
                 v-bind:class="{ 'text-disabled': !tasks.ownUrgency(item.uuid).actionable }"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
             >
-                <template v-if="highlight !== undefined && highlight.length > 0 && found?.has(item.uuid)">
-                    <template
-                        v-for="(segment, index) of highlightTitle(item.title ?? '', highlight)"
-                        v-bind:key="index"
-                    >
-                        <mark
-                            v-if="segment.match"
-                            class="task-tree-match"
-                        >{{ segment.text }}</mark>
-                        <template v-else>{{ segment.text }}</template>
-                    </template>
-                </template>
+                <HighlightedText
+                    v-if="highlight !== undefined && highlight.length > 0 && found?.has(item.uuid)"
+                    v-bind:text="item.title ?? ''"
+                    v-bind:terms="highlight"
+                />
                 <template v-else>{{ item.title }}</template>
             </span>
         </template>
@@ -98,13 +91,13 @@ import { computed, ref, watch } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
+import HighlightedText from '@/components/HighlightedText.vue';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 const tasks = useTasksStore();
 const taskSettings = useTaskSettingsStore();
 import type { UUID } from '@/api';
 import type { TaskNode, TaskTreeItem } from '@/task-forest';
-import { highlight as highlightTitle } from '@/task-tree-filter';
 import { type TaskTreeRow, foldClosed as fold, isFold, isFoldId, shownForMore, shownToReach } from '@/task-tree-fold';
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
@@ -262,13 +255,3 @@ function onDrop(id: UUID, target: string) {
 
 defineExpose({ reveal });
 </script>
-
-<style scoped lang="scss">
-/* A highlighter's yellow, as the theme's primary is all but black. The text keeps its own colour,
-   which says whether the task can be started yet. */
-.task-tree-match {
-    background-color: rgba(var(--v-theme-warning), 0.4);
-    color: inherit;
-    border-radius: 2px;
-}
-</style>
