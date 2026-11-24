@@ -1,25 +1,37 @@
 <template>
     <EntryTree
-        v-bind:items="items"
+        v-bind:items="rows"
         v-bind:open="open"
         v-bind:active="active"
         item-value="uuid"
-        v-bind:route-for="routeFor"
+        v-bind:route-for="rowRouteFor"
         v-bind:can-drag="movable ? canDrag : undefined"
         v-bind:can-drop="canDrop"
         v-on:update:open="$emit('update:open', $event)"
-        v-on:update:active="$emit('update:active', $event)"
+        v-on:update:active="onActive"
+        v-on:choose="onChoose"
         v-on:drop="onDrop"
     >
         <template v-slot:prepend="{ item }">
+            <v-icon v-if="isFold(item)">
+                {{ item.expanded ? mdiChevronUp : mdiChevronDown }}
+            </v-icon>
             <!-- A folder for the subtasks the task holds, not the ones the row shows, which a
                  search or the statuses shown may leave out. -->
-            <v-icon v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
+            <v-icon
+                v-else
+                v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)"
+            >
                 {{ statusIcon(item.metadata?.task?.status?.kind, tasks.childrenOf(item.uuid).length > 0) }}
             </v-icon>
         </template>
         <template v-slot:title="{ item }">
             <span
+                v-if="isFold(item)"
+                class="text-medium-emphasis"
+            >{{ item.title }}</span>
+            <span
+                v-else
                 v-bind:title="item.title ?? undefined"
                 v-bind:class="{ 'text-disabled': !tasks.ownUrgency(item.uuid).actionable }"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
@@ -40,34 +52,40 @@
             </span>
         </template>
         <template v-slot:append="{ item }">
-            <span v-if="tasks.progress(item.uuid) !== undefined" class="task-progress mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
-            <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
-                 but the browser would still follow the link, reloading the app, unless prevented. -->
-            <v-icon-btn
-                v-if="showEdit"
-                v-bind:icon="mdiPencil"
-                variant="text"
-                title="Edit task"
-                v-on:click.stop.prevent="$emit('edit-task', item.uuid)"
-            />
-            <v-icon-btn
-                v-bind:icon="mdiPlus"
-                v-if="showAddChild"
-                variant="text"
-                class="add-child-btn"
-                title="Add child task"
-                v-on:click.stop.prevent="$emit('add-child-task', item.uuid)"
-            ></v-icon-btn>
+            <!-- A fold stands for tasks and is none: there is nothing of its own to edit or add to. -->
+            <template v-if="!isFold(item)">
+                <span v-if="tasks.progress(item.uuid) !== undefined" class="task-progress mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
+                <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
+                     but the browser would still follow the link, reloading the app, unless prevented. -->
+                <v-icon-btn
+                    v-if="showEdit"
+                    v-bind:icon="mdiPencil"
+                    variant="text"
+                    title="Edit task"
+                    v-on:click.stop.prevent="$emit('edit-task', item.uuid)"
+                />
+                <v-icon-btn
+                    v-bind:icon="mdiPlus"
+                    v-if="showAddChild"
+                    variant="text"
+                    class="add-child-btn"
+                    title="Add child task"
+                    v-on:click.stop.prevent="$emit('add-child-task', item.uuid)"
+                ></v-icon-btn>
+            </template>
         </template>
     </EntryTree>
 </template>
 
 <script lang="ts" setup>
 import {
+    mdiChevronDown,
+    mdiChevronUp,
     mdiPencil,
     mdiPlus,
 } from '@mdi/js';
 
+import { computed, ref, watch } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
@@ -76,13 +94,14 @@ import { useTaskSettingsStore } from '@/stores/taskSettings';
 const tasks = useTasksStore();
 const taskSettings = useTaskSettingsStore();
 import type { UUID } from '@/api';
-import type { TaskTreeItem } from '@/task-forest';
+import type { TaskNode, TaskTreeItem } from '@/task-forest';
 import { highlight as highlightTitle } from '@/task-tree-filter';
+import { type TaskTreeRow, foldClosed as fold, isFold, isFoldId } from '@/task-tree-fold';
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 
 // Props
-defineProps<{
+const props = defineProps<{
     items: TaskTreeItem[];
     open: UUID[];
     active?: UUID;
@@ -93,7 +112,7 @@ defineProps<{
     showEdit?: boolean;
     // Where each row goes, making it a link; see EntryTree. Absent in a tree used to pick a task,
     // whose rows only report being chosen.
-    routeFor?: (item: TaskTreeItem) => RouteLocationRaw;
+    routeFor?: (item: TaskNode) => RouteLocationRaw;
     // Whether a task can be dragged onto another to move it there. Off unless the parent handles
     // `move`, as `showAddChild` is.
     movable?: boolean;
@@ -101,6 +120,9 @@ defineProps<{
     // title stands apart from one shown for what is under it.
     highlight?: string[];
     found?: ReadonlySet<string>;
+    // Whether the closed tasks among each list of siblings are drawn as one row until it is
+    // expanded (see task-tree-fold.ts).
+    foldClosed?: boolean;
 }>();
 
 // Emits
@@ -114,11 +136,79 @@ const emit = defineEmits<{
     (e: 'move', id: UUID, parent: UUID | null): void;
 }>();
 
+// State
+// The folds whose tasks are drawn. Kept while the tree is shown, so a list changed by a save keeps
+// what was expanded in it.
+const expanded = ref<ReadonlySet<string>>(new Set());
+
+// Computed properties
+const folded = computed(() => props.foldClosed ? fold(props.items, expanded.value) : undefined);
+
+const rows = computed<TaskTreeRow[]>(() => folded.value?.rows ?? props.items);
+
+// A fold goes nowhere. Made once, as `canDrag` is.
+const rowRouteFor = computed(() => {
+    const routeFor = props.routeFor;
+    return routeFor === undefined ? undefined : (row: TaskTreeRow) => isFold(row) ? null : routeFor(row);
+});
+
+// Whether the tree is given the task chosen at all, drawn or behind a fold: the status filter or a
+// search may leave it out, and give it back.
+const holdsActive = computed<boolean>(() => props.active !== undefined && holds(props.items, props.active));
+
+// The task chosen is drawn even when it is closed: when it is opened from a list or a link, when it
+// was chosen among what a search found and the search is cleared, and when the status filter gives
+// it back. Only then, though, not when it closes while chosen: expanding then would draw every
+// closed task beside it for one that just left the view, as the status filter takes one away while
+// closed tasks are hidden. Nor after its fold is hidden.
+watch([() => props.active, () => props.foldClosed, holdsActive], ([active]) => {
+    if (active !== undefined) {
+        reveal(active);
+    }
+}, { immediate: true });
+
 // Methods
-// Every row is a task, and any task can move. Declared once, as a function made in the template
-// would be a new prop on every render.
-function canDrag(): boolean {
-    return true;
+// Draws the task `id` if the tree holds it behind a fold, as it holds the items it was last given:
+// what it was folded with is expanded.
+function reveal(id: string) {
+    const fold = folded.value?.foldOf.get(id);
+    if (fold !== undefined && !expanded.value.has(fold)) {
+        expanded.value = new Set([...expanded.value, fold]);
+    }
+}
+
+function holds(items: readonly TaskTreeItem[], id: string): boolean {
+    return items.some((item) => item.uuid === id || holds(item.children ?? [], id));
+}
+
+function toggleFold(id: string) {
+    const next = new Set(expanded.value);
+    if (!next.delete(id)) {
+        next.add(id);
+    }
+    expanded.value = next;
+}
+
+// A tree whose rows are not links reports a row chosen as active, and a fold is never active.
+function onActive(id: UUID | undefined) {
+    if (id !== undefined && isFoldId(id)) {
+        toggleFold(id);
+    }
+    else {
+        emit('update:active', id);
+    }
+}
+
+function onChoose(id: string) {
+    if (isFoldId(id)) {
+        toggleFold(id);
+    }
+}
+
+// Every task can move, and a fold is none. Declared once, as a function made in the template would
+// be a new prop on every render.
+function canDrag(id: string): boolean {
+    return !isFoldId(id);
 }
 
 function canDrop(id: UUID, target: string): boolean {
@@ -131,6 +221,8 @@ function onDrop(id: UUID, target: string) {
         emit('move', id, parent);
     }
 }
+
+defineExpose({ reveal });
 </script>
 
 <style scoped lang="scss">

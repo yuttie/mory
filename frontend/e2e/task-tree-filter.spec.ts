@@ -254,7 +254,9 @@ test('leaves out the tasks of the statuses unticked, and remembers them', async 
     await page.goto('/tasks-next');
     await toggle(page, 'Launch');
     await toggle(page, 'Ship');
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'Water the plants', 'Plan the release party']);
+    await settled(page);
+    await row(page, 'Show 1 closed').click();
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'Hide 1 closed', 'Water the plants', 'Plan the release party']);
 
     await statuses(page).click();
     await status(page, 'Done').click();
@@ -306,7 +308,7 @@ test('shows or hides a group of statuses at once', async ({ context, page }) => 
     await expect(closed.getByRole('checkbox')).toBeChecked();
     await expect(closed.getByRole('checkbox')).not.toHaveAttribute('aria-checked', 'mixed');
     await expect(hiddenCount(page)).toBeHidden();
-    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'Water the plants', 'Plan the release party']);
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Show 1 closed', 'Water the plants', 'Plan the release party']);
 
     // To do is in a group as every status is, so the groups between them hide every task.
     await closed.click();

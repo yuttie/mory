@@ -183,12 +183,14 @@
                     No tasks match.
                 </div>
                 <TaskTree
+                    ref="taskTreeRef"
                     v-bind:items="filteredForest"
                     v-bind:active="activeNodeId"
                     v-bind:route-for="treeRouteFor"
                     v-bind:open="treeOpenNodes"
                     v-bind:highlight="treeTerms"
                     v-bind:found="filteredTree.found"
+                    v-bind:fold-closed="treeTerms.length === 0"
                     show-add-child
                     show-edit
                     movable
@@ -414,6 +416,7 @@ import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
 import type NewTaskDialog from '@/components/NewTaskDialog.vue';
+import type TaskTree from '@/components/TaskTree.vue';
 
 import {
     mdiCalendarMultiselectOutline,
@@ -468,6 +471,7 @@ const emit = defineEmits<{
 const taskEditorRef = ref<any>(null);
 const editorDialogRef = ref<InstanceType<typeof VDialog> | null>(null);
 const newTaskDialogRef = ref<InstanceType<typeof NewTaskDialog> | null>(null);
+const taskTreeRef = ref<InstanceType<typeof TaskTree> | null>(null);
 const openNodes = ref<UUID[]>([]);
 // What the search field holds. Null once cleared, as a clearable field leaves it.
 const treeQuery = ref<string | null>('');
@@ -918,6 +922,15 @@ function openUpTo(id: UUID) {
     }
 }
 
+// Where the task `id` went once moved, rather than leave it to vanish into a closed task or behind
+// the closed tasks folded beside it. The tree is handed the listing that shows the move only when
+// the view is drawn next.
+async function showMoved(id: UUID) {
+    openUpTo(id);
+    await nextTick();
+    taskTreeRef.value?.reveal(id);
+}
+
 // Watchers for opening tree nodes when selected node changes
 watch(selectedNode, (node) => {
     if (node) {
@@ -1081,7 +1094,7 @@ async function onParentChosen(newParentUuid: UUID | null) {
     try {
         await store.move(id, newParentUuid);
         // Where it went, as for a task dropped in the tree, to be seen once the editor closes.
-        openUpTo(id);
+        await showMoved(id);
     } catch (e) {
         console.error('Failed to move task:', e);
         error.value = e instanceof Error ? e.message : 'Failed to move task';
@@ -1095,8 +1108,7 @@ async function onTaskMove(id: UUID, parent: UUID | null) {
     const title = store.node(id)?.title || 'Untitled';
     try {
         await store.move(id, parent);
-        // Where it went, rather than leave it to vanish into a closed task.
-        openUpTo(id);
+        await showMoved(id);
     }
     catch (e) {
         error.value = `Could not move "${title}": ${e instanceof Error ? e.message : String(e)}`;
