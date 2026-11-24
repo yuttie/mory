@@ -98,6 +98,62 @@ test('folds nothing a search finds', async ({ context, page }) => {
     await expect(rows(page)).toHaveText(['Under way', 'Dropped', 'Finished']);
 });
 
+// Twelve closed tasks, the first closed last: more than one click on the fold draws.
+const MANY = Array.from({ length: 12 }, (_, index) => ({
+    path: `.tasks/${uuid(10 + index)}.md`,
+    title: `Closed ${index + 1}`,
+    time: `2026-09-${String(30 - index).padStart(2, '0')}T12:00:00+00:00`,
+}));
+
+const MANY_NOTES = {
+    [`.tasks/${uuid(1)}.md`]: note('Under way', 'in_progress'),
+    ...Object.fromEntries(MANY.map(({ path, title }) => [path, note(title, 'done')])),
+};
+
+const MANY_TIMES = { times: Object.fromEntries(MANY.map(({ path, time }) => [path, time])) };
+
+function titles(count: number): string[] {
+    return MANY.slice(0, count).map(({ title }) => title);
+}
+
+test('draws ten closed tasks more each time, the latest first, and hides them from the row or its button', async ({ context, page }) => {
+    await mockBackend(context, MANY_NOTES, MANY_TIMES);
+    await page.goto('/tasks-next/_/descendants/status');
+    await expect(rows(page)).toHaveText(['Under way', 'Show 10 of 12 closed']);
+
+    await row(page, 'Show 10 of 12 closed').click();
+    await expect(rows(page)).toHaveText(['Under way', ...titles(10), 'Show 2 more of 12 closed']);
+    await row(page, 'Show 2 more of 12 closed').press('Enter');
+    await expect(rows(page)).toHaveText(['Under way', ...titles(12), 'Hide 12 closed']);
+    await row(page, 'Hide 12 closed').click();
+    await expect(rows(page)).toHaveText(['Under way', 'Show 10 of 12 closed']);
+
+    // Some drawn, the row draws more, and its button folds them all. The button shows only on the
+    // row pointed at or focused, as a task's do.
+    await row(page, 'Show 10 of 12 closed').click();
+    const more = row(page, 'Show 2 more of 12 closed');
+    const hide = more.getByRole('button', { name: 'Hide 12 closed' });
+    await more.hover();
+    await hide.click();
+    await expect(rows(page)).toHaveText(['Under way', 'Show 10 of 12 closed']);
+    await row(page, 'Show 10 of 12 closed').press('Enter');
+    await page.mouse.move(0, 0);
+    await more.focus();
+    await hide.press('Enter');
+    await expect(rows(page)).toHaveText(['Under way', 'Show 10 of 12 closed']);
+    // On the row, as the button went with what it hid.
+    await expect(row(page, 'Show 10 of 12 closed')).toBeFocused();
+    await expect(page).toHaveURL(/\/tasks-next\/_\/descendants\/status$/);
+});
+
+test('draws as many of the closed tasks as reach the one chosen', async ({ context, page }) => {
+    await mockBackend(context, MANY_NOTES, MANY_TIMES);
+    await page.goto(`/tasks-next/${uuid(12)}/descendants/status`);
+    await expect(rows(page)).toHaveText(['Under way', ...titles(10), 'Show 2 more of 12 closed']);
+    await page.goto(`/tasks-next/${uuid(21)}/descendants/status`);
+    await expect(rows(page)).toHaveText(['Under way', ...titles(12), 'Hide 12 closed']);
+});
+
 // Until a branch just opened has grown, Playwright scrolls it to reach a row in it, and the row
 // moves: see task-tree-move.spec.ts.
 async function settled(page: Page): Promise<void> {

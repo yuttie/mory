@@ -14,7 +14,7 @@
     >
         <template v-slot:prepend="{ item }">
             <v-icon v-if="isFold(item)">
-                {{ item.expanded ? mdiChevronUp : mdiChevronDown }}
+                {{ item.shown < item.count ? mdiChevronDown : mdiChevronUp }}
             </v-icon>
             <!-- A folder for the subtasks the task holds, not the ones the row shows, which a
                  search or the statuses shown may leave out. -->
@@ -73,6 +73,15 @@
                     v-on:click.stop.prevent="$emit('add-child-task', item.uuid)"
                 ></v-icon-btn>
             </template>
+            <!-- With some of its tasks drawn, a click on the row draws more, so folding them all
+                 again needs a button of its own. -->
+            <v-icon-btn
+                v-else-if="item.shown > 0 && item.shown < item.count"
+                v-bind:icon="mdiChevronUp"
+                variant="text"
+                v-bind:title="`Hide ${item.count} closed`"
+                v-on:click.stop="onHide(item.uuid, $event)"
+            />
         </template>
     </EntryTree>
 </template>
@@ -96,7 +105,7 @@ const taskSettings = useTaskSettingsStore();
 import type { UUID } from '@/api';
 import type { TaskNode, TaskTreeItem } from '@/task-forest';
 import { highlight as highlightTitle } from '@/task-tree-filter';
-import { type TaskTreeRow, foldClosed as fold, isFold, isFoldId } from '@/task-tree-fold';
+import { type TaskTreeRow, foldClosed as fold, isFold, isFoldId, shownForMore, shownToReach } from '@/task-tree-fold';
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 
@@ -121,7 +130,7 @@ const props = defineProps<{
     highlight?: string[];
     found?: ReadonlySet<string>;
     // Whether the closed tasks among each list of siblings are drawn as one row until it is
-    // expanded (see task-tree-fold.ts).
+    // asked for them (see task-tree-fold.ts).
     foldClosed?: boolean;
 }>();
 
@@ -137,12 +146,12 @@ const emit = defineEmits<{
 }>();
 
 // State
-// The folds whose tasks are drawn. Kept while the tree is shown, so a list changed by a save keeps
-// what was expanded in it.
-const expanded = ref<ReadonlySet<string>>(new Set());
+// How many of its tasks each fold draws, by its id. Kept while the tree is shown, so a list changed
+// by a save keeps what was drawn of it.
+const shown = ref<ReadonlyMap<string, number>>(new Map());
 
 // Computed properties
-const folded = computed(() => props.foldClosed ? fold(props.items, expanded.value) : undefined);
+const folded = computed(() => props.foldClosed ? fold(props.items, shown.value) : undefined);
 
 const rows = computed<TaskTreeRow[]>(() => folded.value?.rows ?? props.items);
 
@@ -158,9 +167,8 @@ const holdsActive = computed<boolean>(() => props.active !== undefined && holds(
 
 // The task chosen is drawn even when it is closed: when it is opened from a list or a link, when it
 // was chosen among what a search found and the search is cleared, and when the status filter gives
-// it back. Only then, though, not when it closes while chosen: expanding then would draw every
-// closed task beside it for one that just left the view, as the status filter takes one away while
-// closed tasks are hidden. Nor after its fold is hidden.
+// it back. Only then, though, not when it closes while chosen, as the status filter takes one away
+// while closed tasks are hidden, nor after its fold is hidden.
 watch([() => props.active, () => props.foldClosed, holdsActive], ([active]) => {
     if (active !== undefined) {
         reveal(active);
@@ -169,11 +177,12 @@ watch([() => props.active, () => props.foldClosed, holdsActive], ([active]) => {
 
 // Methods
 // Draws the task `id` if the tree holds it behind a fold, as it holds the items it was last given:
-// what it was folded with is expanded.
+// the fold draws as many more as reach it.
 function reveal(id: string) {
-    const fold = folded.value?.foldOf.get(id);
-    if (fold !== undefined && !expanded.value.has(fold)) {
-        expanded.value = new Set([...expanded.value, fold]);
+    const place = folded.value?.foldOf.get(id);
+    const row = place === undefined ? undefined : folded.value?.folds.get(place.fold);
+    if (place !== undefined && row !== undefined && row.shown <= place.index) {
+        showFold(place.fold, shownToReach(row, place.index));
     }
 }
 
@@ -181,12 +190,38 @@ function holds(items: readonly TaskTreeItem[], id: string): boolean {
     return items.some((item) => item.uuid === id || holds(item.children ?? [], id));
 }
 
+function showFold(id: string, count: number) {
+    shown.value = new Map([...shown.value, [id, count]]);
+}
+
+function hideFold(id: string) {
+    const next = new Map(shown.value);
+    next.delete(id);
+    shown.value = next;
+}
+
+// The next of its tasks, or once all of them are drawn, none.
 function toggleFold(id: string) {
-    const next = new Set(expanded.value);
-    if (!next.delete(id)) {
-        next.add(id);
+    const row = folded.value?.folds.get(id);
+    if (row === undefined) {
+        return;
     }
-    expanded.value = next;
+    if (row.shown < row.count) {
+        showFold(id, shownForMore(row));
+    }
+    else {
+        hideFold(id);
+    }
+}
+
+// The button goes with the tasks it hides, and the focus it held would go to the page, so its row
+// takes the focus first.
+function onHide(id: string, event: MouseEvent) {
+    const row = (event.target as Element).closest<HTMLElement>('[role="treeitem"]');
+    if (row !== null && row.contains(document.activeElement)) {
+        row.focus();
+    }
+    hideFold(id);
 }
 
 // A tree whose rows are not links reports a row chosen as active, and a fold is never active.
