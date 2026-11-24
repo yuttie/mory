@@ -43,6 +43,16 @@ function rows(dialog: Locator): Locator {
     return dialog.getByRole('treeitem').locator('.v-list-item-title');
 }
 
+// Until a branch has closed, the rows in it are still drawn, and a branch closing as others open
+// can pass for one left open. Settled once no transition is under way, which Vue marks from its
+// start, and the tree's own animations are over, as `settled` in task-tree-filter.spec.ts tells.
+async function settled(dialog: Locator): Promise<void> {
+    await expect.poll(() => dialog.locator('.entry-tree').evaluate((element) => (
+        element.querySelector('[class*="enter-active"], [class*="leave-active"]') === null
+        && element.getAnimations({ subtree: true }).length === 0
+    )), { intervals: [50] }).toBe(true);
+}
+
 test('folds the closed tasks, and draws them when asked, choosing none of them', async ({ context, page }) => {
     await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
     const dialog = await openPicker(page, MOVED);
@@ -63,4 +73,119 @@ test('draws the closed parent the task has', async ({ context, page }) => {
     const dialog = await openPicker(page, MOVED);
     await expect(dialog.locator('.v-list-item--active')).toContainText('Finished');
     await expect(rows(dialog)).toHaveText(['Project', 'Draft', 'Show 2 closed', 'Finished', 'Hide 1 closed']);
+});
+
+// A row of the open status menu, by its title alone, as task-tree-filter.spec.ts finds one.
+function status(page: Page, name: string): Locator {
+    return page.locator('.v-menu.v-overlay--active .v-list-item').filter({ has: page.getByText(name, { exact: true }) });
+}
+
+test('finds a parent by its title, closed or not, and starts each time without the search', async ({ context, page }) => {
+    await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
+    let dialog = await openPicker(page, MOVED);
+    await dialog.getByRole('textbox', { name: 'Search tasks' }).fill('step');
+    await expect(rows(dialog)).toHaveText(['Project', 'Dropped step', 'Old step']);
+    await expect(dialog.locator('mark')).toHaveText(['step', 'step']);
+    await dialog.getByRole('treeitem', { name: 'Old step' }).click();
+    await expect(dialog.locator('.v-list-item--active')).toContainText('Old step');
+
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    dialog = await openPicker(page, MOVED);
+    await expect(dialog.getByRole('textbox', { name: 'Search tasks' })).toHaveValue('');
+    await expect(rows(dialog)).toHaveText(['Project', 'Draft', 'Show 2 closed', 'Show 1 closed']);
+});
+
+// A search opens every branch it keeps, and the tree it gives back opens only the roots: the row
+// chosen from a branch it opened stays drawn once it is cleared, or the button would move the task
+// under a parent nowhere to be seen.
+test('keeps the parent found by a search drawn once the search is cleared', async ({ context, page }) => {
+    await mockBackend(context, {
+        ...notes(`.tasks/${MOVED}.md`),
+        [`.tasks/${PROJECT}/${uuid(2)}/${uuid(7)}.md`]: note('Outline', 'todo'),
+    }, TIMES);
+    const dialog = await openPicker(page, MOVED);
+    await expect(rows(dialog)).toHaveText(['Project', 'Draft', 'Show 2 closed', 'Show 1 closed']);
+    const search = dialog.getByRole('textbox', { name: 'Search tasks' });
+    await search.fill('outline');
+    await expect(rows(dialog)).toHaveText(['Project', 'Draft', 'Outline']);
+    await dialog.getByRole('treeitem', { name: 'Outline' }).click();
+
+    await search.fill('');
+    await expect(dialog.locator('mark')).toHaveCount(0);
+    await settled(dialog);
+    await expect(rows(dialog)).toHaveText(['Project', 'Draft', 'Outline', 'Show 2 closed', 'Show 1 closed']);
+    await expect(dialog.locator('.v-list-item--active')).toContainText('Outline');
+});
+
+test('leaves out the statuses it is told to, apart from the task tree', async ({ context, page }) => {
+    await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
+    const dialog = await openPicker(page, MOVED);
+    await dialog.getByRole('button', { name: 'Choose which statuses are shown' }).click();
+    await status(page, 'Closed').click();
+    await expect(rows(dialog)).toHaveText(['Project', 'Draft']);
+    await status(page, 'To do').click();
+    await status(page, 'In progress').click();
+    await expect(rows(dialog)).toHaveCount(0);
+    await expect(dialog).toContainText('No tasks match.');
+    // The root is no task, and is still there to choose.
+    await expect(dialog.getByText('Root (No Parent)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    // Each is read where it is kept as the page loads: until then, the tree would hold what it
+    // read before, kept apart or not.
+    await page.reload();
+    const tree = page.locator('.task-tree-container');
+    await expect(tree.getByRole('treeitem').locator('.v-list-item-title')).toHaveText(['Project', 'Moved', 'Show 1 closed']);
+    await expect(tree.getByRole('button', { name: 'Choose which statuses are shown' })).toHaveAccessibleName('Choose which statuses are shown');
+    await page.getByRole('button', { name: 'Change Parent' }).click();
+    await expect(dialog).toContainText('No tasks match.');
+});
+
+// The editor's picker stays in the page while a new task's comes and goes, and each starts from
+// the statuses the last one left, whichever that was.
+test('leaves out what the last picker left out', async ({ context, page }) => {
+    await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
+    let dialog = await openPicker(page, MOVED);
+    await dialog.getByRole('button', { name: 'Choose which statuses are shown' }).click();
+    await status(page, 'Closed').click();
+    await page.keyboard.press('Escape');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    const editor = page.getByRole('dialog').filter({ has: page.locator('.task-editor-next') });
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(editor).toBeHidden();
+
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await editor.getByRole('button', { name: 'Choose Parent' }).click();
+    const chooser = page.getByRole('dialog').filter({ hasText: 'Select a parent for the new task' });
+    await expect(rows(chooser)).toHaveText(['Project', 'Draft', 'Moved']);
+    await chooser.getByRole('button', { name: /^Choose which statuses are shown/ }).click();
+    await status(page, 'Show all').click();
+    await expect(rows(chooser)).toHaveText(['Project', 'Draft', 'Show 2 closed', 'Moved', 'Show 1 closed']);
+    await page.keyboard.press('Escape');
+    await chooser.getByRole('button', { name: 'Cancel' }).click();
+    await expect(chooser).toBeHidden();
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(editor).toBeHidden();
+
+    await page.getByRole('link', { name: 'Edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Change Parent' }).click();
+    dialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) });
+    await expect(rows(dialog)).toHaveText(['Project', 'Draft', 'Show 2 closed', 'Show 1 closed']);
+    await expect(dialog.getByRole('button', { name: /^Choose which statuses are shown/ })).toHaveAccessibleName('Choose which statuses are shown');
+});
+
+// The tree is drawn at one height, but a phone's window has no room for it with the rest: it gives
+// up what it must, rather than the buttons going off the bottom of a dialog that does not scroll.
+test('keeps its buttons in a window too short for the whole tree', async ({ context, page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await mockBackend(context, notes(`.tasks/${MOVED}.md`), TIMES);
+    const dialog = await openPicker(page, MOVED);
+    // Where it settles, as it scales in from a size that fits.
+    await expect.poll(() => dialog.locator('.v-overlay__content').evaluate((element) => element.getAnimations().length)).toBe(0);
+    await expect(dialog.getByRole('button', { name: 'Move Here' })).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole('treeitem', { name: 'Project' })).toBeInViewport({ ratio: 1 });
 });
