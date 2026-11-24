@@ -240,7 +240,7 @@ const placedUnder = computed<UUID | null>(() => {
 
 const parentTitle = computed<string>(() => {
     if (placedUnder.value === null) {
-        return 'Top level';
+        return 'Root';
     }
     return tasks.node(placedUnder.value)?.title || 'Untitled';
 });
