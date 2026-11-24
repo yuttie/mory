@@ -79,6 +79,21 @@ export function titleMatches(title: string | null, terms: readonly string[]): bo
     return matcher(terms)(title);
 }
 
+// Each term in one title or another, as a row naming its task and the tasks above it is read
+// whole: "report budget" finds the step "Budget" of the project "Report". A term is never found
+// across two titles, as the row draws them apart.
+export function titlesMatcher(terms: readonly string[]): (titles: readonly (string | null)[]) => boolean {
+    const patterns = terms.map((term) => termPattern(term, ''));
+    return (titles) => {
+        const texts = titles.map((title) => (title ?? '').normalize('NFC'));
+        return patterns.every((pattern) => texts.some((text) => pattern.test(text)));
+    };
+}
+
+export function titlesMatch(titles: readonly (string | null)[], terms: readonly string[]): boolean {
+    return titlesMatcher(terms)(titles);
+}
+
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 // The title, composed, cut where the terms start and end, every occurrence of each marked, overlaps

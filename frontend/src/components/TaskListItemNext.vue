@@ -18,14 +18,31 @@
             <span
                 class="title-text"
                 v-bind:class="{ strikethrough: canceled }"
-            >{{ titles.own }}</span>
+            >
+                <HighlightedText
+                    v-bind:text="titles.own"
+                    v-bind:terms="highlight"
+                />
+            </span>
         </div>
+        <!-- Each title marked apart, as a term is found in one title or another and never across
+             the separator between two. -->
         <div
             v-if="titles.ancestors.length > 0"
             class="ancestors"
         >
-            <v-icon>{{ mdiFileTreeOutline }}</v-icon>
-            {{ titles.ancestors.join(' › ') }}
+            <v-icon>{{ mdiFileTreeOutline }}</v-icon> <template
+                v-for="(title, index) of titles.ancestors"
+                v-bind:key="index"
+            >
+                <template v-if="index > 0">
+                    {{ ' › ' }}
+                </template>
+                <HighlightedText
+                    v-bind:text="title"
+                    v-bind:terms="highlight"
+                />
+            </template>
         </div>
         <div
             v-if="tags.length > 0"
@@ -74,6 +91,7 @@ import { statusColor, statusGround } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 import { tagsOf } from '@/tags';
 
+import HighlightedText from '@/components/HighlightedText.vue';
 import TaskDateCues from '@/components/TaskDateCues.vue';
 
 // Props
@@ -89,6 +107,9 @@ const props = defineProps<{
     // dropped in another column is drawn there before its note is written, and drawn as its new
     // status there.
     status?: StatusKind;
+    // The terms a search of the list found the task by, marked in its title and the titles above
+    // it, as the list matches them against both.
+    highlight?: readonly string[];
 }>();
 
 // Stores

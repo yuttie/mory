@@ -156,6 +156,96 @@ test('leaves the task the list is under, and those above it, out of the ranking'
     await expect(page.locator('.planning-view .lent-dates')).toHaveCount(0);
 });
 
+// A step is found by its project's name too, as its row names the project, and the one found
+// is planned by the task it is rather than by where it stood in the whole list.
+test('finds a candidate by its title or the titles above it, and plans the one found', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, {
+        [`.tasks/${uuid(1)}.md`]: rated('Report', 'high', '    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(1)}/${uuid(2)}.md`]: unrated('Budget'),
+        [`.tasks/${uuid(1)}/${uuid(3)}.md`]: unrated('Outline'),
+        [`.tasks/${uuid(4)}.md`]: rated('Budget review', 'low'),
+        [`.tasks/${uuid(5)}.md`]: rated('会議の準備', 'low'),
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    const titles = planner.locator('.candidates .candidate .title-text');
+    await expect(titles).toHaveText(['Budget', 'Outline', 'Budget review', '会議の準備']);
+    const search = planner.getByRole('textbox', { name: 'Search candidates' });
+    await search.fill('report');
+    await expect(titles).toHaveText(['Budget', 'Outline']);
+    await expect(planner.locator('.candidates mark')).toHaveText(['Report', 'Report']);
+    // A term in its own title, and one in the title above it, each marked where it is found.
+    await search.fill('BUDGET  report');
+    await expect(titles).toHaveText(['Budget']);
+    await expect(planner.locator('.candidates mark')).toHaveText(['Budget', 'Report']);
+    await search.fill('会議');
+    await expect(titles).toHaveText(['会議の準備']);
+    await search.fill('nothing');
+    await expect(titles).toHaveCount(0);
+    await expect(planner.locator('.candidates')).toContainText('No candidates match.');
+
+    await search.fill('review');
+    const candidate = planner.locator('.candidate').filter({ hasText: 'Budget review' });
+    await candidate.click({ trial: true });
+    const box = await candidate.boundingBox();
+    const target = await planner.locator('.day.today .entries').boundingBox();
+    if (!box || !target) {
+        throw new Error('The candidate or the day is not drawn');
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width, box.y + box.height, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(target.x + 100, target.y + 60, { steps: 20 });
+    await page.mouse.up();
+    await expect(planner.locator('.day.today .planned-entry')).toContainText('Budget review');
+    await expect.poll(() => {
+        const write = repository.writes.filter((write) => write.path === '.mory/plans/2026-10.yaml').at(-1);
+        return write ? YAML.parse(write.content)['2026-10-04'] : undefined;
+    }).toEqual([{ task: uuid(4), origin: 'planned' }]);
+
+    await planner.getByRole('button', { name: 'Clear Search candidates' }).click();
+    await expect(titles).toHaveText(['Budget', 'Outline', 'Budget review', '会議の準備']);
+});
+
+// Under the list's root, a row leaves the root out of the titles it draws, and so the search out of
+// those it matches: every candidate would be found by it.
+test('finds no candidate by the title of the task the list is under', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        [`.tasks/${uuid(1)}.md`]: rated('Report', 'high'),
+        [`.tasks/${uuid(1)}/${uuid(2)}.md`]: unrated('Budget'),
+        [`.tasks/${uuid(1)}/${uuid(3)}.md`]: unrated('Outline'),
+    });
+    await page.goto(`/tasks-next/${uuid(1)}/descendants/schedule`);
+    const planner = page.locator('.planning-view');
+    const titles = planner.locator('.candidates .candidate .title-text');
+    await expect(titles).toHaveText(['Budget', 'Outline']);
+    await expect(planner.locator('.candidates .ancestors')).toHaveCount(0);
+    const search = planner.getByRole('textbox', { name: 'Search candidates' });
+    await search.fill('report');
+    await expect(titles).toHaveCount(0);
+    await expect(planner.locator('.candidates')).toContainText('No candidates match.');
+    await search.fill('budget');
+    await expect(titles).toHaveText(['Budget']);
+});
+
+// The column stays as tall as the view leaves it, and so does the list of a day beside it.
+test('keeps the column of candidates in its place when none match', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        [`.tasks/${uuid(1)}.md`]: rated('Budget', 'high'),
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    await expect(planner.locator('.candidates .candidate')).toHaveCount(1);
+    await planner.getByRole('textbox', { name: 'Search candidates' }).fill('nothing');
+    await expect(planner.locator('.candidates')).toContainText('No candidates match.');
+    const body = planner.locator('.candidates .task-group-body');
+    await expect.poll(() => body.evaluate((element) => element.scrollHeight - element.clientHeight)).toBe(0);
+});
+
 test('plans by dragging, records effort and interruptions, collects history and completes the note', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
     const repository = await mockBackend(context, {

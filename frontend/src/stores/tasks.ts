@@ -105,7 +105,8 @@ export const useTasksStore = defineStore('tasks', () => {
     }
 
     // The titles a task's row in a list draws: its own, and those of the tasks above it under
-    // `below`, as `ancestorsOf` takes them, a task without one drawn as Untitled.
+    // `below`, as `ancestorsOf` takes them, a task without one drawn as Untitled. A search of the
+    // list matches these, so that what it finds a row by is drawn on the row.
     function rowTitles(task: TaskNode, below?: string): RowTitles {
         return {
             own: task.title || 'Untitled',
