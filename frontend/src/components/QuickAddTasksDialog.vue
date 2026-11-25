@@ -52,13 +52,20 @@
                             v-on:mousedown.prevent
                             v-on:update:model-value="previewOnFirstTask = false"
                         >
+                            <!-- The count is named in words, as the badge would otherwise add only
+                                 "Badge" to the tab's name. It is not announced as it changes: the
+                                 editor closes a bracket as it is opened, so each field half typed in
+                                 it is a problem until it is whole, and the count would be read out
+                                 over the typing again and again. -->
                             <v-tab value="preview">
                                 Preview
                                 <v-badge
                                     v-if="outline.problems.length > 0"
                                     color="error"
                                     inline
+                                    aria-live="off"
                                     v-bind:content="outline.problems.length"
+                                    v-bind:label="problemsText"
                                 />
                             </v-tab>
                             <v-tab value="syntax">
@@ -154,7 +161,7 @@
                     v-if="pending === null && outline.problems.length > 0"
                     class="text-error text-body-2 ms-2"
                 >
-                    {{ outline.problems.length === 1 ? '1 problem' : `${outline.problems.length} problems` }} to fix
+                    {{ problemsText }} to fix
                 </span>
                 <v-spacer />
                 <v-btn
@@ -332,6 +339,11 @@ function chipsOf(task: OutlineTask): string[] {
         ...tags.map((tag) => `#${tag}`),
     ];
 }
+
+const problemsText = computed<string>(() => {
+    const count = outline.value.problems.length;
+    return count === 1 ? '1 problem' : `${count} problems`;
+});
 
 const locked = computed(() => saving.value || pending.value !== null);
 
