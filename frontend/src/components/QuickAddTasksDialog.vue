@@ -38,10 +38,59 @@
                         v-bind:readonly="locked"
                         v-on:change="text = $event"
                     />
-                    <div class="preview">
+                    <!-- The syntax and the tasks as they will be added take turns in one pane, so the
+                         syntax can still be looked up once the outline holds a task. Both stay in the
+                         page, so a long outline's preview keeps where it was scrolled to. -->
+                    <div class="side">
+                        <!-- The focus stays in the outline, so what is typed after a look at the
+                             syntax still goes there, and a phone's keyboard stays up. A press on a
+                             tab would take it, so it is kept from moving: the click still lands, and
+                             the keyboard still reaches the tabs. -->
+                        <v-tabs
+                            v-model="sideTab"
+                            density="compact"
+                            color="primary"
+                            aria-label="Preview and syntax"
+                            v-on:mousedown.prevent
+                            v-on:update:model-value="previewOnFirstTask = false"
+                        >
+                            <!-- The count is named in words, as the badge would otherwise add only
+                                 "Badge" to the tab's name. It is not announced as it changes: the
+                                 editor closes a bracket as it is opened, so each field half typed in
+                                 it is a problem until it is whole, and the count would be read out
+                                 over the typing again and again. While there is none it is hidden
+                                 rather than taken away, so the tabs keep their places as it comes and
+                                 goes. -->
+                            <v-tab
+                                v-bind:id="`${sideId}-tab-preview`"
+                                value="preview"
+                                v-bind:aria-controls="`${sideId}-panel-preview`"
+                            >
+                                Preview
+                                <v-badge
+                                    v-bind:class="{ 'no-problems': outline.problems.length === 0 }"
+                                    color="error"
+                                    inline
+                                    aria-live="off"
+                                    v-bind:content="outline.problems.length"
+                                    v-bind:label="problemsText"
+                                />
+                            </v-tab>
+                            <v-tab
+                                v-bind:id="`${sideId}-tab-syntax`"
+                                value="syntax"
+                                v-bind:aria-controls="`${sideId}-panel-syntax`"
+                            >
+                                Syntax
+                            </v-tab>
+                        </v-tabs>
                         <div
-                            v-if="rows.length === 0"
-                            class="text-medium-emphasis"
+                            v-show="sideTab === 'syntax'"
+                            v-bind:id="`${sideId}-panel-syntax`"
+                            class="side-pane text-medium-emphasis"
+                            role="tabpanel"
+                            v-bind:aria-labelledby="`${sideId}-tab-syntax`"
+                            tabindex="0"
                         >
                             <p class="mb-2">
                                 One task per line, nested by indentation, its fields in brackets at the end:
@@ -62,43 +111,58 @@
                                 </tbody>
                             </v-table>
                         </div>
-                        <!-- A problem is told under its task rather than in an alert of its own, which
-                             came and went with every half-typed field and moved the dialog with it. -->
                         <div
-                            v-for="{ task, depth, key } of rows"
-                            v-bind:key="key"
-                            class="row"
-                            v-bind:class="{ 'text-error': problemsByLine.has(task.line) }"
-                            v-bind:style="{ paddingLeft: `${depth * 20}px` }"
+                            v-show="sideTab === 'preview'"
+                            v-bind:id="`${sideId}-panel-preview`"
+                            class="side-pane"
+                            role="tabpanel"
+                            v-bind:aria-labelledby="`${sideId}-tab-preview`"
+                            tabindex="0"
                         >
-                            <v-icon
-                                size="small"
-                                v-bind:color="statusColor(task.fields.status, taskSettings.resolvedStatusColors)"
+                            <p
+                                v-if="rows.length === 0"
+                                class="text-medium-emphasis"
                             >
-                                {{ statusIcon(task.fields.status, task.children.length > 0) }}
-                            </v-icon>
-                            <span class="title">{{ task.title || 'Untitled' }}</span>
-                            <v-chip
-                                v-for="chip of chipsOf(task)"
-                                v-bind:key="chip"
-                                size="x-small"
-                                label
-                            >
-                                {{ chip }}
-                            </v-chip>
-                            <v-icon
-                                v-if="task.note !== ''"
-                                size="small"
-                                v-bind:title="task.note"
-                            >
-                                {{ mdiNoteTextOutline }}
-                            </v-icon>
+                                Tasks typed in the outline are shown here as they will be added.
+                            </p>
+                            <!-- A problem is told under its task rather than in an alert of its own, which
+                                 came and went with every half-typed field and moved the dialog with it. -->
                             <div
-                                v-for="(message, index) of problemsByLine.get(task.line)"
-                                v-bind:key="index"
-                                class="problem text-body-2"
+                                v-for="{ task, depth, key } of rows"
+                                v-bind:key="key"
+                                class="row"
+                                v-bind:class="{ 'text-error': problemsByLine.has(task.line) }"
+                                v-bind:style="{ paddingLeft: `${depth * 20}px` }"
                             >
-                                Line {{ task.line }}: {{ message }}
+                                <v-icon
+                                    size="small"
+                                    v-bind:color="statusColor(task.fields.status, taskSettings.resolvedStatusColors)"
+                                >
+                                    {{ statusIcon(task.fields.status, task.children.length > 0) }}
+                                </v-icon>
+                                <span class="title">{{ task.title || 'Untitled' }}</span>
+                                <v-chip
+                                    v-for="chip of chipsOf(task)"
+                                    v-bind:key="chip"
+                                    size="x-small"
+                                    label
+                                >
+                                    {{ chip }}
+                                </v-chip>
+                                <v-icon
+                                    v-if="task.note !== ''"
+                                    size="small"
+                                    v-bind:title="task.note"
+                                >
+                                    {{ mdiNoteTextOutline }}
+                                </v-icon>
+                                <div
+                                    v-for="(message, index) of problemsByLine.get(task.line)"
+                                    v-bind:key="index"
+                                    class="problem text-body-2"
+                                >
+                                    Line {{ task.line }}: {{ message }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -117,7 +181,7 @@
                     v-if="pending === null && outline.problems.length > 0"
                     class="text-error text-body-2 ms-2"
                 >
-                    {{ outline.problems.length === 1 ? '1 problem' : `${outline.problems.length} problems` }} to fix
+                    {{ problemsText }} to fix
                 </span>
                 <v-spacer />
                 <v-btn
@@ -167,7 +231,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useId, watch } from 'vue';
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
 import { mdiFileTreeOutline, mdiNoteTextOutline } from '@mdi/js';
 
@@ -233,6 +297,12 @@ const createdRoute = ref<RouteLocationRaw | null>(null);
 
 const editorRef = ref<InstanceType<typeof Editor> | null>(null);
 
+const sideId = useId();
+// Opens on the syntax, which is all there is to see before the first task is typed.
+const sideTab = ref<'syntax' | 'preview'>('syntax');
+// Whether the first task typed is still to bring up the preview.
+const previewOnFirstTask = ref(true);
+
 // The parent chosen, while the listing still holds it.
 const placedUnder = computed<UUID | null>(() => {
     return parent.value !== null && tasks.node(parent.value) !== undefined ? parent.value : null;
@@ -267,6 +337,16 @@ const rows = computed(() => {
     return result;
 });
 
+// The first task typed in an opening brings up its preview, unless a tab was picked before it.
+// After that the pane stays on whichever tab was chosen, even when the outline is emptied and
+// typed again.
+watch(() => rows.value.length > 0, (hasRows) => {
+    if (hasRows && previewOnFirstTask.value) {
+        previewOnFirstTask.value = false;
+        sideTab.value = 'preview';
+    }
+});
+
 // What the preview says of a task besides its title, as it will be written.
 function chipsOf(task: OutlineTask): string[] {
     const { status, importance, lead_time, available_from, due_by, deadline, tags } = task.fields;
@@ -280,6 +360,11 @@ function chipsOf(task: OutlineTask): string[] {
         ...tags.map((tag) => `#${tag}`),
     ];
 }
+
+const problemsText = computed<string>(() => {
+    const count = outline.value.problems.length;
+    return count === 1 ? '1 problem' : `${count} problems`;
+});
 
 const locked = computed(() => saving.value || pending.value !== null);
 
@@ -301,6 +386,8 @@ const addLabel = computed(() => {
 watch(isOpen, (open) => {
     if (open) {
         text.value = '';
+        sideTab.value = 'syntax';
+        previewOnFirstTask.value = true;
         parent.value = props.initialParent ?? null;
         errorText.value = '';
         pending.value = null;
@@ -405,9 +492,34 @@ function openCreated(): void {
     border-radius: 4px;
 }
 
-.preview {
+// A grid item is as wide as its content at least, so a long title or tag that does not break
+// would widen the pane and squeeze the editor, or run the dialog off a phone.
+.side {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+// A line parts the tabs from the pane under them. A compact tab is shorter than its bar, and as
+// tall as the bar its underline sits on that line rather than above it.
+.v-tabs {
+    box-shadow: inset 0 -1px 0 rgba(var(--v-border-color), var(--v-border-opacity));
+
+    :deep(.v-tab.v-btn) {
+        height: var(--v-tabs-height);
+    }
+}
+
+.no-problems {
+    visibility: hidden;
+}
+
+.side-pane {
+    flex: 1 1 0;
     min-height: 0;
     overflow: auto;
+    padding-top: 8px;
 }
 
 .row {
