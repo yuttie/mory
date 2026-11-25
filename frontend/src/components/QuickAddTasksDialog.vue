@@ -56,11 +56,13 @@
                                  "Badge" to the tab's name. It is not announced as it changes: the
                                  editor closes a bracket as it is opened, so each field half typed in
                                  it is a problem until it is whole, and the count would be read out
-                                 over the typing again and again. -->
+                                 over the typing again and again. While there is none it is hidden
+                                 rather than taken away, so the tabs keep their places as it comes and
+                                 goes. -->
                             <v-tab value="preview">
                                 Preview
                                 <v-badge
-                                    v-if="outline.problems.length > 0"
+                                    v-bind:class="{ 'no-problems': outline.problems.length === 0 }"
                                     color="error"
                                     inline
                                     aria-live="off"
@@ -482,6 +484,10 @@ function openCreated(): void {
 
 .v-tabs {
     flex: 0 0 auto;
+}
+
+.no-problems {
+    visibility: hidden;
 }
 
 .side-pane {
