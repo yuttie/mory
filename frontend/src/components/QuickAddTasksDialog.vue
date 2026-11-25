@@ -123,7 +123,7 @@
                                 v-if="rows.length === 0"
                                 class="text-medium-emphasis"
                             >
-                                The tasks typed on the left are shown here as they will be added.
+                                Tasks typed in the outline are shown here as they will be added.
                             </p>
                             <!-- A problem is told under its task rather than in an alert of its own, which
                                  came and went with every half-typed field and moved the dialog with it. -->
