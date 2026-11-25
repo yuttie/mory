@@ -501,8 +501,14 @@ function openCreated(): void {
     min-height: 0;
 }
 
+// A line parts the tabs from the pane under them. A compact tab is shorter than its bar, and as
+// tall as the bar its underline sits on that line rather than above it.
 .v-tabs {
-    flex: 0 0 auto;
+    box-shadow: inset 0 -1px 0 rgba(var(--v-border-color), var(--v-border-opacity));
+
+    :deep(.v-tab.v-btn) {
+        height: var(--v-tabs-height);
+    }
 }
 
 .no-problems {
