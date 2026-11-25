@@ -39,7 +39,8 @@
                         v-on:change="text = $event"
                     />
                     <!-- The syntax and the tasks as they will be added take turns in one pane, so the
-                         syntax can still be looked up once the outline holds a task. -->
+                         syntax can still be looked up once the outline holds a task. Both stay in the
+                         page, so a long outline's preview keeps where it was scrolled to. -->
                     <div class="side">
                         <!-- The focus stays in the outline, so what is typed after a look at the
                              syntax still goes there, and a phone's keyboard stays up. A press on a
@@ -75,7 +76,7 @@
                             </v-tab>
                         </v-tabs>
                         <div
-                            v-if="sideTab === 'syntax'"
+                            v-show="sideTab === 'syntax'"
                             class="side-pane text-medium-emphasis"
                         >
                             <p class="mb-2">
@@ -98,7 +99,7 @@
                             </v-table>
                         </div>
                         <div
-                            v-else
+                            v-show="sideTab === 'preview'"
                             class="side-pane"
                         >
                             <p
