@@ -41,10 +41,15 @@
                     <!-- The syntax and the tasks as they will be added take turns in one pane, so the
                          syntax can still be looked up once the outline holds a task. -->
                     <div class="side">
+                        <!-- The focus stays in the outline, so what is typed after a look at the
+                             syntax still goes there, and a phone's keyboard stays up. A press on a
+                             tab would take it, so it is kept from moving: the click still lands, and
+                             the keyboard still reaches the tabs. -->
                         <v-tabs
                             v-model="sideTab"
                             density="compact"
                             color="primary"
+                            v-on:mousedown.prevent
                         >
                             <v-tab value="preview">
                                 Preview
