@@ -50,6 +50,7 @@
                             v-model="sideTab"
                             density="compact"
                             color="primary"
+                            aria-label="Preview and syntax"
                             v-on:mousedown.prevent
                             v-on:update:model-value="previewOnFirstTask = false"
                         >
@@ -60,7 +61,11 @@
                                  over the typing again and again. While there is none it is hidden
                                  rather than taken away, so the tabs keep their places as it comes and
                                  goes. -->
-                            <v-tab value="preview">
+                            <v-tab
+                                v-bind:id="`${sideId}-tab-preview`"
+                                value="preview"
+                                v-bind:aria-controls="`${sideId}-panel-preview`"
+                            >
                                 Preview
                                 <v-badge
                                     v-bind:class="{ 'no-problems': outline.problems.length === 0 }"
@@ -71,13 +76,21 @@
                                     v-bind:label="problemsText"
                                 />
                             </v-tab>
-                            <v-tab value="syntax">
+                            <v-tab
+                                v-bind:id="`${sideId}-tab-syntax`"
+                                value="syntax"
+                                v-bind:aria-controls="`${sideId}-panel-syntax`"
+                            >
                                 Syntax
                             </v-tab>
                         </v-tabs>
                         <div
                             v-show="sideTab === 'syntax'"
+                            v-bind:id="`${sideId}-panel-syntax`"
                             class="side-pane text-medium-emphasis"
+                            role="tabpanel"
+                            v-bind:aria-labelledby="`${sideId}-tab-syntax`"
+                            tabindex="0"
                         >
                             <p class="mb-2">
                                 One task per line, nested by indentation, its fields in brackets at the end:
@@ -100,7 +113,11 @@
                         </div>
                         <div
                             v-show="sideTab === 'preview'"
+                            v-bind:id="`${sideId}-panel-preview`"
                             class="side-pane"
+                            role="tabpanel"
+                            v-bind:aria-labelledby="`${sideId}-tab-preview`"
+                            tabindex="0"
                         >
                             <p
                                 v-if="rows.length === 0"
@@ -214,7 +231,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useId, watch } from 'vue';
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
 import { mdiFileTreeOutline, mdiNoteTextOutline } from '@mdi/js';
 
@@ -280,6 +297,7 @@ const createdRoute = ref<RouteLocationRaw | null>(null);
 
 const editorRef = ref<InstanceType<typeof Editor> | null>(null);
 
+const sideId = useId();
 // Opens on the syntax, which is all there is to see before the first task is typed.
 const sideTab = ref<'syntax' | 'preview'>('syntax');
 // Whether the first task typed is still to bring up the preview.
