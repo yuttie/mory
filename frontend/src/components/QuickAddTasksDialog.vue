@@ -448,9 +448,12 @@ function openCreated(): void {
     border-radius: 4px;
 }
 
+// A grid item is as wide as its content at least, so a long title or tag that does not break
+// would widen the pane and squeeze the editor, or run the dialog off a phone.
 .side {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
 }
 
