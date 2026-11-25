@@ -38,10 +38,30 @@
                         v-bind:readonly="locked"
                         v-on:change="text = $event"
                     />
-                    <div class="preview">
+                    <!-- The syntax and the tasks as they will be added take turns in one pane, so the
+                         syntax can still be looked up once the outline holds a task. -->
+                    <div class="side">
+                        <v-tabs
+                            v-model="sideTab"
+                            density="compact"
+                            color="primary"
+                        >
+                            <v-tab value="preview">
+                                Preview
+                                <v-badge
+                                    v-if="outline.problems.length > 0"
+                                    color="error"
+                                    inline
+                                    v-bind:content="outline.problems.length"
+                                />
+                            </v-tab>
+                            <v-tab value="syntax">
+                                Syntax
+                            </v-tab>
+                        </v-tabs>
                         <div
-                            v-if="rows.length === 0"
-                            class="text-medium-emphasis"
+                            v-if="sideTab === 'syntax'"
+                            class="side-pane text-medium-emphasis"
                         >
                             <p class="mb-2">
                                 One task per line, nested by indentation, its fields in brackets at the end:
@@ -62,43 +82,54 @@
                                 </tbody>
                             </v-table>
                         </div>
-                        <!-- A problem is told under its task rather than in an alert of its own, which
-                             came and went with every half-typed field and moved the dialog with it. -->
                         <div
-                            v-for="{ task, depth, key } of rows"
-                            v-bind:key="key"
-                            class="row"
-                            v-bind:class="{ 'text-error': problemsByLine.has(task.line) }"
-                            v-bind:style="{ paddingLeft: `${depth * 20}px` }"
+                            v-else
+                            class="side-pane"
                         >
-                            <v-icon
-                                size="small"
-                                v-bind:color="statusColor(task.fields.status, taskSettings.resolvedStatusColors)"
+                            <p
+                                v-if="rows.length === 0"
+                                class="text-medium-emphasis"
                             >
-                                {{ statusIcon(task.fields.status, task.children.length > 0) }}
-                            </v-icon>
-                            <span class="title">{{ task.title || 'Untitled' }}</span>
-                            <v-chip
-                                v-for="chip of chipsOf(task)"
-                                v-bind:key="chip"
-                                size="x-small"
-                                label
-                            >
-                                {{ chip }}
-                            </v-chip>
-                            <v-icon
-                                v-if="task.note !== ''"
-                                size="small"
-                                v-bind:title="task.note"
-                            >
-                                {{ mdiNoteTextOutline }}
-                            </v-icon>
+                                The tasks typed on the left are shown here as they will be added.
+                            </p>
+                            <!-- A problem is told under its task rather than in an alert of its own, which
+                                 came and went with every half-typed field and moved the dialog with it. -->
                             <div
-                                v-for="(message, index) of problemsByLine.get(task.line)"
-                                v-bind:key="index"
-                                class="problem text-body-2"
+                                v-for="{ task, depth, key } of rows"
+                                v-bind:key="key"
+                                class="row"
+                                v-bind:class="{ 'text-error': problemsByLine.has(task.line) }"
+                                v-bind:style="{ paddingLeft: `${depth * 20}px` }"
                             >
-                                Line {{ task.line }}: {{ message }}
+                                <v-icon
+                                    size="small"
+                                    v-bind:color="statusColor(task.fields.status, taskSettings.resolvedStatusColors)"
+                                >
+                                    {{ statusIcon(task.fields.status, task.children.length > 0) }}
+                                </v-icon>
+                                <span class="title">{{ task.title || 'Untitled' }}</span>
+                                <v-chip
+                                    v-for="chip of chipsOf(task)"
+                                    v-bind:key="chip"
+                                    size="x-small"
+                                    label
+                                >
+                                    {{ chip }}
+                                </v-chip>
+                                <v-icon
+                                    v-if="task.note !== ''"
+                                    size="small"
+                                    v-bind:title="task.note"
+                                >
+                                    {{ mdiNoteTextOutline }}
+                                </v-icon>
+                                <div
+                                    v-for="(message, index) of problemsByLine.get(task.line)"
+                                    v-bind:key="index"
+                                    class="problem text-body-2"
+                                >
+                                    Line {{ task.line }}: {{ message }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -233,6 +264,9 @@ const createdRoute = ref<RouteLocationRaw | null>(null);
 
 const editorRef = ref<InstanceType<typeof Editor> | null>(null);
 
+// Opens on the syntax, which is all there is to see before the first task is typed.
+const sideTab = ref<'syntax' | 'preview'>('syntax');
+
 // The parent chosen, while the listing still holds it.
 const placedUnder = computed<UUID | null>(() => {
     return parent.value !== null && tasks.node(parent.value) !== undefined ? parent.value : null;
@@ -265,6 +299,14 @@ const rows = computed(() => {
     };
     outline.value.tasks.forEach((task) => visit(task, 0));
     return result;
+});
+
+// The first task typed brings its preview up, as the syntax used to give way to it; after that
+// the pane stays on whichever tab was chosen.
+watch(() => rows.value.length > 0, (hasRows, hadRows) => {
+    if (hasRows && !hadRows) {
+        sideTab.value = 'preview';
+    }
 });
 
 // What the preview says of a task besides its title, as it will be written.
@@ -301,6 +343,7 @@ const addLabel = computed(() => {
 watch(isOpen, (open) => {
     if (open) {
         text.value = '';
+        sideTab.value = 'syntax';
         parent.value = props.initialParent ?? null;
         errorText.value = '';
         pending.value = null;
@@ -405,9 +448,21 @@ function openCreated(): void {
     border-radius: 4px;
 }
 
-.preview {
+.side {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.v-tabs {
+    flex: 0 0 auto;
+}
+
+.side-pane {
+    flex: 1 1 0;
     min-height: 0;
     overflow: auto;
+    padding-top: 8px;
 }
 
 .row {
