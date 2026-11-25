@@ -50,6 +50,7 @@
                             density="compact"
                             color="primary"
                             v-on:mousedown.prevent
+                            v-on:update:model-value="previewOnFirstTask = false"
                         >
                             <v-tab value="preview">
                                 Preview
@@ -271,6 +272,8 @@ const editorRef = ref<InstanceType<typeof Editor> | null>(null);
 
 // Opens on the syntax, which is all there is to see before the first task is typed.
 const sideTab = ref<'syntax' | 'preview'>('syntax');
+// Whether the first task typed is still to bring up the preview.
+const previewOnFirstTask = ref(true);
 
 // The parent chosen, while the listing still holds it.
 const placedUnder = computed<UUID | null>(() => {
@@ -306,10 +309,12 @@ const rows = computed(() => {
     return result;
 });
 
-// The first task typed brings its preview up, as the syntax used to give way to it; after that
-// the pane stays on whichever tab was chosen.
-watch(() => rows.value.length > 0, (hasRows, hadRows) => {
-    if (hasRows && !hadRows) {
+// The first task typed in an opening brings up its preview, unless a tab was picked before it.
+// After that the pane stays on whichever tab was chosen, even when the outline is emptied and
+// typed again.
+watch(() => rows.value.length > 0, (hasRows) => {
+    if (hasRows && previewOnFirstTask.value) {
+        previewOnFirstTask.value = false;
         sideTab.value = 'preview';
     }
 });
@@ -349,6 +354,7 @@ watch(isOpen, (open) => {
     if (open) {
         text.value = '';
         sideTab.value = 'syntax';
+        previewOnFirstTask.value = true;
         parent.value = props.initialParent ?? null;
         errorText.value = '';
         pending.value = null;
