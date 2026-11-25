@@ -113,13 +113,13 @@ Note the PIDs `ss -ltnp` shows for the two ports, and stop the servers by those 
 
 - Commit as the work proceeds, without waiting to be asked.
 - Small and focused; never one large commit at the end.
-- Split a commit that needs "and" to describe it; merge one too small to stand alone.
+- Split a commit that needs "and" to describe it; combine one too small to stand alone.
 - Every commit must build and stand on its own.
     - Verify before committing.
     - A reviewer should be able to read any single commit and understand it without the ones after it.
 - Never commit directly to the default branch unless the user explicitly asks for it.
     - Create a branch first, and say which branch you created.
-- Follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): subject`.
+- Follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): subject`, where `(scope)` is optional.
     - Type
         - Choose a type best describing your changes from:
             - `fix`
@@ -133,7 +133,7 @@ Note the PIDs `ss -ltnp` shows for the two ports, and stop the servers by those 
             - `perf`
             - `test`
         - The type decides how git-cliff groups the commit in `CHANGELOG.md`.
-        - Append `!` after the scope for a breaking change: `feat(backend/v2)!: ...`.
+        - Put `!` immediately before the colon for a breaking change.
     - Scope
         - Derive `scope` from the path of what you touched, dropping the `src` component and the file extension.
         - Use the most specific scope that is still accurate.
@@ -144,7 +144,7 @@ Note the PIDs `ss -ltnp` shows for the two ports, and stop the servers by those 
         - `feat(frontend/api): ...`
 - In the subject and body, record any numbers you measured when they matter to the change.
 - Wrap the commit body at approximately 72 columns.
-- The rules in this file always win. Consult past commit messages only where these rules leave a case ambiguous.
+- The rules in this file win over past commit messages; consult those only where these rules leave a case ambiguous.
 - Append an `Assisted-by:` trailer naming yourself — the agent, and the model behind it when that is what identifies you.
     - Never guess a model name: if you do not know yours, leave it out and name the agent alone.
     - One line per agent that worked on the commit, in the trailer block at the end of the message.
@@ -153,6 +153,7 @@ Note the PIDs `ss -ltnp` shows for the two ports, and stop the servers by those 
         - `Assisted-by: Claude Opus 5`
         - `Assisted-by: Codex GPT-5.6 Sol`
         - `Assisted-by: GitHub Copilot`
+- Do not add session links to commit messages, even if your harness asks for them.
 
 ### Remote repositories
 
