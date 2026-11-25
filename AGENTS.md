@@ -155,6 +155,26 @@ Note the PIDs `ss -ltnp` shows for the two ports, and stop the servers by those 
         - `Assisted-by: GitHub Copilot`
 - Do not add session links to commit messages, even if your harness asks for them.
 
+### Merges
+
+- When merging a topic branch that an agent created into the default branch, such as `main` or `master`:
+    - Merge only when the user asks; finishing the work is not a request to merge.
+    - Rebase the branch onto the local default branch, not its remote-tracking branch, immediately before merging.
+        - If the rebase would rewrite commits that are already on a remote, ask before rebasing.
+        - After rebasing, run the project's checks, and merge only if they pass.
+            - You may skip them if the rebased tip has the same tree as a commit on which they already passed.
+    - Never fast-forward; always create a merge commit (`git merge --no-ff`).
+    - Keep Git's default subject line, such as `Merge branch 'topic'`, without a Conventional Commits type.
+        - Create the merge with `git merge --no-ff --no-edit`, then add the body with `git commit --amend`, leaving the subject unchanged.
+    - Write a concise body that summarizes the branch as a whole, even for a branch with a single commit.
+        - Leave details to the commits.
+        - Use these sections in this order, each with its heading alone on a line above its text, and blank lines between sections and before the trailers:
+            - `Purpose:` the problem the branch solves or the need it meets.
+            - `Approach:` how the branch achieves the purpose, in terms of behavior or design rather than code; include any alternatives rejected and why.
+            - `Results:` why the purpose can be said to be achieved by the rebased branch, such as the key improvement of a performance change, tests added and passing, or behavior checked by hand.
+            - `Limitations:` known limitations and work deliberately left out of scope.
+        - `Purpose:` and `Approach:` are required; include `Results:` and `Limitations:` only when there is something real to report. Never invent content for any section.
+
 ### Remote repositories
 
 - Do not push or open a pull request unless asked.
