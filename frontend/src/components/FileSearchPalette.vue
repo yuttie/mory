@@ -53,10 +53,13 @@
             class="file-search__list"
             v-bind:class="{ 'py-0': options.length === 0 }"
         >
+            <!-- Told apart by its key: Vuetify tells an item without a value by its link, and the
+                 events of one note all open it. -->
             <v-list-item
                 v-for="(option, index) of options"
                 v-bind:id="optionId(option)"
                 v-bind:key="option.key"
+                v-bind:value="option.key"
                 v-bind:active="index === activeIndex"
                 v-bind:title="option.title"
                 v-bind:subtitle="option.subtitle"
