@@ -79,40 +79,63 @@
             </v-alert>
         </v-sheet>
 
-        <v-list
-            class="flex-grow-1 overflow-y-auto"
-            lines="three"
-        >
-            <v-list-item
-                v-for="item of response?.hits ?? []"
-                v-bind:key="`${item.path}:${item.passage_id}`"
-                v-bind:to="routeForMime(item.path, item.mime_type)"
-                class="result-item"
+        <!-- No v-list: a passage is text to select, so a click in one focuses what holds it, and
+             a v-list then takes the arrow keys, with Shift or without, to move to its first or
+             last link. -->
+        <div class="results flex-grow-1 overflow-y-auto">
+            <ol
+                v-if="groups.length > 0"
+                class="result-list"
             >
-                <v-list-item-title class="result-title">
-                    {{ item.title || item.path }}
-                </v-list-item-title>
-                <v-list-item-subtitle class="result-meta">
-                    {{ item.path }}<template v-if="lineLabel(item)">
-                        · {{ lineLabel(item) }}
-                    </template>
-                    · {{ item.sources.join(' + ') }}
-                </v-list-item-subtitle>
-                <div
-                    v-if="item.content_kind === 'image_description'"
-                    class="text-caption text-warning mb-1"
+                <li
+                    v-for="group of groups"
+                    v-bind:key="group.path"
+                    v-bind:aria-label="group.title || group.path"
+                    class="result-group"
                 >
-                    AI-generated image description
-                </div>
-                <div class="result-snippet">
-                    {{ item.snippet }}
-                </div>
-            </v-list-item>
+                    <v-list-item
+                        v-bind:to="routeForMime(group.path, group.mimeType)"
+                        lines="two"
+                        class="result-header"
+                    >
+                        <v-list-item-title class="result-title">
+                            {{ group.title || group.path }}
+                        </v-list-item-title>
+                        <v-list-item-subtitle
+                            v-if="group.title"
+                            class="result-meta"
+                        >
+                            {{ group.path }}
+                        </v-list-item-subtitle>
+                    </v-list-item>
+                    <div
+                        v-for="item of group.hits"
+                        v-bind:key="item.passage_id"
+                        class="result-passage"
+                    >
+                        <v-list-item-subtitle class="result-meta">
+                            <template v-if="lineLabel(item)">
+                                {{ lineLabel(item) }} ·
+                            </template>
+                            {{ item.sources.join(' + ') }}
+                        </v-list-item-subtitle>
+                        <div
+                            v-if="item.content_kind === 'image_description'"
+                            class="text-caption text-warning mb-1"
+                        >
+                            AI-generated image description
+                        </div>
+                        <div class="result-snippet">
+                            {{ item.snippet }}
+                        </div>
+                    </div>
+                </li>
+            </ol>
             <v-list-item
-                v-if="hasSearched && !isLoading && response?.hits.length === 0"
+                v-else-if="hasSearched && !isLoading && response?.hits.length === 0"
                 title="No results"
-            ></v-list-item>
-        </v-list>
+            />
+        </div>
 
         <v-overlay
             v-bind:model-value="isLoading"
@@ -447,6 +470,30 @@ function handleKeydown(event: KeyboardEvent): void {
     }
 }
 
+interface ResultGroup {
+    path: string;
+    title: string | undefined;
+    mimeType: string;
+    hits: SearchHit[];
+}
+
+// Each note once, with its passages under it. A note stands where its best passage ranked, and
+// its passages keep the order moried ranked them in, so the grouping reorders nothing but what
+// would otherwise interleave with another note's. Every passage carries the title of the note it
+// was read from, so the first one's names the note.
+const groups = computed<ResultGroup[]>(() => {
+    const byPath = new Map<string, ResultGroup>();
+    for (const hit of response.value?.hits ?? []) {
+        let group = byPath.get(hit.path);
+        if (group === undefined) {
+            group = { path: hit.path, title: hit.title, mimeType: hit.mime_type, hits: [] };
+            byPath.set(hit.path, group);
+        }
+        group.hits.push(hit);
+    }
+    return [...byPath.values()];
+});
+
 function lineLabel(hit: SearchHit): string {
     if (hit.start_line === undefined) {
         return '';
@@ -512,13 +559,29 @@ watch(draftMode, (mode) => {
     }
 }
 
-.result-item {
-    max-height: 300px;
-    overflow: hidden;
+// Drawn as the v-list the results were in, and not as a v-sheet: the custom CSS a repository sets
+// may restyle every sheet, and the results never were one.
+.results {
+    padding: 8px var(--mory-list-inset);
+    background: rgba(var(--v-theme-surface));
+    color: color-mix(in srgb, rgb(var(--v-theme-on-surface)) calc(var(--v-high-emphasis-opacity) * 100%), transparent);
+}
 
-    &:not(:last-child) {
-        margin-bottom: 30px;
-    }
+.result-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.result-group:not(:last-child) {
+    margin-bottom: 30px;
+}
+
+// A passage is for reading and copying, so it opts back into the selection App.vue turns off. It
+// ends where its header's row does.
+.result-passage {
+    user-select: text;
+    padding-inline: 32px var(--mory-row-inset);
 }
 
 .result-title {
@@ -529,7 +592,15 @@ watch(draftMode, (mode) => {
     opacity: 0.75;
 }
 
+// A passage runs to 800 tokens, too long to stand whole among the rest, so its text is capped. It
+// scrolls rather than being cut: the passage no longer leads to the note, so what a cut hid could
+// not be read anywhere here, yet a selection across it would still copy it unseen. The padding
+// keeps inside the box what Firefox counts as overflow past a line of Japanese, a fallback font's
+// glyphs reaching a pixel below the line: without it, nearly every such line scrolled by a pixel.
 .result-snippet {
+    max-height: 300px;
+    overflow-y: auto;
+    padding-block: 0.25em;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }

@@ -70,6 +70,23 @@ function emptySearchResponse(request: { mode: string }): object {
     };
 }
 
+// A one-line passage of a Markdown note, as Text mode finds one.
+function hit(path: string, title: string | undefined, line: number, snippet: string): object {
+    return {
+        path,
+        blob_id: `blob-${path}`,
+        passage_id: `${path}:${line}`,
+        mime_type: 'text/markdown',
+        title,
+        start_line: line,
+        end_line: line,
+        snippet,
+        content_kind: 'source',
+        sources: ['text'],
+        score: 1,
+    };
+}
+
 test('says why indexing stopped and that a restart resumes it', async ({ context, page }) => {
     await mockBackend(context, {
         stoppedIndexing: [
@@ -659,4 +676,145 @@ test('counts images that could not be described apart from passages', async ({ c
     await expect(page.getByText(
         '1 passage could not be embedded and 1 image could not be described; coverage is partial.',
     )).toBeVisible();
+});
+
+test('groups the passages of each note under its one link, in the order the notes first ranked', async ({ context, page }) => {
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    // Ranked against the order of the paths and of the lines in each, so that
+                    // sorting by either could not pass for keeping the ranks.
+                    hits: [
+                        hit('b.md', 'Note B', 7, 'seventh line of B'),
+                        hit('a.md', 'Note A', 12, 'twelfth line of A'),
+                        hit('b.md', 'Note B', 3, 'third line of B'),
+                        hit('a.md', 'Note A', 3, 'third line of A'),
+                    ],
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=grouped&mode=text');
+
+    const notes = page.locator('#search').getByRole('listitem');
+    await expect(notes).toHaveCount(2);
+    await expect(notes.nth(0)).toHaveAccessibleName('Note B');
+    await expect(notes.nth(1)).toHaveAccessibleName('Note A');
+    await expect(notes.nth(0).getByText(/line of B$/)).toHaveText(['seventh line of B', 'third line of B']);
+    await expect(notes.nth(1).getByText(/line of A$/)).toHaveText(['twelfth line of A', 'third line of A']);
+    await expect(notes.nth(1).getByText(/^line \d+/)).toHaveText([/^line 12 /, /^line 3 /]);
+    await expect(page.locator('#search').getByRole('link', { name: /Note A/ })).toHaveCount(1);
+
+    // A passage is text to select and copy; the note is reached by its header.
+    await expect(page.locator('#search').getByRole('link').filter({ hasText: 'line of' })).toHaveCount(0);
+    const address = page.url();
+    await notes.nth(1).getByText('twelfth line of A').click({ clickCount: 3 });
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim()))
+        .toBe('twelfth line of A');
+    expect(page.url()).toBe(address);
+});
+
+// Enough notes, a passage each, to scroll the page several times over.
+async function mockManyNotes(context: BrowserContext): Promise<void> {
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    hits: Array.from({ length: 30 }, (_, index) => hit(
+                        `note-${index}.md`,
+                        `Note ${index}`,
+                        1,
+                        `passage of note ${index}`,
+                    )),
+                },
+            });
+        },
+    });
+}
+
+test('leaves the arrow keys to the page after a click in a passage', async ({ context, page }) => {
+    await mockManyNotes(context);
+    await page.goto('/search?q=many&mode=text');
+    const passage = page.locator('#search').getByText('passage of note 20', { exact: true });
+
+    // A click in a passage, which is no link, focuses what holds it. When that was a v-list, it
+    // took the arrow keys for its own navigation: one moved to its first link and scrolled the
+    // passage away, and Shift with one could not extend a selection.
+    await passage.click();
+    const { y } = (await passage.boundingBox())!;
+    await page.keyboard.press('ArrowDown');
+
+    await expect.poll(async () => (await passage.boundingBox())!.y).toBeLessThan(y);
+    await expect(passage).toBeInViewport();
+    await expect(page.locator('#search').getByRole('link').first()).not.toBeFocused();
+});
+
+test('reaches each note by Tab', async ({ context, page }) => {
+    await mockManyNotes(context);
+    await page.goto('/search?q=many&mode=text');
+    const links = page.locator('#search').getByRole('link');
+
+    // The arrow keys no longer move between the notes, so Tab has to.
+    await links.first().focus();
+    await page.keyboard.press('Tab');
+    await expect(links.nth(1)).toBeFocused();
+    await expect(links.nth(1)).toHaveAccessibleName('Note 1 note-1.md');
+});
+
+test('scrolls a long passage to its end rather than cutting it', async ({ context, page }) => {
+    const long = Array.from({ length: 100 }, (_, index) => `line ${index + 1} of a long passage`).join('\n');
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: { ...emptySearchResponse(request), hits: [hit('long.md', 'Long', 1, long)] },
+            });
+        },
+    });
+    await page.goto('/search?q=long&mode=text');
+    const snippet = page.locator('#search').getByText(/^line 1 of a long passage/);
+
+    // A passage does not lead to its note, so what of it is not drawn here cannot be read: its last
+    // character has to come into view, where a point on it hits the passage itself.
+    await snippet.hover({ position: { x: 20, y: 20 } });
+    await expect(async () => {
+        // Firefox scrolls a few lines for a wheel event, whatever its delta.
+        await page.mouse.wheel(0, 1_000);
+        expect(await snippet.evaluate((element) => {
+            const text = element.firstChild!;
+            const end = text.textContent!.trimEnd().length;
+            const range = document.createRange();
+            range.setStart(text, end - 1);
+            range.setEnd(text, end);
+            const { x, y, height } = range.getBoundingClientRect();
+            return document.elementFromPoint(x + 1, y + height / 2) === element;
+        })).toBe(true);
+    }).toPass({ timeout: 5_000 });
+});
+
+test('names an untitled note by its path once', async ({ context, page }) => {
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    hits: [
+                        hit('titled.md', 'Titled', 1, 'a passage'),
+                        hit('untitled.md', undefined, 1, 'another passage'),
+                    ],
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=passage&mode=text');
+
+    await expect(page.locator('#search').getByRole('link', { name: 'Titled titled.md' })).toBeVisible();
+    await expect(page.locator('#search').getByRole('link', { name: 'untitled.md', exact: true })).toBeVisible();
+    await expect(page.locator('#search').getByText('untitled.md', { exact: true })).toHaveCount(1);
 });
