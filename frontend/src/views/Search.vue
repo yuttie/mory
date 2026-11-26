@@ -9,6 +9,10 @@
                 v-on:submit.prevent="submit"
             >
                 <div class="d-flex ga-2 align-center">
+                    <!-- The hint is what lets a phone's action key submit at all: without one,
+                         Chrome and Firefox on Android make it Next, since the mode select's input
+                         is a text field after this one in the form, and Next moves the focus there
+                         without sending Enter. -->
                     <v-text-field
                         ref="queryEl"
                         v-model="draftQuery"
@@ -18,10 +22,10 @@
                         type="text"
                         label="Search"
                         autocomplete="off"
+                        enterkeyhint="search"
                         hide-details="auto"
                         class="flex-grow-1"
                         v-on:click:clear="clearQuery"
-                        v-on:keydown.enter="submitFromKeyboard"
                     />
                     <v-select
                         v-model="draftMode"
@@ -34,6 +38,18 @@
                         class="mode-select"
                     />
                 </div>
+                <!-- With the mode select's input a second text field, Enter submits the form only
+                     through a submit button. Enter is left to that rather than to a keydown
+                     handler because the browser never submits on an Enter an IME took to confirm
+                     a conversion, and `isComposing` is no guide to which Enter that was: Safari
+                     sends that one after the composition has ended, and a phone's action key may
+                     arrive while the word typed is still composing. -->
+                <button
+                    type="submit"
+                    class="implicit-submit"
+                    tabindex="-1"
+                    aria-hidden="true"
+                />
             </v-form>
         </AppBarContent>
         <v-sheet class="pb-3 px-3">
@@ -282,14 +298,6 @@ function submit(): void {
         return;
     }
     router.push({ query: query ? { q: query, mode: draftMode.value } : { mode: draftMode.value } });
-}
-
-function submitFromKeyboard(event: KeyboardEvent): void {
-    if (event.isComposing) {
-        return;
-    }
-    event.preventDefault();
-    submit();
 }
 
 function clearQuery(): void {
@@ -548,6 +556,18 @@ watch(draftMode, (mode) => {
 <style scoped lang="scss">
 #search {
     height: 100%;
+}
+
+// Out of sight rather than `display: none`, which some browsers have taken to mean the form has
+// no submit button.
+.implicit-submit {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
+    padding: 0;
 }
 
 .mode-select {
