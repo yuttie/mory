@@ -309,9 +309,12 @@ function onKeydown(event: KeyboardEvent): void {
                 chooseActive();
                 break;
             // In a new tab, as Ctrl+click opens one: the click is sent with the key's Ctrl, as
-            // Vuetify sends Enter on a list item as a click, and the browser opens the link.
+            // Vuetify sends Enter on a list item as a click, and the browser opens the link. Once
+            // for each press: held, the key would open another tab each time it repeated.
             case 'enter':
-                activeRow()?.dispatchEvent(new MouseEvent('click', event));
+                if (!event.repeat) {
+                    activeRow()?.dispatchEvent(new MouseEvent('click', event));
+                }
                 break;
             default:
                 return;
