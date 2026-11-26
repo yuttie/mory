@@ -53,19 +53,23 @@
             class="file-search__list"
             v-bind:class="{ 'py-0': options.length === 0 }"
         >
+            <!-- Told apart by its key: Vuetify tells an item without a value by its link, and the
+                 events of one note all open it. -->
             <v-list-item
                 v-for="(option, index) of options"
                 v-bind:id="optionId(option)"
                 v-bind:key="option.key"
+                v-bind:value="option.key"
                 v-bind:active="index === activeIndex"
                 v-bind:title="option.title"
                 v-bind:subtitle="option.subtitle"
+                v-bind:href="router.resolve(option.to).href"
                 role="option"
                 v-bind:aria-selected="index === activeIndex"
                 tabindex="-1"
                 color="primary"
                 class="file-search__option"
-                v-on:click="emit('choose', option.to)"
+                v-on:click="onClick($event, option)"
                 v-on:mousemove="activeIndex = index"
             >
                 <template v-slot:prepend>
@@ -105,6 +109,7 @@
         <div class="file-search__keys d-none d-sm-flex text-caption text-medium-emphasis">
             <span><kbd>↑</kbd> <kbd>↓</kbd> to move</span>
             <span><kbd>Enter</kbd> to open</span>
+            <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> in a new tab</span>
             <span><kbd>Tab</kbd> for another kind</span>
             <span><kbd>Esc</kbd> to close</span>
         </div>
@@ -114,6 +119,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
+import { useRouter } from 'vue-router';
 import type { RouteLocationRaw } from 'vue-router';
 import type { VList, VTextField } from 'vuetify/components';
 
@@ -149,6 +155,7 @@ const emit = defineEmits<{
     (e: 'close'): void;
 }>();
 
+const router = useRouter();
 const appStore = useAppStore();
 const files = useFilesStore();
 
@@ -301,6 +308,21 @@ function onKeydown(event: KeyboardEvent): void {
             case 'm':
                 chooseActive();
                 break;
+            // In a new tab, as Ctrl+click opens one: a click is sent to the option's link, as
+            // Vuetify sends Enter on a list item, and the browser opens it. With Command as well as
+            // Ctrl, since a Mac opens a link in a new tab on Command+click and in place on a
+            // Ctrl-click; each browser reads only the key its platform opens a tab with. Once for
+            // each press: held, the key would open another tab each time it repeated.
+            case 'enter':
+                if (!event.repeat) {
+                    activeRow()?.dispatchEvent(new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        ctrlKey: true,
+                        metaKey: true,
+                    }));
+                }
+                break;
             default:
                 return;
         }
@@ -330,6 +352,19 @@ function onKeydown(event: KeyboardEvent): void {
             return;
     }
     event.preventDefault();
+}
+
+// Each option is a link, so the browser opens it in a new tab on a middle click or Ctrl+click, as it
+// would any link, and leaves the palette open for the next. A plain click is the dialog's, which
+// closes as it opens the page, or only closes when the page is the one shown, and is kept from the
+// browser, which would load the whole app anew. By its `href` rather than a `to`, whose RouterLink
+// would push the route too unless this handler had run first and prevented the click.
+function onClick(event: MouseEvent | KeyboardEvent, option: Option): void {
+    if ((event instanceof MouseEvent && event.button !== 0) || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+        return;
+    }
+    event.preventDefault();
+    emit('choose', option.to);
 }
 
 function chooseActive(): void {
@@ -464,9 +499,16 @@ watch([options, queryText, tab], ([now, query, kind], [before, queryBefore, kind
     }
 }
 
+// A key and what it does on one line, so that on a narrow screen the ones that do not fit go to the
+// next line whole rather than each broken in two.
 .file-search__keys {
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 4px 16px;
     padding: 8px 16px;
+
+    > span {
+        white-space: nowrap;
+    }
 
     kbd {
         padding: 0 4px;

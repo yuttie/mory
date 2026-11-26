@@ -732,13 +732,85 @@ test('lists the events the last to start first, as the Files view does', async (
     await expect(selected(page)).toContainText('2026-12-01');
 });
 
+// A link, but routed to by the app rather than followed by the browser, which would load the whole
+// app anew.
 test('opens the file clicked', async ({ context, page }) => {
     await mockBackend(context, FILES, { times: TIMES });
     await page.goto('/');
     await open(page);
+    // Lost if the browser loads the link as a new page rather than the app routing to it.
+    await page.evaluate(() => {
+        (window as unknown as { loaded: boolean }).loaded = true;
+    });
     await palette(page).getByRole('option').filter({ hasText: 'Monday' }).click();
     await expect(page).toHaveURL('/note/journal/monday.md');
     await expect(palette(page)).toBeHidden();
+    expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
+});
+
+// As a link would, so that one search opens as many files as are wanted: the palette stays open
+// over the page it was opened from, its search and the focus kept for the next.
+test('opens the file in a new tab on a middle click or Ctrl+click, and in a new window on a Shift+click', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await open(page);
+    await search(page).pressSequentially('th');
+    await expect(titles(page)).toHaveText(['Draft chapter', 'Write the report', 'Thesis', 'Show all 3 in Files']);
+    await expect(option(page, 0)).toHaveAttribute('href', '/note/ideas/draft.md');
+
+    const [middle] = await Promise.all([
+        context.waitForEvent('page'),
+        option(page, 0).click({ button: 'middle' }),
+    ]);
+    await expect(middle).toHaveURL('/note/ideas/draft.md');
+    await middle.close();
+    const [controlled] = await Promise.all([
+        context.waitForEvent('page'),
+        option(page, 2).click({ modifiers: ['ControlOrMeta'] }),
+    ]);
+    await expect(controlled).toHaveURL(`/note/.tasks/${PROJECT}.md`);
+    await controlled.close();
+    const [shifted] = await Promise.all([
+        context.waitForEvent('page'),
+        option(page, 1).click({ modifiers: ['Shift'] }),
+    ]);
+    await expect(shifted).toHaveURL(`/note/.tasks/${PROJECT}/${REPORT}.md`);
+
+    await expect(page).toHaveURL('/');
+    // Still open, as the app tells an open dialog: one closing is drawn a moment longer, as it
+    // scales out, and keeps the focus in its field until then.
+    await expect(palette(page)).toHaveClass(/\bv-overlay--active\b/);
+    await expect(search(page)).toHaveValue('th');
+    await expect(search(page)).toBeFocused();
+});
+
+test('opens the file chosen in a new tab with Ctrl+Enter', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await open(page);
+    await search(page).pressSequentially('mon');
+    await expect(titles(page)).toHaveText(['Monday', 'Show all 1 in Files']);
+    const [opened] = await Promise.all([
+        context.waitForEvent('page'),
+        page.keyboard.press('Control+Enter'),
+    ]);
+    await expect(opened).toHaveURL('/note/journal/monday.md');
+    await opened.close();
+
+    // And the search in the Files view, as Enter opens it.
+    await page.keyboard.press('ArrowDown');
+    await expect(selected(page)).toContainText('Show all 1 in Files');
+    const [files] = await Promise.all([
+        context.waitForEvent('page'),
+        page.keyboard.press('Control+Enter'),
+    ]);
+    await expect(files).toHaveURL('/files?q=mon');
+
+    await expect(page).toHaveURL('/');
+    await expect(palette(page)).toHaveClass(/\bv-overlay--active\b/);
+    await expect(search(page)).toHaveValue('mon');
+    await expect(search(page)).toBeFocused();
+    await expect(selected(page)).toContainText('Show all 1 in Files');
 });
 
 // Each title two characters longer than the one before, beside the same five tags: the first
