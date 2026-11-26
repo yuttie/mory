@@ -101,7 +101,10 @@
                         <v-list-item-title class="result-title">
                             {{ group.title || group.path }}
                         </v-list-item-title>
-                        <v-list-item-subtitle class="result-meta">
+                        <v-list-item-subtitle
+                            v-if="group.title"
+                            class="result-meta"
+                        >
                             {{ group.path }}
                         </v-list-item-subtitle>
                     </v-list-item>

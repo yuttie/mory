@@ -71,7 +71,7 @@ function emptySearchResponse(request: { mode: string }): object {
 }
 
 // A one-line passage of a Markdown note, as Text mode finds one.
-function hit(path: string, title: string, line: number, snippet: string): object {
+function hit(path: string, title: string | undefined, line: number, snippet: string): object {
     return {
         path,
         blob_id: `blob-${path}`,
@@ -795,4 +795,26 @@ test('scrolls a long passage to its end rather than cutting it', async ({ contex
             return document.elementFromPoint(x + 1, y + height / 2) === element;
         })).toBe(true);
     }).toPass({ timeout: 5_000 });
+});
+
+test('names an untitled note by its path once', async ({ context, page }) => {
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    hits: [
+                        hit('titled.md', 'Titled', 1, 'a passage'),
+                        hit('untitled.md', undefined, 1, 'another passage'),
+                    ],
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=passage&mode=text');
+
+    await expect(page.locator('#search').getByRole('link', { name: 'Titled titled.md' })).toBeVisible();
+    await expect(page.locator('#search').getByRole('link', { name: 'untitled.md', exact: true })).toBeVisible();
+    await expect(page.locator('#search').getByText('untitled.md', { exact: true })).toHaveCount(1);
 });
