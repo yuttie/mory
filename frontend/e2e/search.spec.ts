@@ -683,10 +683,13 @@ test('groups the passages of each note under its one link, in the order the note
             await route.fulfill({
                 json: {
                     ...emptySearchResponse(request),
+                    // Ranked against the order of the paths and of the lines in each, so that
+                    // sorting by either could not pass for keeping the ranks.
                     hits: [
-                        hit('a.md', 'Note A', 3, 'first of A'),
-                        hit('b.md', 'Note B', 7, 'only of B'),
-                        hit('a.md', 'Note A', 12, 'second of A'),
+                        hit('b.md', 'Note B', 7, 'seventh line of B'),
+                        hit('a.md', 'Note A', 12, 'twelfth line of A'),
+                        hit('b.md', 'Note B', 3, 'third line of B'),
+                        hit('a.md', 'Note A', 3, 'third line of A'),
                     ],
                 },
             });
@@ -694,14 +697,15 @@ test('groups the passages of each note under its one link, in the order the note
     });
     await page.goto('/search?q=grouped&mode=text');
 
-    const groups = page.getByRole('group');
+    const groups = page.locator('#search').getByRole('group');
     await expect(groups).toHaveCount(2);
-    await expect(groups.nth(0)).toHaveAccessibleName('Note A');
-    await expect(groups.nth(1)).toHaveAccessibleName('Note B');
-    await expect(groups.nth(0).getByText(/of A$/)).toHaveText(['first of A', 'second of A']);
-    await expect(groups.nth(0).getByText('line 12')).toBeVisible();
-    await expect(page.getByRole('link', { name: /Note A/ })).toHaveCount(1);
+    await expect(groups.nth(0)).toHaveAccessibleName('Note B');
+    await expect(groups.nth(1)).toHaveAccessibleName('Note A');
+    await expect(groups.nth(0).getByText(/line of B$/)).toHaveText(['seventh line of B', 'third line of B']);
+    await expect(groups.nth(1).getByText(/line of A$/)).toHaveText(['twelfth line of A', 'third line of A']);
+    await expect(groups.nth(1).getByText(/^line \d+/)).toHaveText([/^line 12 /, /^line 3 /]);
+    await expect(page.locator('#search').getByRole('link', { name: /Note A/ })).toHaveCount(1);
     // A passage is text to select and copy; the note is reached by its header.
-    await expect(page.getByRole('link').filter({ hasText: 'first of A' })).toHaveCount(0);
-    await expect(groups.nth(0).getByRole('listitem').filter({ hasText: 'first of A' })).toHaveCSS('user-select', 'text');
+    await expect(page.locator('#search').getByRole('link').filter({ hasText: 'line of' })).toHaveCount(0);
+    await expect(groups.nth(1).getByRole('listitem').filter({ hasText: 'twelfth line of A' })).toHaveCSS('user-select', 'text');
 });
