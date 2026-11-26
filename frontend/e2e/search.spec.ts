@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { BrowserContext, Route } from '@playwright/test';
+import type { BrowserContext, Page, Route } from '@playwright/test';
 import { API_URL, TOKEN, signIn } from './backend';
 
 const COMMIT = 'a'.repeat(40);
@@ -109,6 +109,17 @@ test('shows no indexing notice while indexing runs', async ({ context, page }) =
     await expect(page.getByText('Indexing stopped')).toHaveCount(0);
 });
 
+// The hint decides whether a phone's action key submits at all: without one, Chrome and Firefox on
+// Android make it Next, since the mode select's input is a text field after the query's, and Next
+// moves the focus there without sending Enter. A desktop browser has no such key, so the attribute
+// is all there is to check.
+test('asks a phone\'s keyboard for a search key rather than Next', async ({ context, page }) => {
+    await mockBackend(context);
+    await page.goto('/search?mode=text');
+
+    await expect(page.getByRole('textbox', { name: 'Search' })).toHaveAttribute('enterkeyhint', 'search');
+});
+
 test('allows slash input and submits the query with Enter', async ({ context, page }) => {
     let submitted: { query: string, mode: string } | undefined;
     await mockBackend(context, {
@@ -127,6 +138,86 @@ test('allows slash input and submits the query with Enter', async ({ context, pa
 
     await expect.poll(() => submitted).toMatchObject({ query: 'path/research', mode: 'text' });
     await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('path/research');
+});
+
+// Each keydown the page sees, and whether it came while a word was being composed: the browser
+// decides that, not the test sending the key, so a test of composing checks it did.
+async function recordKeys(page: Page): Promise<() => Promise<string[]>> {
+    await page.evaluate(() => {
+        const keys: string[] = [];
+        (window as unknown as { keys: string[] }).keys = keys;
+        window.addEventListener('keydown', (event) => {
+            keys.push(`${event.key}${event.isComposing ? ' (composing)' : ''}`);
+        }, { capture: true });
+    });
+    return () => page.evaluate(() => (window as unknown as { keys: string[] }).keys);
+}
+
+// A phone's action key may send its Enter while the word typed is still composed: a keydown
+// composing, then the keypress an input method's own keys never send, on which the browser
+// submits. A keydown handler that skipped a composing Enter, as it must an input method's, would
+// drop this one.
+test('searches with an Enter that comes while the word is composed', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
+    let submitted: { query: string, mode: string } | undefined;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            submitted = route.request().postDataJSON();
+            await route.fulfill({ json: emptySearchResponse(submitted!) });
+        },
+    });
+    await page.goto('/search?mode=text');
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.click();
+    const devtools = await context.newCDPSession(page);
+    await devtools.send('Input.imeSetComposition', { text: 'path', selectionStart: 4, selectionEnd: 4 });
+    await expect(query).toHaveValue('path');
+    const keys = await recordKeys(page);
+
+    await page.keyboard.press('Enter');
+
+    expect(await keys()).toEqual(['Enter (composing)']);
+    await expect.poll(() => submitted).toMatchObject({ query: 'path', mode: 'text' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('path');
+});
+
+// An Enter that confirms a conversion is the input method's: its keydown comes while the reading
+// is composed, with the key code 229 an input method's keys have, and no keypress follows it. It
+// is named Enter, as some browsers name it, for a handler of Enter to see it. Only the next Enter
+// searches, for the word chosen.
+test('leaves the Enter that confirms a conversion to the input method', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
+    const submitted: string[] = [];
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            submitted.push(request.query);
+            await route.fulfill({ json: emptySearchResponse(request) });
+        },
+    });
+    await page.goto('/search?mode=text');
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.click();
+    const devtools = await context.newCDPSession(page);
+    await devtools.send('Input.imeSetComposition', { text: 'けんさく', selectionStart: 4, selectionEnd: 4 });
+    await expect(query).toHaveValue('けんさく');
+    const keys = await recordKeys(page);
+
+    const enter = { key: 'Enter', code: 'Enter' };
+    await devtools.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...enter, windowsVirtualKeyCode: 229 });
+    await devtools.send('Input.insertText', { text: '検索' });
+    await devtools.send('Input.dispatchKeyEvent', { type: 'keyUp', ...enter, windowsVirtualKeyCode: 13 });
+    // Long enough for a search the key started to have been sent, had it started one: the next
+    // Enter would cancel its navigation before then.
+    await page.waitForTimeout(500);
+    expect(submitted).toEqual([]);
+    await expect(query).toHaveValue('検索');
+
+    await page.keyboard.press('Enter');
+
+    expect(await keys()).toEqual(['Enter (composing)', 'Enter']);
+    await expect.poll(() => submitted).toEqual(['検索']);
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('検索');
 });
 
 test('retries an updating search when the first status response is ready', async ({ context, page }) => {
