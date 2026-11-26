@@ -705,7 +705,12 @@ test('groups the passages of each note under its one link, in the order the note
     await expect(groups.nth(1).getByText(/line of A$/)).toHaveText(['twelfth line of A', 'third line of A']);
     await expect(groups.nth(1).getByText(/^line \d+/)).toHaveText([/^line 12 /, /^line 3 /]);
     await expect(page.locator('#search').getByRole('link', { name: /Note A/ })).toHaveCount(1);
+
     // A passage is text to select and copy; the note is reached by its header.
     await expect(page.locator('#search').getByRole('link').filter({ hasText: 'line of' })).toHaveCount(0);
-    await expect(groups.nth(1).getByRole('listitem').filter({ hasText: 'twelfth line of A' })).toHaveCSS('user-select', 'text');
+    const address = page.url();
+    await groups.nth(1).getByText('twelfth line of A').click({ clickCount: 3 });
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().trim()))
+        .toBe('twelfth line of A');
+    expect(page.url()).toBe(address);
 });
