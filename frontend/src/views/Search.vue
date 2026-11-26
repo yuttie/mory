@@ -79,56 +79,60 @@
             </v-alert>
         </v-sheet>
 
-        <v-list
-            class="flex-grow-1 overflow-y-auto"
-            lines="three"
-        >
-            <div
-                v-for="group of groups"
-                v-bind:key="group.path"
-                role="group"
-                v-bind:aria-label="group.title || group.path"
-                class="result-group"
+        <!-- No v-list: a passage is text to select, so a click in one focuses what holds it, and
+             a v-list then takes the arrow keys, with Shift or without, to move to its first or
+             last link. -->
+        <div class="results flex-grow-1 overflow-y-auto">
+            <ol
+                v-if="groups.length > 0"
+                class="result-list"
             >
-                <v-list-item
-                    v-bind:to="routeForMime(group.path, group.mimeType)"
-                    lines="two"
-                    class="result-header"
+                <li
+                    v-for="group of groups"
+                    v-bind:key="group.path"
+                    v-bind:aria-label="group.title || group.path"
+                    class="result-group"
                 >
-                    <v-list-item-title class="result-title">
-                        {{ group.title || group.path }}
-                    </v-list-item-title>
-                    <v-list-item-subtitle class="result-meta">
-                        {{ group.path }}
-                    </v-list-item-subtitle>
-                </v-list-item>
-                <v-list-item
-                    v-for="item of group.hits"
-                    v-bind:key="item.passage_id"
-                    class="result-passage"
-                >
-                    <v-list-item-subtitle class="result-meta">
-                        <template v-if="lineLabel(item)">
-                            {{ lineLabel(item) }} ·
-                        </template>
-                        {{ item.sources.join(' + ') }}
-                    </v-list-item-subtitle>
-                    <div
-                        v-if="item.content_kind === 'image_description'"
-                        class="text-caption text-warning mb-1"
+                    <v-list-item
+                        v-bind:to="routeForMime(group.path, group.mimeType)"
+                        lines="two"
+                        class="result-header"
                     >
-                        AI-generated image description
+                        <v-list-item-title class="result-title">
+                            {{ group.title || group.path }}
+                        </v-list-item-title>
+                        <v-list-item-subtitle class="result-meta">
+                            {{ group.path }}
+                        </v-list-item-subtitle>
+                    </v-list-item>
+                    <div
+                        v-for="item of group.hits"
+                        v-bind:key="item.passage_id"
+                        class="result-passage"
+                    >
+                        <v-list-item-subtitle class="result-meta">
+                            <template v-if="lineLabel(item)">
+                                {{ lineLabel(item) }} ·
+                            </template>
+                            {{ item.sources.join(' + ') }}
+                        </v-list-item-subtitle>
+                        <div
+                            v-if="item.content_kind === 'image_description'"
+                            class="text-caption text-warning mb-1"
+                        >
+                            AI-generated image description
+                        </div>
+                        <div class="result-snippet">
+                            {{ item.snippet }}
+                        </div>
                     </div>
-                    <div class="result-snippet">
-                        {{ item.snippet }}
-                    </div>
-                </v-list-item>
-            </div>
+                </li>
+            </ol>
             <v-list-item
-                v-if="hasSearched && !isLoading && response?.hits.length === 0"
+                v-else-if="hasSearched && !isLoading && response?.hits.length === 0"
                 title="No results"
-            ></v-list-item>
-        </v-list>
+            />
+        </div>
 
         <v-overlay
             v-bind:model-value="isLoading"
@@ -552,16 +556,31 @@ watch(draftMode, (mode) => {
     }
 }
 
+// Drawn as the v-list the results were in, and not as a v-sheet: the custom CSS a repository sets
+// may restyle every sheet, and the results never were one.
+.results {
+    padding: 8px var(--mory-list-inset);
+    background: rgba(var(--v-theme-surface));
+    color: color-mix(in srgb, rgb(var(--v-theme-on-surface)) calc(var(--v-high-emphasis-opacity) * 100%), transparent);
+}
+
+.result-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
 .result-group:not(:last-child) {
     margin-bottom: 30px;
 }
 
-// A passage is for reading and copying, so it opts back into the selection App.vue turns off.
+// A passage is for reading and copying, so it opts back into the selection App.vue turns off. It
+// ends where its header's row does.
 .result-passage {
     user-select: text;
     max-height: 300px;
     overflow: hidden;
-    padding-inline-start: 32px;
+    padding-inline: 32px var(--mory-row-inset);
 }
 
 .result-title {
