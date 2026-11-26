@@ -105,7 +105,6 @@
                 <v-list-item
                     v-for="item of group.hits"
                     v-bind:key="item.passage_id"
-                    v-bind:to="routeForMime(item.path, item.mime_type)"
                     class="result-passage"
                 >
                     <v-list-item-subtitle class="result-meta">
@@ -557,7 +556,9 @@ watch(draftMode, (mode) => {
     margin-bottom: 30px;
 }
 
+// A passage is for reading and copying, so it opts back into the selection App.vue turns off.
 .result-passage {
+    user-select: text;
     max-height: 300px;
     overflow: hidden;
     padding-inline-start: 32px;

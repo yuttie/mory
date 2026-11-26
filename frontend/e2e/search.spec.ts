@@ -661,7 +661,7 @@ test('counts images that could not be described apart from passages', async ({ c
     )).toBeVisible();
 });
 
-test('groups the passages of each note under it, in the order the notes first ranked', async ({ context, page }) => {
+test('groups the passages of each note under its one link, in the order the notes first ranked', async ({ context, page }) => {
     function hit(path: string, title: string, line: number, snippet: string): object {
         return {
             path,
@@ -701,4 +701,7 @@ test('groups the passages of each note under it, in the order the notes first ra
     await expect(groups.nth(0).getByText(/of A$/)).toHaveText(['first of A', 'second of A']);
     await expect(groups.nth(0).getByText('line 12')).toBeVisible();
     await expect(page.getByRole('link', { name: /Note A/ })).toHaveCount(1);
+    // A passage is text to select and copy; the note is reached by its header.
+    await expect(page.getByRole('link').filter({ hasText: 'first of A' })).toHaveCount(0);
+    await expect(groups.nth(0).getByRole('listitem').filter({ hasText: 'first of A' })).toHaveCSS('user-select', 'text');
 });
