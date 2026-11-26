@@ -578,8 +578,6 @@ watch(draftMode, (mode) => {
 // ends where its header's row does.
 .result-passage {
     user-select: text;
-    max-height: 300px;
-    overflow: hidden;
     padding-inline: 32px var(--mory-row-inset);
 }
 
@@ -591,7 +589,15 @@ watch(draftMode, (mode) => {
     opacity: 0.75;
 }
 
+// A passage runs to 800 tokens, too long to stand whole among the rest, so its text is capped. It
+// scrolls rather than being cut: the passage no longer leads to the note, so what a cut hid could
+// not be read anywhere here, yet a selection across it would still copy it unseen. The padding
+// keeps inside the box what Firefox counts as overflow past a line of Japanese, a fallback font's
+// glyphs reaching a pixel below the line: without it, nearly every such line scrolled by a pixel.
 .result-snippet {
+    max-height: 300px;
+    overflow-y: auto;
+    padding-block: 0.25em;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }

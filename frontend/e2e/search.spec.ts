@@ -765,3 +765,34 @@ test('reaches each note by Tab', async ({ context, page }) => {
     await expect(links.nth(1)).toBeFocused();
     await expect(links.nth(1)).toHaveAccessibleName('Note 1 note-1.md');
 });
+
+test('scrolls a long passage to its end rather than cutting it', async ({ context, page }) => {
+    const long = Array.from({ length: 100 }, (_, index) => `line ${index + 1} of a long passage`).join('\n');
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: { ...emptySearchResponse(request), hits: [hit('long.md', 'Long', 1, long)] },
+            });
+        },
+    });
+    await page.goto('/search?q=long&mode=text');
+    const snippet = page.locator('#search').getByText(/^line 1 of a long passage/);
+
+    // A passage does not lead to its note, so what of it is not drawn here cannot be read: its last
+    // character has to come into view, where a point on it hits the passage itself.
+    await snippet.hover({ position: { x: 20, y: 20 } });
+    await expect(async () => {
+        // Firefox scrolls a few lines for a wheel event, whatever its delta.
+        await page.mouse.wheel(0, 1_000);
+        expect(await snippet.evaluate((element) => {
+            const text = element.firstChild!;
+            const end = text.textContent!.trimEnd().length;
+            const range = document.createRange();
+            range.setStart(text, end - 1);
+            range.setEnd(text, end);
+            const { x, y, height } = range.getBoundingClientRect();
+            return document.elementFromPoint(x + 1, y + height / 2) === element;
+        })).toBe(true);
+    }).toPass({ timeout: 5_000 });
+});
