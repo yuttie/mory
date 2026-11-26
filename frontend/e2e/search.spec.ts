@@ -109,6 +109,17 @@ test('shows no indexing notice while indexing runs', async ({ context, page }) =
     await expect(page.getByText('Indexing stopped')).toHaveCount(0);
 });
 
+// The hint decides whether a phone's action key submits at all: without one, Chrome and Firefox on
+// Android make it Next, since the mode select's input is a text field after the query's, and Next
+// moves the focus there without sending Enter. A desktop browser has no such key, so the attribute
+// is all there is to check.
+test('asks a phone\'s keyboard for a search key rather than Next', async ({ context, page }) => {
+    await mockBackend(context);
+    await page.goto('/search?mode=text');
+
+    await expect(page.getByRole('textbox', { name: 'Search' })).toHaveAttribute('enterkeyhint', 'search');
+});
+
 test('allows slash input and submits the query with Enter', async ({ context, page }) => {
     let submitted: { query: string, mode: string } | undefined;
     await mockBackend(context, {
