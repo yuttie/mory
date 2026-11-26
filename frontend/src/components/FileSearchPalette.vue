@@ -480,9 +480,16 @@ watch([options, queryText, tab], ([now, query, kind], [before, queryBefore, kind
     }
 }
 
+// A key and what it does on one line, so that on a narrow screen the ones that do not fit go to the
+// next line whole rather than each broken in two.
 .file-search__keys {
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 4px 16px;
     padding: 8px 16px;
+
+    > span {
+        white-space: nowrap;
+    }
 
     kbd {
         padding: 0 4px;
