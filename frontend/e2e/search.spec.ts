@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { BrowserContext, Route } from '@playwright/test';
+import type { BrowserContext, Page, Route } from '@playwright/test';
 import { API_URL, TOKEN, signIn } from './backend';
 
 const COMMIT = 'a'.repeat(40);
@@ -138,6 +138,47 @@ test('allows slash input and submits the query with Enter', async ({ context, pa
 
     await expect.poll(() => submitted).toMatchObject({ query: 'path/research', mode: 'text' });
     await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('path/research');
+});
+
+// Each keydown the page sees, and whether it came while a word was being composed: the browser
+// decides that, not the test sending the key, so a test of composing checks it did.
+async function recordKeys(page: Page): Promise<() => Promise<string[]>> {
+    await page.evaluate(() => {
+        const keys: string[] = [];
+        (window as unknown as { keys: string[] }).keys = keys;
+        window.addEventListener('keydown', (event) => {
+            keys.push(`${event.key}${event.isComposing ? ' (composing)' : ''}`);
+        }, { capture: true });
+    });
+    return () => page.evaluate(() => (window as unknown as { keys: string[] }).keys);
+}
+
+// A phone's action key may send its Enter while the word typed is still composed: a keydown
+// composing, then the keypress an input method's own keys never send, on which the browser
+// submits. A keydown handler that skipped a composing Enter, as it must an input method's, would
+// drop this one.
+test('searches with an Enter that comes while the word is composed', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
+    let submitted: { query: string, mode: string } | undefined;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            submitted = route.request().postDataJSON();
+            await route.fulfill({ json: emptySearchResponse(submitted!) });
+        },
+    });
+    await page.goto('/search?mode=text');
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.click();
+    const devtools = await context.newCDPSession(page);
+    await devtools.send('Input.imeSetComposition', { text: 'path', selectionStart: 4, selectionEnd: 4 });
+    await expect(query).toHaveValue('path');
+    const keys = await recordKeys(page);
+
+    await page.keyboard.press('Enter');
+
+    expect(await keys()).toEqual(['Enter (composing)']);
+    await expect.poll(() => submitted).toMatchObject({ query: 'path', mode: 'text' });
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('path');
 });
 
 test('retries an updating search when the first status response is ready', async ({ context, page }) => {
