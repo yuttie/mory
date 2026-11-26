@@ -83,31 +83,48 @@
             class="flex-grow-1 overflow-y-auto"
             lines="three"
         >
-            <v-list-item
-                v-for="item of response?.hits ?? []"
-                v-bind:key="`${item.path}:${item.passage_id}`"
-                v-bind:to="routeForMime(item.path, item.mime_type)"
-                class="result-item"
+            <div
+                v-for="group of groups"
+                v-bind:key="group.path"
+                role="group"
+                v-bind:aria-label="group.title || group.path"
+                class="result-group"
             >
-                <v-list-item-title class="result-title">
-                    {{ item.title || item.path }}
-                </v-list-item-title>
-                <v-list-item-subtitle class="result-meta">
-                    {{ item.path }}<template v-if="lineLabel(item)">
-                        · {{ lineLabel(item) }}
-                    </template>
-                    · {{ item.sources.join(' + ') }}
-                </v-list-item-subtitle>
-                <div
-                    v-if="item.content_kind === 'image_description'"
-                    class="text-caption text-warning mb-1"
+                <v-list-item
+                    v-bind:to="routeForMime(group.path, group.mimeType)"
+                    lines="two"
+                    class="result-header"
                 >
-                    AI-generated image description
-                </div>
-                <div class="result-snippet">
-                    {{ item.snippet }}
-                </div>
-            </v-list-item>
+                    <v-list-item-title class="result-title">
+                        {{ group.title || group.path }}
+                    </v-list-item-title>
+                    <v-list-item-subtitle class="result-meta">
+                        {{ group.path }}
+                    </v-list-item-subtitle>
+                </v-list-item>
+                <v-list-item
+                    v-for="item of group.hits"
+                    v-bind:key="item.passage_id"
+                    v-bind:to="routeForMime(item.path, item.mime_type)"
+                    class="result-passage"
+                >
+                    <v-list-item-subtitle class="result-meta">
+                        <template v-if="lineLabel(item)">
+                            {{ lineLabel(item) }} ·
+                        </template>
+                        {{ item.sources.join(' + ') }}
+                    </v-list-item-subtitle>
+                    <div
+                        v-if="item.content_kind === 'image_description'"
+                        class="text-caption text-warning mb-1"
+                    >
+                        AI-generated image description
+                    </div>
+                    <div class="result-snippet">
+                        {{ item.snippet }}
+                    </div>
+                </v-list-item>
+            </div>
             <v-list-item
                 v-if="hasSearched && !isLoading && response?.hits.length === 0"
                 title="No results"
@@ -447,6 +464,30 @@ function handleKeydown(event: KeyboardEvent): void {
     }
 }
 
+interface ResultGroup {
+    path: string;
+    title: string | undefined;
+    mimeType: string;
+    hits: SearchHit[];
+}
+
+// Each note once, with its passages under it. A note stands where its best passage ranked, and
+// its passages keep the order moried ranked them in, so the grouping reorders nothing but what
+// would otherwise interleave with another note's.
+const groups = computed<ResultGroup[]>(() => {
+    const byPath = new Map<string, ResultGroup>();
+    for (const hit of response.value?.hits ?? []) {
+        let group = byPath.get(hit.path);
+        if (group === undefined) {
+            group = { path: hit.path, title: hit.title, mimeType: hit.mime_type, hits: [] };
+            byPath.set(hit.path, group);
+        }
+        group.title ||= hit.title;
+        group.hits.push(hit);
+    }
+    return [...byPath.values()];
+});
+
 function lineLabel(hit: SearchHit): string {
     if (hit.start_line === undefined) {
         return '';
@@ -512,13 +553,14 @@ watch(draftMode, (mode) => {
     }
 }
 
-.result-item {
+.result-group:not(:last-child) {
+    margin-bottom: 30px;
+}
+
+.result-passage {
     max-height: 300px;
     overflow: hidden;
-
-    &:not(:last-child) {
-        margin-bottom: 30px;
-    }
+    padding-inline-start: 32px;
 }
 
 .result-title {

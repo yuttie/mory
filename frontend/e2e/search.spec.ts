@@ -660,3 +660,45 @@ test('counts images that could not be described apart from passages', async ({ c
         '1 passage could not be embedded and 1 image could not be described; coverage is partial.',
     )).toBeVisible();
 });
+
+test('groups the passages of each note under it, in the order the notes first ranked', async ({ context, page }) => {
+    function hit(path: string, title: string, line: number, snippet: string): object {
+        return {
+            path,
+            blob_id: `blob-${path}`,
+            passage_id: `${path}:${line}`,
+            mime_type: 'text/markdown',
+            title,
+            start_line: line,
+            end_line: line,
+            snippet,
+            content_kind: 'source',
+            sources: ['text'],
+            score: 1,
+        };
+    }
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    hits: [
+                        hit('a.md', 'Note A', 3, 'first of A'),
+                        hit('b.md', 'Note B', 7, 'only of B'),
+                        hit('a.md', 'Note A', 12, 'second of A'),
+                    ],
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=grouped&mode=text');
+
+    const groups = page.getByRole('group');
+    await expect(groups).toHaveCount(2);
+    await expect(groups.nth(0)).toHaveAccessibleName('Note A');
+    await expect(groups.nth(1)).toHaveAccessibleName('Note B');
+    await expect(groups.nth(0).getByText(/of A$/)).toHaveText(['first of A', 'second of A']);
+    await expect(groups.nth(0).getByText('line 12')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Note A/ })).toHaveCount(1);
+});
