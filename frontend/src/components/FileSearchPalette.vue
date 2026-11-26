@@ -106,6 +106,7 @@
         <div class="file-search__keys d-none d-sm-flex text-caption text-medium-emphasis">
             <span><kbd>↑</kbd> <kbd>↓</kbd> to move</span>
             <span><kbd>Enter</kbd> to open</span>
+            <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> in a new tab</span>
             <span><kbd>Tab</kbd> for another kind</span>
             <span><kbd>Esc</kbd> to close</span>
         </div>
@@ -303,6 +304,11 @@ function onKeydown(event: KeyboardEvent): void {
                 break;
             case 'm':
                 chooseActive();
+                break;
+            // In a new tab, as Ctrl+click opens one: the click is sent with the key's Ctrl, as
+            // Vuetify sends Enter on a list item as a click, and the browser opens the link.
+            case 'enter':
+                activeRow()?.dispatchEvent(new MouseEvent('click', event));
                 break;
             default:
                 return;

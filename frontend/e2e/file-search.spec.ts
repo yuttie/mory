@@ -766,6 +766,23 @@ test('opens the file in a new tab on a middle click or Ctrl+click', async ({ con
     await expect(search(page)).toBeFocused();
 });
 
+test('opens the file chosen in a new tab with Ctrl+Enter', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await open(page);
+    await page.keyboard.press('ArrowDown');
+    await expect(selected(page)).toContainText('Monday');
+    const [opened] = await Promise.all([
+        context.waitForEvent('page'),
+        page.keyboard.press('Control+Enter'),
+    ]);
+    await expect(opened).toHaveURL('/note/journal/monday.md');
+    await expect(page).toHaveURL('/');
+    await expect(palette(page)).toBeVisible();
+    await expect(search(page)).toBeFocused();
+    await expect(selected(page)).toContainText('Monday');
+});
+
 // Each title two characters longer than the one before, beside the same five tags: the first
 // leaves room for every tag, and the last for none, and is cut short itself.
 const CROWDED_TITLE = 'A title that goes on and on about one thing and another, at length, and then about yet another thing, and more, and still more';
