@@ -308,12 +308,19 @@ function onKeydown(event: KeyboardEvent): void {
             case 'm':
                 chooseActive();
                 break;
-            // In a new tab, as Ctrl+click opens one: the click is sent with the key's Ctrl, as
-            // Vuetify sends Enter on a list item as a click, and the browser opens the link. Once
-            // for each press: held, the key would open another tab each time it repeated.
+            // In a new tab, as Ctrl+click opens one: a click is sent to the option's link, as
+            // Vuetify sends Enter on a list item, and the browser opens it. With Command as well as
+            // Ctrl, since a Mac opens a link in a new tab on Command+click and in place on a
+            // Ctrl-click; each browser reads only the key its platform opens a tab with. Once for
+            // each press: held, the key would open another tab each time it repeated.
             case 'enter':
                 if (!event.repeat) {
-                    activeRow()?.dispatchEvent(new MouseEvent('click', event));
+                    activeRow()?.dispatchEvent(new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        ctrlKey: true,
+                        metaKey: true,
+                    }));
                 }
                 break;
             default:

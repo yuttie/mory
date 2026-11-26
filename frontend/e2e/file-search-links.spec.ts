@@ -67,18 +67,25 @@ test('lists each event of a note as an option of its own', async ({ context, pag
     expect(warnings).toEqual([]);
 });
 
-// The clicks the palette sends an option's link itself, by the address of each.
-async function recordClicks(page: Page): Promise<() => Promise<string[]>> {
+interface Click {
+    href: string | null;
+    ctrlKey: boolean;
+    metaKey: boolean;
+}
+
+// The clicks the palette sends an option's link itself.
+async function recordClicks(page: Page): Promise<() => Promise<Click[]>> {
     await page.evaluate(() => {
-        const clicks: string[] = [];
-        (window as unknown as { clicks: string[] }).clicks = clicks;
+        const clicks: Click[] = [];
+        (window as unknown as { clicks: Click[] }).clicks = clicks;
         window.addEventListener('click', (event) => {
             if (!event.isTrusted && event.target instanceof HTMLAnchorElement) {
-                clicks.push(event.target.getAttribute('href') ?? '');
+                const { ctrlKey, metaKey } = event;
+                clicks.push({ href: event.target.getAttribute('href'), ctrlKey, metaKey });
             }
         }, true);
     });
-    return () => page.evaluate(() => (window as unknown as { clicks: string[] }).clicks);
+    return () => page.evaluate(() => (window as unknown as { clicks: Click[] }).clicks);
 }
 
 // Once for each press, as Ctrl+K opens the palette once: a tab for each time the key repeats would
@@ -97,5 +104,23 @@ test('opens one tab for Ctrl+Enter held down', async ({ context, page }) => {
     await page.keyboard.up('Enter');
     await page.keyboard.up('Control');
     await expect(await opened).toHaveURL('/note/journal/monday.md');
-    expect(await clicks()).toEqual(['/note/journal/monday.md']);
+    expect((await clicks()).map((click) => click.href)).toEqual(['/note/journal/monday.md']);
+});
+
+// With the key a new tab is opened with on a Mac as well, where Ctrl+click is a right click and a
+// Ctrl-click link opens in place. Only told by the click here, as no browser the tests run in reads
+// Command as a Mac's does; that Ctrl+Enter opens a tab on this one is in `file-search.spec.ts`.
+test('sends Ctrl+Enter to the link as a click with Command too', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await open(page);
+    await expect(titles(page)).toHaveText(['Monday', 'Ideas', 'Show all 2 in Files']);
+    const clicks = await recordClicks(page);
+    const [opened] = await Promise.all([
+        context.waitForEvent('page'),
+        page.keyboard.press('Control+Enter'),
+    ]);
+    await expect(opened).toHaveURL('/note/journal/monday.md');
+    await expect(page).toHaveURL('/');
+    expect(await clicks()).toEqual([{ href: '/note/journal/monday.md', ctrlKey: true, metaKey: true }]);
 });
