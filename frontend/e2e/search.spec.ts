@@ -181,6 +181,45 @@ test('searches with an Enter that comes while the word is composed', async ({ br
     await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('path');
 });
 
+// An Enter that confirms a conversion is the input method's: its keydown comes while the reading
+// is composed, with the key code 229 an input method's keys have, and no keypress follows it. It
+// is named Enter, as some browsers name it, for a handler of Enter to see it. Only the next Enter
+// searches, for the word chosen.
+test('leaves the Enter that confirms a conversion to the input method', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
+    const submitted: string[] = [];
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            submitted.push(request.query);
+            await route.fulfill({ json: emptySearchResponse(request) });
+        },
+    });
+    await page.goto('/search?mode=text');
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.click();
+    const devtools = await context.newCDPSession(page);
+    await devtools.send('Input.imeSetComposition', { text: 'けんさく', selectionStart: 4, selectionEnd: 4 });
+    await expect(query).toHaveValue('けんさく');
+    const keys = await recordKeys(page);
+
+    const enter = { key: 'Enter', code: 'Enter' };
+    await devtools.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...enter, windowsVirtualKeyCode: 229 });
+    await devtools.send('Input.insertText', { text: '検索' });
+    await devtools.send('Input.dispatchKeyEvent', { type: 'keyUp', ...enter, windowsVirtualKeyCode: 13 });
+    // Long enough for a search the key started to have been sent, had it started one: the next
+    // Enter would cancel its navigation before then.
+    await page.waitForTimeout(500);
+    expect(submitted).toEqual([]);
+    await expect(query).toHaveValue('検索');
+
+    await page.keyboard.press('Enter');
+
+    expect(await keys()).toEqual(['Enter (composing)', 'Enter']);
+    await expect.poll(() => submitted).toEqual(['検索']);
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('検索');
+});
+
 test('retries an updating search when the first status response is ready', async ({ context, page }) => {
     let attempts = 0;
     let releaseStatus: (() => void) | undefined;
