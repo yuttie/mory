@@ -479,7 +479,8 @@ interface ResultGroup {
 
 // Each note once, with its passages under it. A note stands where its best passage ranked, and
 // its passages keep the order moried ranked them in, so the grouping reorders nothing but what
-// would otherwise interleave with another note's.
+// would otherwise interleave with another note's. Every passage carries the title of the note it
+// was read from, so the first one's names the note.
 const groups = computed<ResultGroup[]>(() => {
     const byPath = new Map<string, ResultGroup>();
     for (const hit of response.value?.hits ?? []) {
@@ -488,7 +489,6 @@ const groups = computed<ResultGroup[]>(() => {
             group = { path: hit.path, title: hit.title, mimeType: hit.mime_type, hits: [] };
             byPath.set(hit.path, group);
         }
-        group.title ||= hit.title;
         group.hits.push(hit);
     }
     return [...byPath.values()];
