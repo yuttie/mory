@@ -741,6 +741,31 @@ test('opens the file clicked', async ({ context, page }) => {
     await expect(palette(page)).toBeHidden();
 });
 
+// As a link would, leaving the palette open over the page it was opened from, for the next.
+test('opens the file in a new tab on a middle click or Ctrl+click', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await open(page);
+    const monday = palette(page).getByRole('option').filter({ hasText: 'Monday' });
+    await expect(monday).toHaveAttribute('href', '/note/journal/monday.md');
+
+    const [middle] = await Promise.all([
+        context.waitForEvent('page'),
+        monday.click({ button: 'middle' }),
+    ]);
+    await expect(middle).toHaveURL('/note/journal/monday.md');
+    await middle.close();
+
+    const [controlled] = await Promise.all([
+        context.waitForEvent('page'),
+        monday.click({ modifiers: ['ControlOrMeta'] }),
+    ]);
+    await expect(controlled).toHaveURL('/note/journal/monday.md');
+    await expect(page).toHaveURL('/');
+    await expect(palette(page)).toBeVisible();
+    await expect(search(page)).toBeFocused();
+});
+
 // Each title two characters longer than the one before, beside the same five tags: the first
 // leaves room for every tag, and the last for none, and is cut short itself.
 const CROWDED_TITLE = 'A title that goes on and on about one thing and another, at length, and then about yet another thing, and more, and still more';

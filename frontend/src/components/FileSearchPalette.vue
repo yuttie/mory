@@ -60,12 +60,13 @@
                 v-bind:active="index === activeIndex"
                 v-bind:title="option.title"
                 v-bind:subtitle="option.subtitle"
+                v-bind:href="router.resolve(option.to).href"
                 role="option"
                 v-bind:aria-selected="index === activeIndex"
                 tabindex="-1"
                 color="primary"
                 class="file-search__option"
-                v-on:click="emit('choose', option.to)"
+                v-on:click="onClick($event, option)"
                 v-on:mousemove="activeIndex = index"
             >
                 <template v-slot:prepend>
@@ -114,6 +115,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
+import { useRouter } from 'vue-router';
 import type { RouteLocationRaw } from 'vue-router';
 import type { VList, VTextField } from 'vuetify/components';
 
@@ -149,6 +151,7 @@ const emit = defineEmits<{
     (e: 'close'): void;
 }>();
 
+const router = useRouter();
 const appStore = useAppStore();
 const files = useFilesStore();
 
@@ -330,6 +333,19 @@ function onKeydown(event: KeyboardEvent): void {
             return;
     }
     event.preventDefault();
+}
+
+// Each option is a link, so the browser opens it in a new tab on a middle click or Ctrl+click, as it
+// would any link, and leaves the palette open for the next. A plain click is the dialog's, which
+// closes as it opens the page, or only closes when the page is the one shown, and is kept from the
+// browser, which would load the whole app anew. By its `href` rather than a `to`, whose RouterLink
+// would push the route too unless this handler had run first and prevented the click.
+function onClick(event: MouseEvent | KeyboardEvent, option: Option): void {
+    if ((event instanceof MouseEvent && event.button !== 0) || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+        return;
+    }
+    event.preventDefault();
+    emit('choose', option.to);
 }
 
 function chooseActive(): void {
