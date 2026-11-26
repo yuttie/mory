@@ -732,13 +732,20 @@ test('lists the events the last to start first, as the Files view does', async (
     await expect(selected(page)).toContainText('2026-12-01');
 });
 
+// A link, but routed to by the app rather than followed by the browser, which would load the whole
+// app anew.
 test('opens the file clicked', async ({ context, page }) => {
     await mockBackend(context, FILES, { times: TIMES });
     await page.goto('/');
     await open(page);
+    // Lost if the browser loads the link as a new page rather than the app routing to it.
+    await page.evaluate(() => {
+        (window as unknown as { loaded: boolean }).loaded = true;
+    });
     await palette(page).getByRole('option').filter({ hasText: 'Monday' }).click();
     await expect(page).toHaveURL('/note/journal/monday.md');
     await expect(palette(page)).toBeHidden();
+    expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
 });
 
 // As a link would, leaving the palette open over the page it was opened from, for the next.
