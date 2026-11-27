@@ -314,6 +314,22 @@ describe('taskChecks', () => {
         ]);
     });
 
+    // The schema takes any count of digits, so an estimate too long for JavaScript to hold passed
+    // it, and the Plan view drew the task as one without an estimate, unannounced.
+    it('reports an estimate the Plan view does not read', () => {
+        const task = (estimate: unknown) => ({ task: { status: { kind: 'todo' }, estimate } });
+        expect(problemsOf(taskChecks([
+            entry(`.tasks/${A}.md`, task('9007199254740992m')),
+            entry(`.tasks/${B}.md`, task(90)),
+            entry(`.tasks/${A}/${B}.md`, task('1h 30m')),
+            entry(`.tasks/${A}/${B.replace('2', '3')}.md`, task(null)),
+        ]))['task-estimates']).toEqual([
+            { path: `.tasks/${A}.md`, message: 'estimate "9007199254740992m" is not read.' },
+            { path: `.tasks/${B}.md`, message: 'estimate "90" is not read.' },
+        ]);
+        expect(frontmatterChecks([entry(`.tasks/${A}.md`, task('9007199254740992m'))]).flatMap((check) => check.problems)).toEqual([]);
+    });
+
     it('passes a datetime that carries its offset', () => {
         const task = { status: { kind: 'todo' }, due_by: '2026-10-01 10:00+09:00', deadline: null };
         expect(problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task })]))['task-date-values']).toEqual([]);

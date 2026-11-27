@@ -12,6 +12,7 @@ import type { AlarmDefaults } from '@/alarms';
 import type { ImageSearchReport, ListEntry2 } from '@/api';
 import { eventsFromEntries, isCalendarReadable, taskDatesFromEntries, toWallClock } from '@/events';
 import type { EventCategories, EventError, EventWindow } from '@/events';
+import { estimateMinutes } from '@/estimate';
 import metadataSchema from '@/metadata-schema.json';
 import { planMonthOf } from '@/plans';
 import { readDatetime } from '@/recurrence';
@@ -387,6 +388,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
     const orphaned: HealthProblem[] = [];
     const legacy: HealthProblem[] = [];
     const unreadDates: HealthProblem[] = [];
+    const unreadEstimates: HealthProblem[] = [];
     const statusless: HealthProblem[] = [];
     const covered = new Set<string>();
     const pathsOf = new Map<string, string[]>();
@@ -484,6 +486,11 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
                     unreadDates.push({ severity: 'error', message: misread, path: entry.path });
                 }
             }
+            // The schema's pattern takes any number of digits, where the readers stop at what
+            // JavaScript holds exactly, so only the reader itself finds every one it refuses.
+            if (record.estimate !== undefined && record.estimate !== null && estimateMinutes(record.estimate) === undefined) {
+                unreadEstimates.push({ severity: 'error', message: `estimate "${describeValue(record.estimate)}" is not read.`, path: entry.path });
+            }
         }
     }
     return [
@@ -522,6 +529,12 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             title: 'Task dates are ones urgency reads as the rest do',
             description: 'Each due_by, deadline and available_from is a bare date or a datetime, such as 2026-10-21 or 2026-10-21 09:00+09:00; one written without its offset is read in moried\'s zone. Urgency ignores any other value. One in the years 0 to 99 urgency reads as written, while the task editor reads it in the 1900s, and so do the calendar and moried\'s alarms where it carries no offset, which leaves the task due in one century and drawn and rung in another.',
             problems: unreadDates,
+        },
+        {
+            id: 'task-estimates',
+            title: 'Task estimates are ones the Plan view reads',
+            description: 'Each estimate is hours and minutes, such as 3h, 90m or 1h 30m, and no more minutes than JavaScript holds exactly. The Plan view fills a day with a task whose estimate it does not read as though the task gave none, taking estimate_by_tag, default_estimate or an hour for it, and moried\'s create_task and update_task refuse to write one.',
+            problems: unreadEstimates,
         },
         {
             id: 'task-model',
