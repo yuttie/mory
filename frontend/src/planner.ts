@@ -31,21 +31,26 @@ export interface DayEvents {
 const DAY = 24 * 60;
 const emptyDay = (): DayEvents => ({ allDay: [], timed: [], taskDates: [] });
 
+// Which day a moment is on, counted in dates rather than in time gone by: a day the clocks change
+// on is 23 or 25 hours long, and is still one day.
+const dayNumber = (moment: dayjs.Dayjs): number => Date.UTC(moment.year(), moment.month(), moment.date()) / 86_400_000;
+
 /// The events of each day from `from` to `to`, both `YYYY-MM-DD` and included. An event is on
 /// every day it reaches, and a timed one is cut at each midnight. Its times are the wall clock the
-/// calendar draws it at (`toWallClock`).
+/// calendar draws it at (`toWallClock`), and are placed by the wall clock as `<v-calendar>` places
+/// them, to the minute: on a day the clocks change, ten o'clock is not ten hours after midnight.
 export function eventsByDay(events: readonly CalendarEvent[], from: string, to: string): Record<string, DayEvents> {
     const days: Record<string, DayEvents> = {};
     const first = dayjs(from);
-    const count = dayjs(to).diff(first, 'day') + 1;
+    const firstDay = dayNumber(first);
+    const count = dayNumber(dayjs(to)) - firstDay + 1;
     if (!first.isValid() || !(count > 0)) {
         return days;
     }
-    const dates = Array.from({ length: count }, (_, index) => first.add(index, 'day'));
+    const dates = Array.from({ length: count }, (_, index) => first.add(index, 'day').format('YYYY-MM-DD'));
     for (const date of dates) {
-        days[date.format('YYYY-MM-DD')] = emptyDay();
+        days[date] = emptyDay();
     }
-    const windowEnd = first.add(count, 'day');
     for (const event of events) {
         const start = dayjs(event.start);
         if (!start.isValid()) {
@@ -55,28 +60,37 @@ export function eventsByDay(events: readonly CalendarEvent[], from: string, to: 
             days[start.format('YYYY-MM-DD')]?.taskDates.push(event);
             continue;
         }
-        const whole = isAllDay(event.start);
-        // An end as written: a date names the whole of its day, and an event without one is over
-        // where it starts -- a moment, which takes no time, or its one day.
+        // An end as written, and an event without one over where it starts -- a moment, which
+        // takes no time, or its one day.
         let end = event.end === undefined ? start : dayjs(event.end);
         if (!end.isValid() || end.isBefore(start)) {
             end = start;
         }
-        if (whole) {
-            const last = end.startOf('day');
-            for (let day = start.startOf('day'); !day.isAfter(last) && day.isBefore(windowEnd); day = day.add(1, 'day')) {
-                days[day.format('YYYY-MM-DD')]?.allDay.push(event);
+        // Counted from the window's first day, so that only the window's days are walked: every
+        // event the notes declare without a rule reaches here, whenever it is, and one begun years
+        // ago must cost no more than one begun today.
+        const startsOn = dayNumber(start) - firstDay;
+        const endsOn = dayNumber(end) - firstDay;
+        const last = Math.min(count - 1, endsOn);
+        if (isAllDay(event.start)) {
+            // A whole day's end is inclusive, as `eventEndsAt` reads it.
+            for (let index = Math.max(0, startsOn); index <= last; index += 1) {
+                days[dates[index]].allDay.push(event);
             }
             continue;
         }
-        for (let day = start.startOf('day'); !day.isAfter(end) && day.isBefore(windowEnd); day = day.add(1, 'day')) {
-            const from = Math.max(0, start.diff(day, 'minute'));
-            const until = Math.min(DAY, end.diff(day, 'minute'));
-            // Not the midnight a day before it ended at: an event ending at 00:00 is not on that day.
-            if (until <= 0 && !day.isSame(start.startOf('day'))) {
+        // A timed event's end is the moment it names, and a date there is the midnight that date
+        // begins with: that is where the calendar stops drawing it.
+        const startsAt = start.hour() * 60 + start.minute();
+        const endsAt = end.hour() * 60 + end.minute();
+        for (let index = Math.max(0, startsOn); index <= last; index += 1) {
+            // Not on the day whose first moment it ends at, which the calendar leaves it off, unless
+            // it is a moment at that midnight.
+            if (index === endsOn && endsAt === 0 && index !== startsOn) {
                 continue;
             }
-            days[day.format('YYYY-MM-DD')]?.timed.push({ event, start: from, end: Math.max(from, until) });
+            const from = index === startsOn ? startsAt : 0;
+            days[dates[index]].timed.push({ event, start: from, end: Math.max(from, index === endsOn ? endsAt : DAY) });
         }
     }
     for (const day of Object.values(days)) {
@@ -129,16 +143,20 @@ export interface Flow {
     overflow: FlowItem[];
 }
 
-/// The shortest piece a task is cut into, and the shortest stretch one is begun in: less is left
-/// as slack rather than given ten minutes of a task before a meeting.
+/// The shortest piece a task is cut into: less is left as slack rather than given ten minutes of a
+/// task before a meeting. A task that fits what is left of a stretch whole is not cut, and is done
+/// there however short both are.
 export const MIN_PIECE = 30;
 
-/// `items` laid into `free` in their order, each beginning where the one before ended.
+/// `items` laid into `free` in their order, each beginning no earlier than the one before ended.
+/// `free` is in order and apart, as `freeSpans` gives it.
 ///
-/// The order is the reader's and is kept: nothing is moved ahead to fill a stretch better. A task
-/// longer than what is left of a stretch is cut there and goes on in the next, unless that would
-/// leave either piece under `minPiece`: then the rest of the stretch stays empty. What the day has
-/// no room for is `overflow`, for the reader to decide what gives way.
+/// The order is the reader's and is kept: nothing is moved ahead to fill a stretch better, even one
+/// an earlier task left empty. A task longer than what is left of a stretch is cut there and goes
+/// on in the next, but into no piece under `minPiece`, counting what is left for another day: it is
+/// cut short of the stretch's end where that keeps the next piece long enough, and not begun in the
+/// stretch at all where nothing does, the rest of the stretch staying empty. What the day has no
+/// room for is `overflow`, and so is everything after it, for the reader to decide what gives way.
 export function flow(items: readonly FlowItem[], free: readonly Span[], minPiece = MIN_PIECE): Flow {
     const segments: FlowSegment[] = [];
     const overflow: FlowItem[] = [];
