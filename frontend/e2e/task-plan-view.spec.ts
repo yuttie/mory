@@ -171,6 +171,8 @@ test('corrects an estimate where the task is planned', async ({ context, page })
     await expect(field).toHaveValue('3h');
     await field.fill('1h 30m');
     await page.getByRole('button', { name: 'Set', exact: true }).click();
+    // The menu goes as the change is made, rather than stay over the view while it loads.
+    await expect(page.locator('.plan-entry-menu')).toBeHidden();
     await expect.poll(() => repository.writes.find(({ path }) => path === `.tasks/${B}.md`)?.content)
         .toBe(NOTES[`.tasks/${B}.md`].replace('estimate: 3h', 'estimate: 1h 30m'));
     await expect(day(page, '2026-10-05').locator('.day-load')).toHaveText('2h 30m / 7h');

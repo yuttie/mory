@@ -860,6 +860,15 @@ watch(chosen, (value) => {
         menuOpen.value = false;
     }
 });
+// The task view covers itself while the listing loads, and a menu is drawn over that cover, as
+// every overlay is: left open, it would be the one thing still offered on a view that says to wait,
+// and offered for a task the listing may be about to change. So it closes, as it does once any
+// of its own actions is taken.
+watch(() => tasks.isLoading, (loading) => {
+    if (loading) {
+        menuOpen.value = false;
+    }
+});
 
 const cloneTask = (task: TaskNode): PlanEntry => ({ task: task.uuid.toLowerCase(), origin: 'planned' });
 interface DraggedPlanEntry extends PlanEntry {
@@ -937,12 +946,13 @@ function onDayChange(date: string, event: { added?: { element: DraggedPlanEntry;
         }
     });
 }
-async function saveEstimate(): Promise<void> {
+function saveEstimate(): void {
     const task = chosen.value?.row.task;
     if (!task || !estimateChanged.value) {
         return;
     }
-    await run(() => tasks.setEstimate(task.path, estimateDraft.value.trim()));
+    const estimate = estimateDraft.value.trim();
+    act(() => tasks.setEstimate(task.path, estimate));
 }
 async function complete(date: string, uuid: string): Promise<void> {
     const task = taskOf(uuid);
