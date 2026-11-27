@@ -7,80 +7,23 @@
         <div class="events-section ma-3">
             <h2 class="mb-3 text-center">Events</h2>
             <div class="events-grid">
-                <v-card variant="outlined" class="event-column">
+                <v-card
+                    v-for="day in eventDays"
+                    v-bind:key="day.date"
+                    variant="outlined"
+                    class="event-column"
+                >
                     <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCalendarToday }}</v-icon>
-                        Today
+                        <v-icon start>{{ day.icon }}</v-icon>
+                        {{ day.title }}
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="todayEvents.length === 0" class="text-center text-medium-emphasis">
-                            No events today
+                        <div v-if="day.events.length === 0" class="text-center text-medium-emphasis">
+                            {{ day.empty }}
                         </div>
                         <div v-else>
                             <div
-                                v-for="event in todayEvents"
-                                v-bind:key="eventKey(event)"
-                                class="event-item mb-2 pa-2 clickable-event"
-                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                                v-on:click="navigateToEvent(event)"
-                            >
-                                <div class="event-name font-weight-medium">
-                                    <span
-                                        v-if="event.taskDate"
-                                        class="task-date-label text-caption mr-1"
-                                        v-bind:style="{ 'background-color': event.color }"
-                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
-                                </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
-                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
-                            </div>
-                        </div>
-                    </v-card-text>
-                </v-card>
-
-                <v-card variant="outlined" class="event-column">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCalendar }}</v-icon>
-                        Tomorrow
-                    </v-card-title>
-                    <v-card-text>
-                        <div v-if="tomorrowEvents.length === 0" class="text-center text-medium-emphasis">
-                            No events tomorrow
-                        </div>
-                        <div v-else>
-                            <div
-                                v-for="event in tomorrowEvents"
-                                v-bind:key="eventKey(event)"
-                                class="event-item mb-2 pa-2 clickable-event"
-                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                                v-on:click="navigateToEvent(event)"
-                            >
-                                <div class="event-name font-weight-medium">
-                                    <span
-                                        v-if="event.taskDate"
-                                        class="task-date-label text-caption mr-1"
-                                        v-bind:style="{ 'background-color': event.color }"
-                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
-                                </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
-                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
-                            </div>
-                        </div>
-                    </v-card-text>
-                </v-card>
-
-                <v-card variant="outlined" class="event-column">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCalendarPlus }}</v-icon>
-                        Day After Tomorrow
-                    </v-card-title>
-                    <v-card-text>
-                        <div v-if="dayAfterTomorrowEvents.length === 0" class="text-center text-medium-emphasis">
-                            No events
-                        </div>
-                        <div v-else>
-                            <div
-                                v-for="event in dayAfterTomorrowEvents"
+                                v-for="event in day.events"
                                 v-bind:key="eventKey(event)"
                                 class="event-item mb-2 pa-2 clickable-event"
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
@@ -366,26 +309,20 @@ const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
 const dayAfterTomorrow = dayjs().add(2, 'days').format('YYYY-MM-DD');
 
-const todayEvents = computed(() => {
+function eventsOn(day: string): CalendarEvent[] {
     return events.value.filter(event => {
         const eventDate = dayjs(event.start).format('YYYY-MM-DD');
-        return eventDate === today;
+        return eventDate === day;
     }).sort((a, b) => a.start.localeCompare(b.start));
-});
+}
 
-const tomorrowEvents = computed(() => {
-    return events.value.filter(event => {
-        const eventDate = dayjs(event.start).format('YYYY-MM-DD');
-        return eventDate === tomorrow;
-    }).sort((a, b) => a.start.localeCompare(b.start));
-});
+const days = [
+    { date: today, title: 'Today', icon: mdiCalendarToday, empty: 'No events today' },
+    { date: tomorrow, title: 'Tomorrow', icon: mdiCalendar, empty: 'No events tomorrow' },
+    { date: dayAfterTomorrow, title: 'Day After Tomorrow', icon: mdiCalendarPlus, empty: 'No events' },
+];
 
-const dayAfterTomorrowEvents = computed(() => {
-    return events.value.filter(event => {
-        const eventDate = dayjs(event.start).format('YYYY-MM-DD');
-        return eventDate === dayAfterTomorrow;
-    }).sort((a, b) => a.start.localeCompare(b.start));
-});
+const eventDays = computed(() => days.map((day) => ({ ...day, events: eventsOn(day.date) })));
 
 const plans = usePlansStore();
 void plans.loadMonths([today.slice(0, 7)]).catch(() => undefined);
