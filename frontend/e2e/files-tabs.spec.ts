@@ -63,7 +63,7 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
     await expect(report).toContainText('2026-11-30');
     // Into the task's editor, rather than its note.
     await expect(report.getByRole('link', { name: 'Write the report' }))
-        .toHaveAttribute('href', `/tasks-next/${REPORT}/descendants/schedule?task=${REPORT}`);
+        .toHaveAttribute('href', `/tasks-next/${REPORT}/descendants/plan?task=${REPORT}`);
 
     await tab(page, 'Media').click();
     await expect(page).toHaveURL(/\/files\/media$/);

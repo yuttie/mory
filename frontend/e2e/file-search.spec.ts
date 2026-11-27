@@ -179,7 +179,7 @@ test('moves between the kinds of file with Tab, as the Files view has them', asy
     await expect(selected(page)).toContainText('Thesis · In progress');
     // Into the task's editor, as the Tasks tab opens it.
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(`/tasks-next/${REPORT}/descendants/schedule?task=${REPORT}`);
+    await expect(page).toHaveURL(`/tasks-next/${REPORT}/descendants/plan?task=${REPORT}`);
     await expect(palette(page)).toBeHidden();
 });
 

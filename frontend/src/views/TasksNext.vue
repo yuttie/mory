@@ -427,7 +427,7 @@ const descendantsViewMode = computed<'plan' | 'schedule' | 'status' | 'eisenhowe
     if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
         return route.params.viewMode as 'plan' | 'schedule' | 'status' | 'eisenhower';
     }
-    return 'schedule';
+    return 'plan';
 });
 
 // The task open in the editor over the list, which the address names. A task the listing does not
@@ -636,8 +636,8 @@ const eisenhowerQuadrants = computed(() => {
 });
 
 const viewModeOptions = computed(() => [
-    { text: 'Schedule', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
     { text: 'Plan', icon: mdiCalendarClockOutline, value: 'plan' },
+    { text: 'Schedule', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
     { text: 'Status', icon: mdiTrafficLightOutline, value: 'status' },
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
 ]);

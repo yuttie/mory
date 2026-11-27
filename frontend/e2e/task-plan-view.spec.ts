@@ -41,6 +41,16 @@ const planOf = (writes: { path: string; content: string }[], date: string) => {
     return write ? YAML.parse(write.content)[date] : undefined;
 };
 
+test('is the view the tasks open in', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next');
+    await expect(page).toHaveURL(/\/tasks-next\/_\/descendants\/plan$/);
+    await expect(plan(page).locator('.plan-range')).toHaveText('2026-10-04 – 2026-10-17');
+    await expect(plan(page).locator('.day')).toHaveCount(14);
+    await expect(plan(page).locator('.day.today')).toHaveAttribute('data-day', '2026-10-05');
+});
+
 test('draws each day with its events and the time they leave', async ({ context, page }) => {
     await page.clock.setFixedTime(MORNING);
     await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
