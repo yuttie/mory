@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import YAML from 'yaml';
 import { mockBackend, uuid } from './backend';
 
@@ -160,6 +160,26 @@ test('opens a planned task\'s menu again, and on another task', async ({ context
     await expect(menu.locator('.v-card-title')).toHaveText('Beta');
     await page.waitForTimeout(400);
     await expect(menu).toBeVisible();
+});
+
+
+// A colour may be a palette name, which CSS does not read, and a pale one: each is drawn as the
+// calendar draws it, with what is written on it in whichever of black and white stands out.
+test('draws events in their colours, written on legibly', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    await mockBackend(context, {
+        ...NOTES,
+        '.events/week.md': NOTES['.events/week.md']
+            .replace('        end: 2026-10-05 13:00:00+09:00\n', '        end: 2026-10-05 13:00:00+09:00\n        color: deep-purple\n')
+            .replace('        end: 2026-10-08\n', '        end: 2026-10-08\n        color: light-green\n'),
+    }, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    const colours = (locator: Locator) => locator.evaluate((element) => [getComputedStyle(element).backgroundColor, getComputedStyle(element).color]);
+    await expect(day(page, '2026-10-07').locator('.day-banner')).toHaveText('Trip');
+    expect(await colours(day(page, '2026-10-07').locator('.day-banner'))).toEqual(['rgb(139, 195, 74)', 'rgb(0, 0, 0)']);
+    expect(await colours(day(page, '2026-10-05').locator('.day-event-dot'))).toContain('rgb(103, 58, 183)');
+    await zoom(page, 'One day, by the clock');
+    expect(await colours(plan(page).locator('.timeline-event'))).toEqual(['rgb(103, 58, 183)', 'rgb(255, 255, 255)']);
 });
 
 test('corrects an estimate where the task is planned', async ({ context, page }) => {

@@ -253,7 +253,7 @@
                         v-for="(event, index) of day.events.allDay"
                         v-bind:key="`all-${index}`"
                         class="day-banner"
-                        v-bind:style="{ backgroundColor: event.color }"
+                        v-bind:style="{ backgroundColor: paintOf(event.color).fill, color: paintOf(event.color).ink }"
                         v-bind:title="event.name"
                     >
                         {{ event.name }}
@@ -262,7 +262,7 @@
                         v-for="(event, index) of day.taskDates.slice(0, shownTaskDates)"
                         v-bind:key="`date-${index}`"
                         class="day-task-date"
-                        v-bind:style="{ color: event.color }"
+                        v-bind:style="{ color: paintOf(event.color).fill }"
                         v-bind:title="event.name"
                     >
                         <v-icon size="x-small">
@@ -287,7 +287,7 @@
                     >
                         <span
                             class="day-event-dot"
-                            v-bind:style="{ backgroundColor: timed.event.color }"
+                            v-bind:style="{ backgroundColor: paintOf(timed.event.color).fill }"
                         />
                         <span class="day-event-time">{{ clockOf(timed.start) }}</span>
                         {{ timed.event.name }}
@@ -387,7 +387,7 @@
                             v-for="(block, index) of timeline.events"
                             v-bind:key="`event-${index}`"
                             class="timeline-event"
-                            v-bind:style="{ top: `${block.top}px`, height: `${block.height}px`, left: `calc(${TIMELINE_GUTTER}px + (45% - ${TIMELINE_GUTTER / 2}px) * ${block.lane} / ${timeline.lanes})`, width: `calc((45% - ${TIMELINE_GUTTER / 2}px) / ${timeline.lanes} - 2px)`, backgroundColor: block.color }"
+                            v-bind:style="{ top: `${block.top}px`, height: `${block.height}px`, left: `calc(${TIMELINE_GUTTER}px + (45% - ${TIMELINE_GUTTER / 2}px) * ${block.lane} / ${timeline.lanes})`, width: `calc((45% - ${TIMELINE_GUTTER / 2}px) / ${timeline.lanes} - 2px)`, backgroundColor: block.paint.fill, color: block.paint.ink }"
                             v-bind:title="block.title"
                         >
                             {{ block.name }}
@@ -564,6 +564,7 @@
 import { computed, ref, watch, onMounted } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import dayjs from 'dayjs';
+import Color from 'color';
 import draggable from 'vuedraggable';
 import {
     mdiCalendarArrowRight,
@@ -583,7 +584,8 @@ import type { TaskNode } from '@/task-forest';
 import { makeDefaultStatus } from '@/task';
 import type { PlanEntry } from '@/plans';
 import { DEFAULT_WORK_HOURS, estimateMinutes, formatEstimate, resolvedEstimate, type ResolvedEstimate } from '@/estimate';
-import { eventsFromEntries, mergeImported, taskDatesFromEntries, type CalendarEvent } from '@/events';
+import { DEFAULT_EVENT_COLOR, eventsFromEntries, mergeImported, taskDatesFromEntries, type CalendarEvent } from '@/events';
+import { parseEventColor } from '@/event-color';
 import { clockOf, eventsByDay, flow, freeSpans, minutesIn, type DayEvents, type Flow, type Span } from '@/planner';
 import { parseOutline, writesOf } from '@/task-outline';
 import { statusColor, statusGround } from '@/status-color';
@@ -695,6 +697,27 @@ const eventsOfDays = computed(() => eventsByDay(events.value, dates.value[0], da
 const listed = computed(() => new Set([...props.candidates.map((task) => task.uuid.toLowerCase()), ...(props.listRoot ? [props.listRoot.toLowerCase()] : [])]));
 const isListed = (event: CalendarEvent): boolean => event.taskId !== undefined && listed.value.has(event.taskId.toLowerCase());
 
+// An event's colour as the calendar draws it, and what is written on it in white or black as the
+// calendar chooses. A colour is free text, a palette name such as `light-green` among it, which CSS
+// reads as no colour at all; and white on a pale one, as the imported calendars' default is,
+// cannot be read. Kept by colour, as a few colours are drawn over and over.
+interface Paint {
+    fill: string;
+    ink: string;
+}
+const paints = new Map<string, Paint>();
+function paintOf(color: string): Paint {
+    let paint = paints.get(color);
+    if (paint === undefined) {
+        const fill = parseEventColor(color) ?? Color(DEFAULT_EVENT_COLOR);
+        const onWhite = fill.contrast(Color('#ffffff'));
+        const onBlack = fill.contrast(Color('#000000'));
+        paint = { fill: fill.string(), ink: onWhite >= 4.5 || onWhite >= onBlack ? '#ffffff' : '#000000' };
+        paints.set(color, paint);
+    }
+    return paint;
+}
+
 interface Row {
     entry: PlanEntry;
     task: TaskNode | undefined;
@@ -796,7 +819,7 @@ const timeline = computed(() => {
             top: at(start),
             height: Math.max(at(end) - at(start), 16),
             name: event.name,
-            color: event.color,
+            paint: paintOf(event.color),
             title: `${clockOf(start)}–${clockOf(end)} ${event.name}`,
         };
     });
@@ -1106,7 +1129,6 @@ onMounted(() => {
     padding: 0 4px;
     border-radius: 3px;
     font-size: 12px;
-    color: #fff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1172,7 +1194,6 @@ onMounted(() => {
     line-height: 16px;
     overflow: hidden;
 }
-.timeline-event { color: #fff; }
 .timeline-task {
     left: calc(45% + 28px);
     right: 0;
