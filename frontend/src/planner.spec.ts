@@ -250,6 +250,13 @@ describe('flow', () => {
                 if (overflowing) {
                     expect(pieces, context).toEqual([]);
                 }
+                // And the day has no room only where no stretch from where the task could begin
+                // takes the whole of it, as the rest would then be done there: without this, a
+                // flow that placed nothing, or kept to the first stretch, kept every rule above.
+                if (left > 0 && !overflowing) {
+                    const after = Math.max(-Infinity, ...segments.filter(({ id }) => Number(id) < Number(item.id)).map(({ end }) => end));
+                    expect(spans.every((span) => span.end - Math.max(span.start, after) < item.minutes), context).toBe(true);
+                }
                 if (left > 0) {
                     overflowing = true;
                 }
