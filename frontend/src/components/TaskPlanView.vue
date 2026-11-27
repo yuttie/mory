@@ -293,12 +293,20 @@
                         <span class="day-event-time">{{ clockOf(timed.start) }}</span>
                         {{ timed.event.name }}
                     </div>
-                    <!-- A planned task is clicked for its menu, as a candidate is for its task, by a
+                    <!-- A task with a result recorded stays on its day (`filter`): the result is of
+                         that day, and moved with the task it would say that a day to come was
+                         worked on and leave the day that was without its record. Matched on the
+                         entry Sortable picks up, not its chip, since a press in the gap under the
+                         chip picks the entry up too. It is still clicked for its menu, where the
+                         result is taken back.
+                         A planned task is clicked for its menu, as a candidate is for its task, by a
                          hand that may move the mouse a pixel between press and release: with no
                          tolerance, Sortable takes that for a drag and swallows the click. -->
                     <draggable
                         class="task-list entries"
                         v-bind:data-date="day.date"
+                        filter=".recorded"
+                        v-bind:prevent-on-filter="false"
                         v-bind:model-value="day.rows"
                         v-bind:item-key="rowKey"
                         v-bind:group="DAY_GROUP"
@@ -316,7 +324,10 @@
                         v-on:change="onDayChange(day.date, $event)"
                     >
                         <template #item="{ element: row }">
-                            <div class="task-list-entry">
+                            <div
+                                class="task-list-entry"
+                                v-bind:class="{ recorded: row.entry.result !== undefined }"
+                            >
                                 <button
                                     type="button"
                                     class="plan-entry"

@@ -161,6 +161,69 @@ test('moves a planned task to another day', async ({ context, page }) => {
     await expect(page.locator('.plan-entry-menu')).toBeHidden();
 });
 
+// A result is of the day it was recorded on. Moved with its task, a day to come said it had been
+// worked on, and the day that was lost its record.
+test('keeps a task with a result recorded on its day', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    const repository = await mockBackend(context, {
+        ...NOTES,
+        '.mory/plans/2026-10.yaml': `2026-10-04:\n    - task: ${A}\n      origin: planned\n      result: worked\n2026-10-05:\n    - task: ${B}\n      origin: planned\n      result: missed\n`,
+    }, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    for (const [date, title] of [['2026-10-04', 'Alpha'], ['2026-10-05', 'Beta']]) {
+        const chip = day(page, date).locator('.plan-entry', { hasText: title });
+        await chip.click({ trial: true });
+        const box = (await chip.boundingBox())!;
+        const to = (await day(page, '2026-10-06').locator('.entries').boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width, box.y + box.height, { steps: 5 });
+        await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+        await expect(page.locator('.sortable-fallback')).toHaveCount(0);
+        await page.mouse.up();
+        await expect(day(page, date).locator('.plan-entry-title')).toHaveText(title);
+    }
+    await expect(day(page, '2026-10-06').locator('.plan-entry')).toHaveCount(0);
+    expect(repository.writes).toEqual([]);
+    // Its menu still opens, and taking the result back there lets it be moved again.
+    await day(page, '2026-10-05').locator('.plan-entry', { hasText: 'Beta' }).click();
+    await page.getByText('Not missed after all').click();
+    await expect.poll(() => planOf(repository.writes, '2026-10-05')).toEqual([{ task: B, origin: 'planned' }]);
+    await day(page, '2026-10-04').locator('.plan-entry', { hasText: 'Alpha' }).click();
+    await page.getByText('Not worked after all').click();
+    await expect.poll(() => planOf(repository.writes, '2026-10-04')).toEqual([{ task: A, origin: 'planned' }]);
+    await drag(page, day(page, '2026-10-04').locator('.plan-entry', { hasText: 'Alpha' }), day(page, '2026-10-06').locator('.entries'));
+    await expect.poll(() => planOf(repository.writes, '2026-10-06')).toEqual([{ task: A, origin: 'planned' }]);
+});
+
+// Sortable picks up the entry a press lands in, and the gap that spaces a chip from the next is
+// the entry's, not the chip's: pressed there, a task worked on was carried to another day.
+test('keeps a task with a result recorded on its day when pressed below its chip', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    const repository = await mockBackend(context, {
+        ...NOTES,
+        '.mory/plans/2026-10.yaml': `2026-10-05:\n    - task: ${A}\n      origin: planned\n      result: worked\n    - task: ${B}\n      origin: planned\n`,
+    }, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    const entry = day(page, '2026-10-05').locator('.task-list-entry', { hasText: 'Alpha' });
+    await entry.click({ trial: true });
+    const box = (await entry.boundingBox())!;
+    const chip = (await entry.locator('.plan-entry').boundingBox())!;
+    const to = (await day(page, '2026-10-06').locator('.entries').boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = (chip.y + chip.height + box.y + box.height) / 2;
+    expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.className, [x, y])).toContain('task-list-entry');
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 20, y + 20, { steps: 5 });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+    await expect(page.locator('.sortable-fallback')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(day(page, '2026-10-05').locator('.plan-entry-title')).toHaveText(['Alpha', 'Beta']);
+    await expect(day(page, '2026-10-06').locator('.plan-entry')).toHaveCount(0);
+    expect(repository.writes).toEqual([]);
+});
+
 test('reorders a day\'s tasks, and pours them in the new order', async ({ context, page }) => {
     await page.clock.setFixedTime(MORNING);
     const repository = await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
