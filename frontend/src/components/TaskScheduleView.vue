@@ -11,7 +11,7 @@
             <div class="week-navigation">
                 <v-btn
                     v-bind:disabled="busy"
-                    v-on:click="week = week.subtract(7, 'day')"
+                    v-on:click="week = week.subtract(1, 'day')"
                 >
                     Previous
                 </v-btn>
@@ -23,7 +23,7 @@
                 </v-btn>
                 <v-btn
                     v-bind:disabled="busy"
-                    v-on:click="week = week.add(7, 'day')"
+                    v-on:click="week = week.add(1, 'day')"
                 >
                     Next
                 </v-btn>

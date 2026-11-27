@@ -33,8 +33,12 @@ for (const width of [390, 600, 1000, 1600]) {
         await lastDay.getByRole('button', { name: 'Record interruption' }).click();
         await expect(page.getByRole('dialog')).toBeVisible();
         await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+        // A day at a time, so the days around today stay in view as it moves.
         await planner.getByRole('button', { name: 'Next', exact: true }).click();
-        await expect(planner.locator('.week-range')).toContainText('2026-10-11');
+        await expect(planner.locator('.week-range')).toHaveText('2026-10-05 – 2026-10-11');
+        await planner.getByRole('button', { name: 'Previous', exact: true }).click();
+        await planner.getByRole('button', { name: 'Previous', exact: true }).click();
+        await expect(planner.locator('.week-range')).toHaveText('2026-10-03 – 2026-10-09');
     });
 }
 
