@@ -160,6 +160,7 @@
                     v-bind:sort="false"
                     v-bind:disabled="busy"
                     v-bind:force-fallback="true"
+                    v-bind:fallback-tolerance="DRAG_TOLERANCE"
                     v-bind:fallback-on-body="true"
                     v-bind:delay="500"
                     v-bind:delay-on-touch-only="true"
@@ -292,6 +293,9 @@
                         <span class="day-event-time">{{ clockOf(timed.start) }}</span>
                         {{ timed.event.name }}
                     </div>
+                    <!-- A planned task is clicked for its menu, as a candidate is for its task, by a
+                         hand that may move the mouse a pixel between press and release: with no
+                         tolerance, Sortable takes that for a drag and swallows the click. -->
                     <draggable
                         class="task-list entries"
                         v-bind:data-date="day.date"
@@ -302,6 +306,7 @@
                         v-bind:move="canDrop"
                         v-bind:disabled="busy"
                         v-bind:force-fallback="true"
+                        v-bind:fallback-tolerance="DRAG_TOLERANCE"
                         v-bind:fallback-on-body="true"
                         v-bind:delay="500"
                         v-bind:delay-on-touch-only="true"
@@ -609,6 +614,8 @@ const props = defineProps<{
 // Created once: Sortable knows the list a drag began in by its group object.
 const CANDIDATE_GROUP = { name: 'plans', pull: 'clone', put: false };
 const DAY_GROUP = { name: 'plans', pull: true, put: true };
+// In pixels: a click jitters by one or two, and a drag soon goes further.
+const DRAG_TOLERANCE = 4;
 
 type Zoom = 'day' | 'w1' | 'w2' | 'w4';
 const ZOOMS: { value: Zoom; text: string; title: string }[] = [

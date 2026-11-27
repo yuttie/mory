@@ -162,6 +162,20 @@ test('opens a planned task\'s menu again, and on another task', async ({ context
     await expect(menu).toBeVisible();
 });
 
+// A hand on a mouse moves it a little as it clicks, which Sortable took for a drag.
+test('opens a planned task\'s menu on a click that moves a pixel', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    const entry = day(page, '2026-10-05').locator('.plan-entry', { hasText: 'Alpha' });
+    await entry.click({ trial: true });
+    const box = (await entry.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2 + 1);
+    await page.mouse.up();
+    await expect(page.locator('.plan-entry-menu .v-card-title')).toHaveText('Alpha');
+});
 
 // A colour may be a palette name, which CSS does not read, and a pale one: each is drawn as the
 // calendar draws it, with what is written on it in whichever of black and white stands out.
