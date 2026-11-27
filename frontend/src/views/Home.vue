@@ -7,18 +7,29 @@
         <div class="events-section ma-3">
             <h2 class="mb-3 text-center">Events</h2>
             <div class="events-grid">
-                <v-card variant="outlined" class="event-column">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCalendarToday }}</v-icon>
-                        Today
+                <v-card
+                    v-for="day in eventDays"
+                    v-bind:key="day.date"
+                    variant="outlined"
+                    class="event-column"
+                >
+                    <v-card-title
+                        v-bind:id="day.titleId"
+                        class="pb-2"
+                    >
+                        <v-icon start>{{ day.icon }}</v-icon>
+                        {{ day.title }}
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="todayEvents.length === 0" class="text-center text-medium-emphasis">
-                            No events today
+                        <!-- Even a day holding nothing but finished events folds them, where the
+                             task tree folds closed tasks only beside open ones: "No events" would
+                             be untrue, and the day is looked at for what is left of it. -->
+                        <div v-if="day.unfinished.length === 0 && day.finished.length === 0" class="text-center text-medium-emphasis">
+                            {{ day.empty }}
                         </div>
                         <div v-else>
                             <div
-                                v-for="event in todayEvents"
+                                v-for="event in day.expanded ? [...day.unfinished, ...day.finished] : day.unfinished"
                                 v-bind:key="eventKey(event)"
                                 class="event-item mb-2 pa-2 clickable-event"
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
@@ -34,68 +45,20 @@
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
                                 <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
-                        </div>
-                    </v-card-text>
-                </v-card>
-
-                <v-card variant="outlined" class="event-column">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCalendar }}</v-icon>
-                        Tomorrow
-                    </v-card-title>
-                    <v-card-text>
-                        <div v-if="tomorrowEvents.length === 0" class="text-center text-medium-emphasis">
-                            No events tomorrow
-                        </div>
-                        <div v-else>
-                            <div
-                                v-for="event in tomorrowEvents"
-                                v-bind:key="eventKey(event)"
-                                class="event-item mb-2 pa-2 clickable-event"
-                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                                v-on:click="navigateToEvent(event)"
+                            <!-- Described by the day, which a screen reader moving from fold to
+                                 fold would otherwise not hear. -->
+                            <button
+                                v-if="day.finished.length > 0"
+                                type="button"
+                                class="finished-fold text-medium-emphasis text-caption"
+                                v-bind:aria-describedby="day.titleId"
+                                v-on:click="toggleFinished(day.date)"
                             >
-                                <div class="event-name font-weight-medium">
-                                    <span
-                                        v-if="event.taskDate"
-                                        class="task-date-label text-caption mr-1"
-                                        v-bind:style="{ 'background-color': event.color }"
-                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
-                                </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
-                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
-                            </div>
-                        </div>
-                    </v-card-text>
-                </v-card>
-
-                <v-card variant="outlined" class="event-column">
-                    <v-card-title class="pb-2">
-                        <v-icon start>{{ mdiCalendarPlus }}</v-icon>
-                        Day After Tomorrow
-                    </v-card-title>
-                    <v-card-text>
-                        <div v-if="dayAfterTomorrowEvents.length === 0" class="text-center text-medium-emphasis">
-                            No events
-                        </div>
-                        <div v-else>
-                            <div
-                                v-for="event in dayAfterTomorrowEvents"
-                                v-bind:key="eventKey(event)"
-                                class="event-item mb-2 pa-2 clickable-event"
-                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                                v-on:click="navigateToEvent(event)"
-                            >
-                                <div class="event-name font-weight-medium">
-                                    <span
-                                        v-if="event.taskDate"
-                                        class="task-date-label text-caption mr-1"
-                                        v-bind:style="{ 'background-color': event.color }"
-                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
-                                </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
-                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
-                            </div>
+                                <v-icon start>
+                                    {{ day.expanded ? mdiChevronUp : mdiChevronDown }}
+                                </v-icon>
+                                {{ day.expanded ? 'Hide' : 'Show' }} {{ day.finished.length }} finished
+                            </button>
                         </div>
                     </v-card-text>
                 </v-card>
@@ -221,6 +184,8 @@ import {
     mdiCalendarPlus,
     mdiCheckboxMarkedCircleOutline,
     mdiClockOutline,
+    mdiChevronDown,
+    mdiChevronUp,
 } from '@mdi/js';
 
 import type { ListEntry2 } from '@/api';
@@ -366,26 +331,44 @@ const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
 const dayAfterTomorrow = dayjs().add(2, 'days').format('YYYY-MM-DD');
 
-const todayEvents = computed(() => {
+function eventsOn(day: string): CalendarEvent[] {
     return events.value.filter(event => {
         const eventDate = dayjs(event.start).format('YYYY-MM-DD');
-        return eventDate === today;
+        return eventDate === day;
     }).sort((a, b) => a.start.localeCompare(b.start));
-});
+}
 
-const tomorrowEvents = computed(() => {
-    return events.value.filter(event => {
-        const eventDate = dayjs(event.start).format('YYYY-MM-DD');
-        return eventDate === tomorrow;
-    }).sort((a, b) => a.start.localeCompare(b.start));
-});
+const days = [
+    { date: today, title: 'Today', icon: mdiCalendarToday, empty: 'No events today' },
+    { date: tomorrow, title: 'Tomorrow', icon: mdiCalendar, empty: 'No events tomorrow' },
+    { date: dayAfterTomorrow, title: 'Day After Tomorrow', icon: mdiCalendarPlus, empty: 'No events' },
+];
 
-const dayAfterTomorrowEvents = computed(() => {
-    return events.value.filter(event => {
-        const eventDate = dayjs(event.start).format('YYYY-MM-DD');
-        return eventDate === dayAfterTomorrow;
-    }).sort((a, b) => a.start.localeCompare(b.start));
-});
+// The days whose finished events are drawn, after the rest: the due dates and deadlines of a task
+// done or canceled, and the events marked `finished`. Folded until asked for, as the task tree
+// folds its closed tasks, rather than drawn faded among the rest, where a day of finished tasks
+// crowded out what is still to come. Not remembered: what is finished changes from one visit to
+// the next.
+const expandedDays = ref(new Set<string>());
+
+const eventDays = computed(() => days.map((day) => {
+    const onDay = eventsOn(day.date);
+    return {
+        ...day,
+        titleId: `events-${day.date}`,
+        unfinished: onDay.filter((event) => !event.finished),
+        finished: onDay.filter((event) => event.finished),
+        expanded: expandedDays.value.has(day.date),
+    };
+}));
+
+function toggleFinished(date: string) {
+    const expanded = new Set(expandedDays.value);
+    if (!expanded.delete(date)) {
+        expanded.add(date);
+    }
+    expandedDays.value = expanded;
+}
 
 const plans = usePlansStore();
 void plans.loadMonths([today.slice(0, 7)]).catch(() => undefined);
@@ -679,6 +662,30 @@ function changeSortOrder(category: string, kind: string) {
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.08);
+    }
+}
+
+// Drawn as the task tree draws its fold, a row rather than a button: a native button's own fill
+// and border, which Vuetify's reset leaves, made it stand out from the events it stands for.
+.finished-fold {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--mory-row-height);
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--mory-corner-radius);
+    background: none;
+    text-align: start;
+
+    &:hover {
+        background-color: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
+    }
+
+    &:focus-visible {
+        outline: 2px solid rgb(var(--v-theme-primary));
+        outline-offset: -2px;
     }
 }
 
