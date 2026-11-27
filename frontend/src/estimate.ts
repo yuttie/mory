@@ -18,7 +18,8 @@ export function estimateMinutes(value: unknown): number | undefined {
     return Number.isSafeInteger(minutes) ? minutes : undefined;
 }
 
-/// Minutes as an estimate is written, for a field to show and a save to write: `90` is `1h 30m`.
+/// Minutes as an estimate is written, for the views to show in the spelling a field takes back:
+/// `90` is `1h 30m`.
 export function formatEstimate(minutes: number): string {
     const whole = Math.max(0, Math.round(minutes));
     const hours = Math.floor(whole / 60);
