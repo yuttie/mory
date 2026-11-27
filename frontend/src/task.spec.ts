@@ -102,10 +102,18 @@ describe('replaceEstimate', () => {
             .toBe('---\ntask:\n    estimate: 2h\n    status:\n        kind: todo\n---\n');
     });
 
+    it('fills in an estimate named without a value', () => {
+        expect(replaceEstimate('---\ntask:\n    status: {kind: todo}\n    estimate:\n---\n', '2h'))
+            .toBe('---\ntask:\n    status: {kind: todo}\n    estimate: 2h\n---\n');
+        expect(replaceEstimate('---\r\ntask:\r\n    estimate:   # a guess\r\n    status: {kind: todo}\r\n---\r\n', '2h'))
+            .toBe('---\r\ntask:\r\n    estimate: 2h # a guess\r\n    status: {kind: todo}\r\n---\r\n');
+    });
+
     it('refuses a note it cannot edit in place', () => {
         expect(() => replaceEstimate('---\ntask: {status: {kind: todo}}\n---\n', '2h')).toThrow('block');
         expect(() => replaceEstimate('---\ntags: []\n---\n', '2h')).toThrow('block');
-        expect(() => replaceEstimate('---\ntask:\n    status: {kind: todo}\n    estimate:\n---\n', '2h')).toThrow('editor');
+        expect(() => replaceEstimate('---\ntask:\n    status: {kind: todo}\n    estimate: >-\n        3h\n    deadline: 2026-12-01\n---\n', '2h')).toThrow('more than the estimate');
+        expect(() => replaceEstimate('---\nusual: &usual 3h\ntask:\n    status: {kind: todo}\n    estimate: *usual\n---\n', '2h')).toThrow('editor');
     });
 });
 

@@ -499,6 +499,12 @@ function replaceEstimateInYaml(source: string, estimate: string): string {
     else if (YAML.isScalar(pair.value) && pair.value.range && pair.value.range[0] < pair.value.range[1]) {
         edited = splice(source, pair.value.range[0], pair.value.range[1], estimate);
     }
+    else if (YAML.isScalar(pair.value) && pair.value.value === null && pair.value.range && pair.key.range) {
+        // Named and left empty, as a note written from a template leaves it: the value goes after
+        // the key, ahead of any comment on its line, which `#` begins only after a space.
+        const at = pair.value.range[0];
+        edited = splice(source, pair.key.range[0], at, `estimate: ${estimate}${source[at] === '#' ? ' ' : ''}`);
+    }
     else {
         throw new Error('The task\'s estimate is written in a form this edit does not handle. Set it in the task\'s editor.');
     }
