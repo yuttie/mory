@@ -1041,6 +1041,9 @@ mod tests {
         assert!(apply(TASK, &measure_changes(&a).unwrap()).contains("estimate: 1h 30m"));
         a.estimate = Some("2d".into());
         assert!(measure_changes(&a).is_err());
+        let estimated = apply(TASK, &measure_changes(&UpdateTaskArgs { estimate: Some("2h".into()), ..args("t.md") }).unwrap());
+        let cleared = apply(&estimated, &measure_changes(&UpdateTaskArgs { clear_estimate: Some(true), ..args("t.md") }).unwrap());
+        assert_eq!(cleared, TASK);
     }
 
     fn dates(json: serde_json::Value) -> SetTaskDatesArgs {

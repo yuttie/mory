@@ -123,6 +123,7 @@ describe('a task holding values the editor does not read', () => {
         ['tags that are not strings', 'tags: [a, {b: 1}]\n', 'tags'],
         ['an importance of no level', 'task:\n    status: {kind: todo}\n    importance: urgent\n', 'importance'],
         ['a lead time that is not text', 'task:\n    status: {kind: todo}\n    lead_time: 7\n', 'lead_time'],
+        ['an estimate that is not text', 'task:\n    status: {kind: todo}\n    estimate: 90\n', 'estimate'],
         ['a date that is not text', 'task:\n    status: {kind: todo}\n    due_by: [2026-11-20]\n', 'due_by'],
         ['an older start that is not text', 'task:\n    status: {kind: todo}\n    start_at: {at: 2026-11-20}\n', 'start_at'],
         ['alarms that are not a mapping', 'task:\n    status: {kind: todo}\n    deadline: 2026-11-20\n    alarms: -1d\n', 'alarms'],
@@ -140,11 +141,11 @@ describe('a task holding values the editor does not read', () => {
     });
 
     it('reads every value it can as it did', async () => {
-        const markdown = '---\ntags: [work]\ntask:\n    status: {kind: todo}\n    importance: 4\n    lead_time: 2w\n    due_by: 2026-11-20\n    alarms:\n        due_by: -1d\n---\n\n# Title\n';
+        const markdown = '---\ntags: [work]\ntask:\n    status: {kind: todo}\n    importance: 4\n    lead_time: 2w\n    estimate: 1h 30m\n    due_by: 2026-11-20\n    alarms:\n        due_by: -1d\n---\n\n# Title\n';
         client.get.mockResolvedValue({ status: 200, data: markdown, headers: { etag: '"v1"' } });
         const [, task] = await getTask(PATH);
         expect(task?.unread).toBeUndefined();
-        expect(task).toMatchObject({ tags: ['work'], importance: 'medium', lead_time: '2w', due_by: '2026-11-20', alarms: { due_by: ['-1d'] } });
+        expect(task).toMatchObject({ tags: ['work'], importance: 'medium', lead_time: '2w', estimate: '1h 30m', due_by: '2026-11-20', alarms: { due_by: ['-1d'] } });
     });
 });
 
