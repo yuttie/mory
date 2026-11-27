@@ -13,17 +13,23 @@
                     variant="outlined"
                     class="event-column"
                 >
-                    <v-card-title class="pb-2">
+                    <v-card-title
+                        v-bind:id="day.titleId"
+                        class="pb-2"
+                    >
                         <v-icon start>{{ day.icon }}</v-icon>
                         {{ day.title }}
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="day.events.length === 0" class="text-center text-medium-emphasis">
+                        <!-- Even a day holding nothing but finished events folds them, where the
+                             task tree folds closed tasks only beside open ones: "No events" would
+                             be untrue, and the day is looked at for what is left of it. -->
+                        <div v-if="day.unfinished.length === 0 && day.finished.length === 0" class="text-center text-medium-emphasis">
                             {{ day.empty }}
                         </div>
                         <div v-else>
                             <div
-                                v-for="event in day.events"
+                                v-for="event in day.expanded ? [...day.unfinished, ...day.finished] : day.unfinished"
                                 v-bind:key="eventKey(event)"
                                 class="event-item mb-2 pa-2 clickable-event"
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
@@ -39,6 +45,20 @@
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
                                 <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
+                            <!-- Described by the day, which a screen reader moving from fold to
+                                 fold would otherwise not hear. -->
+                            <button
+                                v-if="day.finished.length > 0"
+                                type="button"
+                                class="finished-fold text-medium-emphasis text-caption"
+                                v-bind:aria-describedby="day.titleId"
+                                v-on:click="toggleFinished(day.date)"
+                            >
+                                <v-icon start>
+                                    {{ day.expanded ? mdiChevronUp : mdiChevronDown }}
+                                </v-icon>
+                                {{ day.expanded ? 'Hide' : 'Show' }} {{ day.finished.length }} finished
+                            </button>
                         </div>
                     </v-card-text>
                 </v-card>
@@ -164,6 +184,8 @@ import {
     mdiCalendarPlus,
     mdiCheckboxMarkedCircleOutline,
     mdiClockOutline,
+    mdiChevronDown,
+    mdiChevronUp,
 } from '@mdi/js';
 
 import type { ListEntry2 } from '@/api';
@@ -322,7 +344,31 @@ const days = [
     { date: dayAfterTomorrow, title: 'Day After Tomorrow', icon: mdiCalendarPlus, empty: 'No events' },
 ];
 
-const eventDays = computed(() => days.map((day) => ({ ...day, events: eventsOn(day.date) })));
+// The days whose finished events are drawn, after the rest: the due dates and deadlines of a task
+// done or canceled, and the events marked `finished`. Folded until asked for, as the task tree
+// folds its closed tasks, rather than drawn faded among the rest, where a day of finished tasks
+// crowded out what is still to come. Not remembered: what is finished changes from one visit to
+// the next.
+const expandedDays = ref(new Set<string>());
+
+const eventDays = computed(() => days.map((day) => {
+    const onDay = eventsOn(day.date);
+    return {
+        ...day,
+        titleId: `events-${day.date}`,
+        unfinished: onDay.filter((event) => !event.finished),
+        finished: onDay.filter((event) => event.finished),
+        expanded: expandedDays.value.has(day.date),
+    };
+}));
+
+function toggleFinished(date: string) {
+    const expanded = new Set(expandedDays.value);
+    if (!expanded.delete(date)) {
+        expanded.add(date);
+    }
+    expandedDays.value = expanded;
+}
 
 const plans = usePlansStore();
 void plans.loadMonths([today.slice(0, 7)]).catch(() => undefined);
@@ -616,6 +662,30 @@ function changeSortOrder(category: string, kind: string) {
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.08);
+    }
+}
+
+// Drawn as the task tree draws its fold, a row rather than a button: a native button's own fill
+// and border, which Vuetify's reset leaves, made it stand out from the events it stands for.
+.finished-fold {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--mory-row-height);
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--mory-corner-radius);
+    background: none;
+    text-align: start;
+
+    &:hover {
+        background-color: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
+    }
+
+    &:focus-visible {
+        outline: 2px solid rgb(var(--v-theme-primary));
+        outline-offset: -2px;
     }
 }
 
