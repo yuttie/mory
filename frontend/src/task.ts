@@ -461,3 +461,49 @@ function replaceStatusInYaml(source: string, status: Status): string {
     }
     return edited;
 }
+
+// A note with its task's estimate replaced, and every other byte left alone, as `replaceStatus`
+// leaves a note: the Plan view changes an estimate where the task is planned, holding nothing else
+// of the note. `estimate` is written as given, so it is one `estimateMinutes` reads.
+export function replaceEstimate(markdown: string, estimate: string): string {
+    return editFrontmatter(markdown, (yaml) => replaceEstimateInYaml(yaml, estimate));
+}
+
+function replaceEstimateInYaml(source: string, estimate: string): string {
+    const doc = YAML.parseDocument(source);
+    if (doc.errors.length > 0) {
+        throw new Error(`The frontmatter is not valid YAML: ${doc.errors[0].message}`);
+    }
+    const root = doc.contents;
+    const taskPair = YAML.isMap(root) ? root.items.find((pair) => hasKey(pair, 'task')) : undefined;
+    const task = taskPair?.value;
+    if (!YAML.isMap(task) || task.flow || !task.range) {
+        throw new Error('The frontmatter has no block `task:` mapping to set the estimate in. Set it in the task\'s editor.');
+    }
+    const before = doc.toJS();
+    if (before.task.estimate === estimate) {
+        return source;
+    }
+    const eol = lineEnding(source);
+    const pair = task.items.find((p) => hasKey(p, 'estimate'));
+    let edited: string;
+    if (pair === undefined) {
+        // Where `render` writes it, after the keys it writes before it: in front of the first key
+        // that is not one of those, or of the last key where all are. In front of a key either
+        // way, which keeps its line and its column.
+        const earlier = ['status', 'importance', 'available_from', 'lead_time'];
+        const later = task.items.find((p) => !earlier.some((key) => hasKey(p, key))) ?? task.items.at(-1);
+        const at = (YAML.isScalar(later?.key) ? later.key.range?.[0] : undefined) ?? task.range[0];
+        edited = splice(source, at, at, `estimate: ${estimate}${eol}${' '.repeat(columnOf(source, at))}`);
+    }
+    else if (YAML.isScalar(pair.value) && pair.value.range && pair.value.range[0] < pair.value.range[1]) {
+        edited = splice(source, pair.value.range[0], pair.value.range[1], estimate);
+    }
+    else {
+        throw new Error('The task\'s estimate is written in a form this edit does not handle. Set it in the task\'s editor.');
+    }
+    if (!parsesTo(edited, { ...before, task: { ...before.task, estimate } })) {
+        throw new Error('Setting the estimate in place would have changed more than the estimate. Set it in the task\'s editor.');
+    }
+    return edited;
+}

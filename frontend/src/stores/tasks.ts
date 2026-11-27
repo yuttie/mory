@@ -15,7 +15,7 @@ import {
     toNestedForest,
 } from '@/forest';
 import { buildPathForest } from '@/path-forest';
-import { render, replaceStatus } from '@/task';
+import { render, replaceEstimate, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
 import {
     TASKS_DIR,
@@ -291,6 +291,20 @@ export const useTasksStore = defineStore('tasks', () => {
         );
     }
 
+    // Change the estimate alone, as `setStatus` changes the status: the Plan view corrects one
+    // where the task is planned, as the work left turns out longer or shorter than it was thought.
+    async function setEstimate(path: string, estimate: string): Promise<void> {
+        const content = await files.read(path);
+        const edited = replaceEstimate(content, estimate);
+        if (edited !== content) {
+            await files.write(path, edited);
+        }
+        await subset.settle(
+            path,
+            (entry) => (entry.metadata as TaskMetadata | null)?.task?.estimate === estimate,
+        );
+    }
+
     // Only a task with nothing under it. Its subtasks live in the directory it names, which
     // deleting its file leaves behind: they would be drawn at the top of the tree, with nothing to
     // say what they were part of. Asked once any move is done, as a move renames the task's file
@@ -437,6 +451,7 @@ export const useTasksStore = defineStore('tasks', () => {
         save,
         saveAll,
         setStatus,
+        setEstimate,
         remove,
         move,
     };

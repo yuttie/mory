@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { type Status, type Task, STATUS_KINDS, hasFields, makeDefaultStatus, render, replaceStatus, withoutBlanks } from '@/task';
+import { type Status, type Task, STATUS_KINDS, hasFields, makeDefaultStatus, render, replaceEstimate, replaceStatus, withoutBlanks } from '@/task';
 
 function task(overrides: Partial<Task> = {}): Task {
     return {
@@ -77,6 +77,35 @@ Some notes.
         const after = replaceStatus(before, { kind: 'todo' });
         expect(after).toBe(render(task({ status: { kind: 'todo' }, alarms: { due_by: ['09:00'] } })));
         expect(after).toContain('due_by: [09:00]');
+    });
+});
+
+describe('replaceEstimate', () => {
+    it('writes what render would, for a note render wrote', () => {
+        const before = render(task({ due_by: '2026-12-01' }));
+        expect(replaceEstimate(before, '1h 30m')).toBe(render(task({ due_by: '2026-12-01', estimate: '1h 30m' })));
+        expect(replaceEstimate(replaceEstimate(before, '1h 30m'), '45m')).toBe(render(task({ due_by: '2026-12-01', estimate: '45m' })));
+    });
+
+    it('leaves every other byte alone', () => {
+        const note = '---\n# mine\ntags: [ a,b ]\ntask:\n  status: {kind: todo}  # soon\n  estimate: "3h" # a guess\n  deadline: 2026-12-01\n---\n\n# T\n';
+        expect(replaceEstimate(note, '2h')).toBe(note.replace('"3h"', '2h'));
+        expect(replaceEstimate(note, '3h')).toBe(note);
+        const without = note.replace('  estimate: "3h" # a guess\n', '');
+        expect(replaceEstimate(without, '2h')).toBe(without.replace('  deadline', '  estimate: 2h\n  deadline'));
+    });
+
+    it('goes before the first key render writes after it, or before the last key', () => {
+        expect(replaceEstimate('---\ntask:\n    deadline: 2026-12-01\n    status: {kind: todo}\n---\n', '2h'))
+            .toBe('---\ntask:\n    estimate: 2h\n    deadline: 2026-12-01\n    status: {kind: todo}\n---\n');
+        expect(replaceEstimate('---\ntask:\n    status:\n        kind: todo\n---\n', '2h'))
+            .toBe('---\ntask:\n    estimate: 2h\n    status:\n        kind: todo\n---\n');
+    });
+
+    it('refuses a note it cannot edit in place', () => {
+        expect(() => replaceEstimate('---\ntask: {status: {kind: todo}}\n---\n', '2h')).toThrow('block');
+        expect(() => replaceEstimate('---\ntags: []\n---\n', '2h')).toThrow('block');
+        expect(() => replaceEstimate('---\ntask:\n    status: {kind: todo}\n    estimate:\n---\n', '2h')).toThrow('editor');
     });
 });
 
