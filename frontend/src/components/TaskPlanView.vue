@@ -1030,8 +1030,8 @@ async function collect(): Promise<void> {
 }
 
 // A task typed where it is planned from, as a line of Quick add: a title, and its fields in
-// brackets. It is added To do unless the line says otherwise, since a task in the backlog is no
-// candidate and would vanish as it is added.
+// brackets. It is added To do where the line gives Backlog or no status, which Quick add reads
+// alike, since a task in the backlog is no candidate and would vanish as it is added.
 const added = ref('');
 const addError = ref('');
 const adding = ref(false);
