@@ -678,10 +678,12 @@ function openDay(date: string): void {
     zoom.value = 'day';
 }
 
-// The events of the days shown, as the calendar draws them. A week further back, so that an event
-// begun before the first day and still on is there.
+// The events of the days shown, as the calendar draws them. A month further back, as far as the
+// calendar looks, so that an event begun before the first day and still on is there: an
+// occurrence of a series, and an imported event, is found by when it begins, and a fortnight away
+// is no rarity.
 const eventWindow = computed(() => ({
-    from: dayjs(dates.value[0]).subtract(7, 'day').format('YYYY-MM-DD'),
+    from: dayjs(dates.value[0]).subtract(1, 'month').format('YYYY-MM-DD'),
     to: dayjs(dates.value.at(-1)).add(1, 'day').format('YYYY-MM-DD'),
 }));
 const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY, []);

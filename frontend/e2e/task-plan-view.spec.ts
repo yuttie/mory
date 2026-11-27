@@ -70,6 +70,20 @@ test('draws each day with its events and the time they leave', async ({ context,
     await expect(day(page, '2026-10-04').locator('.day-load')).toHaveCount(0);
 });
 
+// A series' occurrence is found by when it begins, as an imported event is: one begun well before
+// the first day shown is still drawn on the days it reaches, as the calendar draws it.
+test('draws a long event begun before the days shown', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    await mockBackend(context, {
+        ...NOTES,
+        '.events/leave.md': '---\nevents:\n    Leave:\n        start: 2025-09-20\n        end: 2025-10-06\n        repeat:\n            freq: yearly\n---\n\n# Leave\n',
+    }, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    await expect(day(page, '2026-10-04').locator('.day-banner')).toHaveText('Leave');
+    await expect(day(page, '2026-10-06').locator('.day-banner')).toHaveText('Leave');
+    await expect(day(page, '2026-10-07').locator('.day-banner')).toHaveText('Trip');
+});
+
 test('pours a day\'s tasks around its events, in their order', async ({ context, page }) => {
     await page.clock.setFixedTime(MORNING);
     await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
