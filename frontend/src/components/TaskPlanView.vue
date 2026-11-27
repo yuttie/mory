@@ -638,6 +638,9 @@ const zoom = useLocalStorage<Zoom>('task-plan-zoom', 'w2');
 // tasks are poured from.
 const present = computed(() => dayjs(tasks.now));
 const today = computed(() => present.value.format('YYYY-MM-DD'));
+// By the clock, as a day's events and the hours worked are placed: the minutes gone by since
+// midnight are an hour off it on a day the clocks change.
+const nowMinutes = computed(() => present.value.hour() * 60 + present.value.minute());
 const cursor = ref(dayjs().format('YYYY-MM-DD'));
 const busy = ref(false);
 const error = ref('');
@@ -764,7 +767,7 @@ const days = computed<Day[]>(() => dates.value.map((date, index) => {
     // A day gone by has no time left to pour into, and nothing on it is still to be fitted: it
     // only shows what was planned and what came of it.
     const active = past ? [] : rows.filter((row) => row.active);
-    const free = past ? [] : freeSpans(work.value, dayEvents.timed, isToday ? present.value.diff(present.value.startOf('day'), 'minute') : undefined);
+    const free = past ? [] : freeSpans(work.value, dayEvents.timed, isToday ? nowMinutes.value : undefined);
     const poured = flow(active.map((row) => ({ id: row.entry.task, minutes: row.estimate.minutes })), free);
     for (const row of active) {
         row.start = poured.segments.find((segment) => segment.id === row.entry.task)?.start;
@@ -832,7 +835,7 @@ const timeline = computed(() => {
             title: `${clockOf(start)}–${clockOf(end)} ${event.name}`,
         };
     });
-    const now = present.value.diff(present.value.startOf('day'), 'minute');
+    const now = nowMinutes.value;
     const nameOf = (uuid: string): string => taskOf(uuid)?.title || 'Untitled';
     return {
         height: at(last),
