@@ -293,11 +293,24 @@ export const useTasksStore = defineStore('tasks', () => {
 
     // Change the estimate alone, as `setStatus` changes the status: the Plan view corrects one
     // where the task is planned, as the work left turns out longer or shorter than it was thought.
+    // Written only over the note as it was read, as `save` writes: the edit is of that text, so a
+    // change landing in between -- the task completed through MCP, say -- would be undone by it.
     async function setEstimate(path: string, estimate: string): Promise<void> {
-        const content = await files.read(path);
+        const { content, etag } = await files.readVersion(path);
+        if (typeof content !== 'string') {
+            throw new Error(`${path} could not be read as text.`);
+        }
         const edited = replaceEstimate(content, estimate);
         if (edited !== content) {
-            await files.write(path, edited);
+            try {
+                await files.writeChecked(path, edited, etag);
+            }
+            catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 412) {
+                    throw new Error('The task changed while its estimate was being set. Set it again.', { cause: error });
+                }
+                throw error;
+            }
         }
         await subset.settle(
             path,
