@@ -515,9 +515,9 @@
                     <v-list-item
                         v-if="chosen.row.entry.origin === 'planned'"
                         v-bind:prepend-icon="mdiClose"
-                        title="Missed"
-                        v-bind:disabled="busy || chosen.row.entry.result === 'missed'"
-                        v-on:click="act(() => plans.recordResult(chosen!.date, chosen!.row.entry.task, 'missed'))"
+                        v-bind:title="chosen.row.entry.result === 'missed' ? 'Not missed after all' : 'Missed'"
+                        v-bind:disabled="busy"
+                        v-on:click="act(() => plans.recordResult(chosen!.date, chosen!.row.entry.task, chosen!.row.entry.result === 'missed' ? undefined : 'missed'))"
                     />
                     <v-list-item
                         v-bind:prepend-icon="mdiTrashCanOutline"
