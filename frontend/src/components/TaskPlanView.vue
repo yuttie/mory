@@ -1001,8 +1001,16 @@ function continuationOf(date: string): string {
     return date < today.value ? today.value : dayjs(date).add(1, 'day').format('YYYY-MM-DD');
 }
 async function continueLater(date: string, uuid: string): Promise<void> {
+    const next = continuationOf(date);
     await plans.recordResult(date, uuid, 'worked');
-    await plans.planTask(continuationOf(date), uuid, 'planned');
+    try {
+        await plans.planTask(next, uuid, 'planned');
+    }
+    catch (failure) {
+        // The day is worked by now, which is all the task's chip shows, and the day it was to go on
+        // may be out of sight: said, or the task is left on no day ahead unawares.
+        throw new Error(`Recorded as worked, but planning it on ${next} failed: ${failure instanceof Error ? failure.message : String(failure)}`, { cause: failure });
+    }
 }
 async function recordInterruption(): Promise<void> {
     const date = interruptionDate.value;

@@ -191,6 +191,25 @@ test('opens a planned task\'s menu on a click that moves a pixel', async ({ cont
     await expect(page.locator('.plan-entry-menu .v-card-title')).toHaveText('Alpha');
 });
 
+test('says what was done when a task set down for the day cannot be planned on the next', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
+    // The first write records the day worked; the second, which plans the next, fails.
+    let saves = 0;
+    await context.route('**/api/notes/.mory/plans/2026-10.yaml', async (route) => {
+        if (route.request().method() === 'PUT' && ++saves === 2) {
+            await route.fulfill({ status: 500, json: {} });
+            return;
+        }
+        await route.fallback();
+    });
+    await page.goto('/tasks-next/_/descendants/plan');
+    await day(page, '2026-10-05').locator('.plan-entry', { hasText: 'Alpha' }).click();
+    await page.getByText('Worked, and continue on 2026-10-06').click();
+    await expect(plan(page).locator('.v-alert')).toContainText('Recorded as worked, but planning it on 2026-10-06 failed');
+    await expect(day(page, '2026-10-06').locator('.plan-entry')).toHaveCount(0);
+});
+
 // A colour may be a palette name, which CSS does not read, and a pale one: each is drawn as the
 // calendar draws it, with what is written on it in whichever of black and white stands out.
 test('draws events in their colours, written on legibly', async ({ context, page }) => {
