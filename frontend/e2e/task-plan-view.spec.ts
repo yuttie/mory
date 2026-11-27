@@ -115,6 +115,24 @@ test('says what a day has no room for', async ({ context, page }) => {
     await expect(plan(page).locator('.timeline-overflow')).toContainText('Beta (2h 30m)');
 });
 
+// The hours worked are by the clock, and so is the present moment they are poured from: on the
+// morning the clocks go forward, ten o'clock is nine hours after midnight.
+test.describe('on a day the clocks change', () => {
+    test.use({ timezoneId: 'America/New_York' });
+
+    test('pours today from the present moment by the clock', async ({ context, page }) => {
+        // 10:00 on 2026-03-08 in New York, the clocks having gone forward at 02:00.
+        await page.clock.setFixedTime(new Date('2026-03-08T14:00:00Z'));
+        await mockBackend(context, {
+            [`.tasks/${A}.md`]: NOTES[`.tasks/${A}.md`],
+            '.mory/plans/2026-03.yaml': `2026-03-08:\n    - task: ${A}\n      origin: planned\n`,
+        }, { zone: 'America/New_York' });
+        await page.goto('/tasks-next/_/descendants/plan');
+        await expect(day(page, '2026-03-08').locator('.plan-entry-meta')).toHaveText(/10:00\s*1h/);
+        await expect(day(page, '2026-03-08').locator('.day-load')).toHaveText('1h / 8h');
+    });
+});
+
 test('plans a candidate on the day it is dropped on', async ({ context, page }) => {
     await page.clock.setFixedTime(MORNING);
     const repository = await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
