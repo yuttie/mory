@@ -263,6 +263,14 @@ describe('metadata schema, task revision', () => {
             expect(ok(task({ lead_time }))).toBe(false);
         }
     });
+    it('validates an estimate in hours and minutes', () => {
+        for (const estimate of ['3h', '90m', '1h 30m', '1h30m', '0m']) {
+            expect(ok(task({ estimate }))).toBe(true);
+        }
+        for (const estimate of ['', 'h', '1.5h', '2d', '30m 1h', 90]) {
+            expect(ok(task({ estimate }))).toBe(false);
+        }
+    });
     it('validates the creation timestamp format', () => {
         expect(ok({ created_at: '2026-10-04 14:05:12+09:00' })).toBe(true);
         expect(ok({ created_at: '2026-10-04' })).toBe(false);

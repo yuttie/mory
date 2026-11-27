@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 import YAML from 'yaml';
 import { readTaskSettings, type TaskSettings } from '@/urgency';
+import { readPlanningSettings, type PlanningSettings } from '@/estimate';
 import { readStatusColors, resolveStatusColors, writeStatusColors, type StatusColorEdits, type StatusColors } from '@/status-color';
 import { useFilesStore } from '@/stores/files';
 import { keepEqual } from '@/keep';
@@ -11,6 +12,8 @@ export const TASK_SETTINGS_PATH = '.mory/tasks.yaml';
 export const useTaskSettingsStore = defineStore('task-settings', () => {
     const files = useFilesStore();
     const settings = ref<TaskSettings>({});
+    // What a planned day is filled by: the estimates a task without one takes, and the hours worked.
+    const planning = ref<PlanningSettings>({});
     // As the file writes them; `resolvedStatusColors` is what to draw.
     const statusColors = ref<StatusColors>({});
     const resolvedStatusColors = computed(() => resolveStatusColors(statusColors.value));
@@ -37,16 +40,19 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                         const value = YAML.parse(source);
                         const parsed = readTaskSettings(value);
                         const colors = readStatusColors(value);
+                        const planned = readPlanningSettings(value);
                         // Each task's urgency is worked out from `settings`, so the same settings
                         // read again must not stand in for them.
                         keepEqual(settings, parsed.settings);
                         keepEqual(statusColors, colors.colors);
-                        keepEqual(problems, [...parsed.problems, ...(parsed.settings.lead_time_by_tag === undefined ? [] : untextTagKeys(source)), ...colors.problems]);
+                        keepEqual(planning, planned.settings);
+                        keepEqual(problems, [...parsed.problems, ...(parsed.settings.lead_time_by_tag === undefined ? [] : untextTagKeys(source)), ...colors.problems, ...planned.problems]);
                         readAt.value = commit;
                     }
                     catch (error) {
                         keepEqual(settings, {});
                         keepEqual(statusColors, {});
+                        keepEqual(planning, {});
                         keepEqual(problems, isMissing(error) ? [] : [String(error)]);
                         readAt.value = axios.isAxiosError(error) && !isMissing(error) ? null : commit;
                     }
@@ -107,7 +113,7 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
         }
         statusColors.value = readStatusColors(YAML.parse(edited)).colors;
     }
-    return { settings, statusColors, resolvedStatusColors, problems, readAt, load, loadAt, saveStatusColors };
+    return { settings, planning, statusColors, resolvedStatusColors, problems, readAt, load, loadAt, saveStatusColors };
 });
 
 /// A problem for each key of `lead_time_by_tag` that YAML reads as something other than text, such

@@ -568,7 +568,7 @@ export function settingsChecks(reports: {
         {
             id: 'tasks-settings',
             title: `${reports.tasksPath} reads cleanly`,
-            description: 'default_lead_time, lead_time_by_tag and status_colors are each what they should be, each tag under lead_time_by_tag is text, as moried matches only text, and the file holds no legacy task data.',
+            description: 'default_lead_time, lead_time_by_tag, default_estimate, estimate_by_tag, work_hours and status_colors are each what they should be, each tag under lead_time_by_tag is text, as moried matches only text, and the file holds no legacy task data.',
             problems: reports.taskSettingsProblems.map((message) => ({ severity: 'error', message, path: reports.tasksPath })),
         },
         {

@@ -231,6 +231,11 @@
                 "importance": { "enum": ["low", "medium", "high"] },
                 "available_from": { "type": "string" },
                 "lead_time": { "type": "string", "pattern": "^[0-9]+ *(weeks?|days?|w|d)$" },
+                "estimate": {
+                    "description": "How long the work that is left takes, in hours and minutes: 3h, 90m, 1h 30m.",
+                    "type": "string",
+                    "pattern": "^(?=.*[0-9])([0-9]+ *h)? *([0-9]+ *m)?$"
+                },
                 "due_by": { "type": "string" },
                 "deadline": { "type": "string" },
                 "alarms": {
