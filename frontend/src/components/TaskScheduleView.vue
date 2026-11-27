@@ -482,7 +482,11 @@ async function collect(): Promise<void> {
         return task ? task.metadata?.task?.status?.kind ?? 'backlog' : undefined;
     });
 }
-watch(dates, () => { void run(() => plans.loadMonths(dates.value.map((date) => date.slice(0, 7)))); }, { immediate: true });
+// Read when the months shown change, not at every step. A read holds the controls disabled for its
+// round trip, so a day at a time it would drop the next click on nearly every step, and the store
+// already reads each month it holds again at every commit.
+const shownMonths = computed(() => [...new Set(dates.value.map((date) => date.slice(0, 7)))]);
+watch(() => shownMonths.value.join(), () => { void run(() => plans.loadMonths(shownMonths.value)); }, { immediate: true });
 onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String(failure); }); });
 </script>
 

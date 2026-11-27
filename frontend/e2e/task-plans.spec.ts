@@ -76,6 +76,30 @@ test('steps the days shown one at a time, over the end of a month', async ({ con
     await expect(range).toHaveText('2026-10-04 – 2026-10-10');
 });
 
+// A step within the months shown reads none of them again, which would hold the controls disabled
+// for its round trip and drop the clicks that came in it.
+test('takes every one of quick steps through the days', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, { [`.tasks/${A}.md`]: task('Alpha') });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    const next = planner.getByRole('button', { name: 'Next', exact: true });
+    await expect(next).toBeEnabled();
+    // Slower than the clicks come, so a read in a step would still be running at the next one.
+    await context.route(`${API_URL}v2/files/.mory/plans/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    // The first click waits for the button to take one, once the app's loading cover has faded. The
+    // rest come at its place straight after, as a person's do: the locator's would wait for it enabled.
+    await next.click();
+    const box = (await next.boundingBox())!;
+    for (let step = 0; step < 2; step += 1) {
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(planner.locator('.week-range')).toHaveText('2026-10-07 – 2026-10-13');
+});
+
 test('offers a task with subtasks only while none under it can be planned', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
     await mockBackend(context, {
