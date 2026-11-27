@@ -136,6 +136,43 @@ test('plans a candidate on the day it is dropped on', async ({ context, page }) 
     await expect(day(page, '2026-10-06').locator('.day-load')).toHaveText('1h / 9h');
 });
 
+// Pressed on its middle, and let go over `target`'s.
+async function drag(page: Page, from: Locator, target: Locator): Promise<void> {
+    await from.click({ trial: true });
+    const box = (await from.boundingBox())!;
+    const to = (await target.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width, box.y + box.height, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+    await page.mouse.up();
+}
+
+test('moves a planned task to another day', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    const repository = await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    await drag(page, day(page, '2026-10-05').locator('.plan-entry', { hasText: 'Alpha' }), day(page, '2026-10-06').locator('.entries'));
+    await expect(day(page, '2026-10-06').locator('.plan-entry-title')).toHaveText('Alpha');
+    await expect.poll(() => planOf(repository.writes, '2026-10-06')).toEqual([{ task: A, origin: 'planned' }]);
+    expect(planOf(repository.writes, '2026-10-05')).toEqual([{ task: B, origin: 'planned' }]);
+    // The release is no click on the task: its menu would have opened as it was let go.
+    await expect(page.locator('.plan-entry-menu')).toBeHidden();
+});
+
+test('reorders a day\'s tasks, and pours them in the new order', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    const repository = await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    const monday = day(page, '2026-10-05');
+    await drag(page, monday.locator('.plan-entry', { hasText: 'Beta' }), monday.locator('.plan-entry', { hasText: 'Alpha' }));
+    await expect.poll(() => planOf(repository.writes, '2026-10-05')).toEqual([{ task: B, origin: 'planned' }, { task: A, origin: 'planned' }]);
+    await expect(monday.locator('.plan-entry-title')).toHaveText(['Beta', 'Alpha']);
+    await expect(monday.locator('.plan-entry-meta')).toHaveText([/10:00\s*3h/, /14:00\s*1h/]);
+    await expect(page.locator('.plan-entry-menu')).toBeHidden();
+});
+
 test('sets a task down for the day and takes it up on the next', async ({ context, page }) => {
     await page.clock.setFixedTime(MORNING);
     const repository = await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
