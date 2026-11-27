@@ -34,9 +34,71 @@ for (const width of [390, 600, 1000, 1600]) {
         await expect(page.getByRole('dialog')).toBeVisible();
         await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
         await planner.getByRole('button', { name: 'Next', exact: true }).click();
-        await expect(planner.locator('.week-range')).toContainText('2026-10-11');
+        await expect(planner.locator('.week-range')).toHaveText('2026-10-05 – 2026-10-11');
     });
 }
+
+// A step moves the seven days by one, so a day at either edge stays in view beside the one the step
+// brings in. Each day comes from its month's plan, so a step back over the first of a month draws
+// days from two plans, and a step forward from one again.
+test('steps the days shown one at a time, over the end of a month', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        [`.tasks/${B}.md`]: task('Beta'),
+        '.mory/plans/2026-09.yaml': `2026-09-30:\n    - task: ${A}\n      origin: planned\n`,
+        '.mory/plans/2026-10.yaml': `2026-10-01:\n    - task: ${B}\n      origin: planned\n`,
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    const range = planner.locator('.week-range');
+    const entries = planner.locator('.planned-entry');
+    const day = (date: string) => planner.locator('.day').filter({ has: page.locator('.task-group-title', { hasText: date }) });
+    // No wait between steps: a click waits for its button, which is disabled while the months load.
+    const step = (name: string) => planner.getByRole('button', { name, exact: true }).click();
+    await expect(range).toHaveText('2026-10-04 – 2026-10-10');
+    await step('Next');
+    await expect(range).toHaveText('2026-10-05 – 2026-10-11');
+    for (let count = 0; count < 4; count++) {
+        await step('Previous');
+    }
+    await expect(range).toHaveText('2026-10-01 – 2026-10-07');
+    await expect(entries).toHaveText([/Beta/]);
+    await step('Previous');
+    await expect(range).toHaveText('2026-09-30 – 2026-10-06');
+    await expect(day('2026-09-30').locator('.planned-entry')).toHaveText([/Alpha/]);
+    await expect(day('2026-10-01').locator('.planned-entry')).toHaveText([/Beta/]);
+    await expect(entries).toHaveCount(2);
+    await step('Next');
+    await expect(range).toHaveText('2026-10-01 – 2026-10-07');
+    await expect(entries).toHaveText([/Beta/]);
+    await step('Today');
+    await expect(range).toHaveText('2026-10-04 – 2026-10-10');
+});
+
+// A step within the months shown reads none of them again, which would hold the controls disabled
+// for its round trip and drop the clicks that came in it.
+test('takes every one of quick steps through the days', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, { [`.tasks/${A}.md`]: task('Alpha') });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    const next = planner.getByRole('button', { name: 'Next', exact: true });
+    await expect(next).toBeEnabled();
+    // Slower than the clicks come, so a read in a step would still be running at the next one.
+    await context.route(`${API_URL}v2/files/.mory/plans/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    // The first click waits for the button to take one, once the app's loading cover has faded. The
+    // rest come at its place straight after, as a person's do: the locator's would wait for it enabled.
+    await next.click();
+    const box = (await next.boundingBox())!;
+    for (let step = 0; step < 2; step += 1) {
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(planner.locator('.week-range')).toHaveText('2026-10-07 – 2026-10-13');
+});
 
 test('offers a task with subtasks only while none under it can be planned', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
