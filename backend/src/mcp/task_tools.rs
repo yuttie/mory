@@ -81,6 +81,13 @@ pub struct UpdateTaskArgs {
     /// of its tags, else that file's default, else 7d.
     #[serde(default)]
     pub clear_lead_time: Option<bool>,
+    /// How long the work that is left takes, in hours and minutes: `3h`, `90m`, `1h 30m`.
+    #[serde(default)]
+    pub estimate: Option<String>,
+    /// True to remove `estimate`, so the task takes the longest `.mory/tasks.yaml` sets for one
+    /// of its tags, else that file's default, else an hour.
+    #[serde(default)]
+    pub clear_estimate: Option<bool>,
 }
 
 /// The `status:` mapping a kind and its companions make, or why they do not make one.
@@ -226,6 +233,15 @@ fn measure_changes(args: &UpdateTaskArgs) -> Result<Vec<Change>, String> {
         }
         changes.push(Change::set(&["task", "lead_time"], lead.trim()));
     }
+    if args.clear_estimate.unwrap_or(false) {
+        changes.push(Change::remove(&["task", "estimate"]));
+    }
+    if let Some(estimate) = &args.estimate {
+        if crate::estimate::estimate_minutes(&estimate.clone().into()).is_none() {
+            return Err("estimate must be hours and minutes, such as 3h, 90m or 1h 30m.".into());
+        }
+        changes.push(Change::set(&["task", "estimate"], estimate.trim()));
+    }
     Ok(changes)
 }
 
@@ -261,7 +277,7 @@ pub async fn update_task(
     }
     if changes.is_empty() {
         return Ok(tool_error(
-            "Nothing to change. Pass status, importance or lead_time, or clear_importance/clear_lead_time. Urgency and progress are derived; use plan_task for planning.",
+            "Nothing to change. Pass status, importance, lead_time or estimate, or clear_importance/clear_lead_time/clear_estimate. Urgency and progress are derived; use plan_task for planning.",
         ));
     }
 
@@ -421,6 +437,8 @@ fn empty_update() -> UpdateTaskArgs {
         clear_importance: None,
         lead_time: None,
         clear_lead_time: None,
+        estimate: None,
+        clear_estimate: None,
     }
 }
 
@@ -635,6 +653,10 @@ pub struct CreateTaskArgs {
     /// the longest `.mory/tasks.yaml` sets for one of its tags, else that file's default, else 7d.
     #[serde(default)]
     pub lead_time: Option<String>,
+    /// How long the work takes, in hours and minutes: `3h`, `90m`, `1h 30m`. Omit for the
+    /// longest `.mory/tasks.yaml` sets for one of its tags, else that file's default, else an hour.
+    #[serde(default)]
+    pub estimate: Option<String>,
     /// When it can be started. A bare date, or a datetime carrying its offset.
     #[serde(default)]
     pub available_from: Option<String>,
@@ -682,6 +704,7 @@ pub async fn create_task(
         cancel_reason: args.cancel_reason.clone(),
         importance: args.importance.clone(),
         lead_time: args.lead_time.clone(),
+        estimate: args.estimate.clone(),
         ..empty_update()
     };
     if args.title.trim().is_empty() {
@@ -1012,6 +1035,11 @@ mod tests {
         a.importance = Some(Importance::High);
         assert!(apply(TASK, &measure_changes(&a).unwrap()).contains("importance: high"));
         a.lead_time = Some("-2w".into());
+        assert!(measure_changes(&a).is_err());
+        let mut a = args("t.md");
+        a.estimate = Some(" 1h 30m ".into());
+        assert!(apply(TASK, &measure_changes(&a).unwrap()).contains("estimate: 1h 30m"));
+        a.estimate = Some("2d".into());
         assert!(measure_changes(&a).is_err());
     }
 
