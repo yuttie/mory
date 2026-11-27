@@ -15,7 +15,7 @@ import {
     toNestedForest,
 } from '@/forest';
 import { buildPathForest } from '@/path-forest';
-import { render, replaceStatus } from '@/task';
+import { render, replaceEstimate, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
 import {
     TASKS_DIR,
@@ -291,6 +291,33 @@ export const useTasksStore = defineStore('tasks', () => {
         );
     }
 
+    // Change the estimate alone, as `setStatus` changes the status: the Plan view corrects one
+    // where the task is planned, as the work left turns out longer or shorter than it was thought.
+    // Written only over the note as it was read, as `save` writes: the edit is of that text, so a
+    // change landing in between -- the task completed through MCP, say -- would be undone by it.
+    async function setEstimate(path: string, estimate: string): Promise<void> {
+        const { content, etag } = await files.readVersion(path);
+        if (typeof content !== 'string') {
+            throw new Error(`${path} could not be read as text.`);
+        }
+        const edited = replaceEstimate(content, estimate);
+        if (edited !== content) {
+            try {
+                await files.writeChecked(path, edited, etag);
+            }
+            catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 412) {
+                    throw new Error('The task changed while its estimate was being set. Set it again.', { cause: error });
+                }
+                throw error;
+            }
+        }
+        await subset.settle(
+            path,
+            (entry) => (entry.metadata as TaskMetadata | null)?.task?.estimate === estimate,
+        );
+    }
+
     // Only a task with nothing under it. Its subtasks live in the directory it names, which
     // deleting its file leaves behind: they would be drawn at the top of the tree, with nothing to
     // say what they were part of. Asked once any move is done, as a move renames the task's file
@@ -437,6 +464,7 @@ export const useTasksStore = defineStore('tasks', () => {
         save,
         saveAll,
         setStatus,
+        setEstimate,
         remove,
         move,
     };

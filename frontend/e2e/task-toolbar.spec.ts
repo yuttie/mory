@@ -24,10 +24,12 @@ for (const width of [360, 840, 1200, 1400]) {
         const toolbar = page.locator('.item-view .v-toolbar');
         const views = toolbar.locator('.v-btn-group');
         await expect(views).toBeVisible();
-        for (const name of ['Status', 'Schedule', 'Eisenhower Matrix']) {
+        for (const name of ['Plan', 'Schedule', 'Status', 'Eisenhower Matrix']) {
             expect(await within(views.getByRole('button', { name, exact: true }), views), name).toBe(true);
         }
-        for (const name of ['Add', 'Edit', ...(width < 600 ? [] : ['Quick add'])]) {
+        // Quick add is in the menu where the toolbar has no room for it: on a phone, and here at
+        // 840px, where the drawer and the tree leave the toolbar 274px.
+        for (const name of ['Add', 'Edit', ...(width < 1200 ? [] : ['Quick add'])]) {
             const button = toolbar.getByTitle(name, { exact: true });
             expect(await within(button, toolbar), name).toBe(true);
         }

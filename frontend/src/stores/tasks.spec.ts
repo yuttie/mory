@@ -19,6 +19,8 @@ const apiMocks = vi.hoisted(() => ({
         async () => ({ data: null })),
     deleteNote: vi.fn<(path: string) => Promise<{ data: boolean }>>(async () => ({ data: true })),
     getNote: vi.fn<(path: string) => Promise<{ data: string }>>(async () => ({ data: '' })),
+    getFile: vi.fn<(path: string, etag?: string) => Promise<{ content: string | null; etag: string }>>(
+        async () => ({ content: '', etag: '"v0"' })),
     uploadFiles: vi.fn<(form: FormData) => Promise<{ data: [string, string][] }>>(
         async () => ({ data: [] })),
     searchNotes: vi.fn<(pattern: string) => Promise<{ data: unknown[] }>>(
@@ -592,6 +594,47 @@ describe('setStatus', () => {
         const { store } = await storeWith(sample);
         apiMocks.getNote.mockResolvedValueOnce({ data: '# No frontmatter\n' });
         await expect(store.setStatus(`.tasks/${uuid(3)}.md`, { kind: 'todo' })).rejects.toThrow();
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+});
+
+describe('setEstimate', () => {
+    const before = '---\ntask:\n    status:\n        kind: todo\n    deadline: 2026-12-01\n---\n\n# Alpha\n';
+
+    it('rewrites the estimate alone, over the version it read, and waits for the listing', async () => {
+        const { store, repo } = await storeWith(sample);
+        const path = `.tasks/${uuid(3)}.md`;
+        apiMocks.getFile.mockResolvedValueOnce({ content: before, etag: '"as-read"' });
+        repo.lag(2);
+
+        await store.setEstimate(path, '1h 30m');
+
+        expect(apiMocks.saveFileChecked).toHaveBeenCalledWith(path, before.replace('    deadline', '    estimate: 1h 30m\n    deadline'), '"as-read"');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+        expect(store.node(uuid(3))?.metadata?.task?.estimate).toBe('1h 30m');
+    });
+
+    // The Plan view holds nothing of the note but its estimate, so a change made between the read
+    // and the write would be written over unannounced.
+    it('refuses to write over a note changed since it was read', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.getFile.mockResolvedValueOnce({ content: before, etag: '"as-read"' });
+        apiMocks.saveFileChecked.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 412'), {
+            isAxiosError: true,
+            response: { status: 412 },
+        }));
+
+        await expect(store.setEstimate(`.tasks/${uuid(3)}.md`, '2h')).rejects.toThrow('changed while');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when the note already holds the estimate', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.getFile.mockResolvedValueOnce({ content: before.replace('    deadline', '    estimate: 2h\n    deadline'), etag: '"as-read"' });
+
+        await store.setEstimate(`.tasks/${uuid(3)}.md`, '2h');
+
+        expect(apiMocks.saveFileChecked).not.toHaveBeenCalled();
         expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
 });

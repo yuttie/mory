@@ -9,7 +9,7 @@
         </v-card-subtitle>
         <p class="text-medium-emphasis mb-4">
             The colour each status is drawn in: its icon in the task tree, and the ground of its
-            cards in the Status, Schedule and Eisenhower views. Leave one empty for its
+            cards in the Plan, Schedule, Status and Eisenhower views. Leave one empty for its
             default.
         </p>
         <div class="status-colors">

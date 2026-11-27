@@ -257,6 +257,7 @@ const SYNTAX: [string, string][] = [
     ['backlog, to do, in progress, done', 'Status; Backlog if none'],
     ['low, medium, high', 'Importance'],
     ['3w, 2d', 'Lead time'],
+    ['3h, 90m, 1h 30m', 'Estimate'],
     ['>=2026-11-01', 'Available from'],
     ['<=2026-12-01', 'Due by'],
     ['!<=2026-12-08 17:00', 'Deadline; any date may have a time'],
@@ -349,11 +350,12 @@ watch(() => rows.value.length > 0, (hasRows) => {
 
 // What the preview says of a task besides its title, as it will be written.
 function chipsOf(task: OutlineTask): string[] {
-    const { status, importance, lead_time, available_from, due_by, deadline, tags } = task.fields;
+    const { status, importance, lead_time, estimate, available_from, due_by, deadline, tags } = task.fields;
     return [
         STATUS_LABEL[status],
         ...(importance ? [`${importance} importance`] : []),
         ...(lead_time ? [`lead ${lead_time}`] : []),
+        ...(estimate ? [`takes ${estimate}`] : []),
         ...(available_from ? [`from ${available_from}`] : []),
         ...(due_by ? [`due ${due_by}`] : []),
         ...(deadline ? [`deadline ${deadline}`] : []),

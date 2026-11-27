@@ -11,6 +11,7 @@
 // - a status that needs nothing more: `backlog`, `to do`, `in progress` or `done`;
 // - an importance: `low`, `medium` or `high`;
 // - a lead time: `3w`, `2d`, `10 days`;
+// - an estimate: `3h`, `90m`, `1h 30m`;
 // - `>=DATE` available from, `<=DATE` due by, `!<=DATE` the deadline, where DATE is
 //   `YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` with an offset or in moried's zone;
 // - `#tag`, as many as wanted;
@@ -21,6 +22,7 @@
 
 import { childTaskPath } from '@/task-forest';
 import { type StatusKind, type Task, type UUID, STATUS_KINDS, STATUS_LABEL, hasFields, makeDefaultStatus, render } from '@/task';
+import { estimateMinutes } from '@/estimate';
 import { type Importance, isWrittenTaskDate, leadTimeDays, readImportance, withOffset } from '@/urgency';
 
 const LIST_MARKER = /^(?:[-*+]|[0-9]+[.)])(?:\s+|$)/;
@@ -33,6 +35,7 @@ export interface OutlineFields {
     status?: StatusKind;
     importance?: Importance;
     lead_time?: string;
+    estimate?: string;
     available_from?: string;
     due_by?: string;
     deadline?: string;
@@ -143,7 +146,7 @@ export function writesOf(
 }
 
 function taskOf(task: OutlineTask, uuid: UUID): Task {
-    const { status, importance, lead_time, available_from, due_by, deadline, tags } = task.fields;
+    const { status, importance, lead_time, estimate, available_from, due_by, deadline, tags } = task.fields;
     return {
         uuid,
         title: task.title,
@@ -151,6 +154,7 @@ function taskOf(task: OutlineTask, uuid: UUID): Task {
         status: makeDefaultStatus(status),
         ...(importance !== undefined ? { importance } : {}),
         ...(lead_time !== undefined ? { lead_time } : {}),
+        ...(estimate !== undefined ? { estimate } : {}),
         ...(available_from !== undefined ? { available_from } : {}),
         ...(due_by !== undefined ? { due_by } : {}),
         ...(deadline !== undefined ? { deadline } : {}),
@@ -246,6 +250,7 @@ const FIELD_NAMES: Record<Exclude<keyof OutlineFields, 'tags'>, string> = {
     status: 'status',
     importance: 'importance',
     lead_time: 'lead time',
+    estimate: 'estimate',
     available_from: 'available-from date',
     due_by: 'due-by date',
     deadline: 'deadline',
@@ -328,6 +333,10 @@ function readItems(items: Item[], zone: string, report: (message: string) => voi
         else if (leadTimeDays(text.toLowerCase()) !== undefined) {
             // As the schema's pattern spells a unit, which is in lower case.
             set('lead_time', text.toLowerCase());
+        }
+        // Its units are not a lead time's, so `2h` is never mistaken for `2d`.
+        else if (estimateMinutes(text.toLowerCase()) !== undefined) {
+            set('estimate', text.toLowerCase());
         }
         // A line has no place for a reason, so it gives only the statuses that need none. Done's
         // fields are the time it is written, and need nobody to give them.

@@ -129,21 +129,21 @@ describe('creating a note', () => {
 describe('the task view\'s addresses', () => {
     const id = '00000001-0000-4000-8000-000000000000';
 
-    it('opens a task selected, in its editor, over the schedule view', () => {
-        expect(router.resolve(taskRoute(id)).fullPath).toBe(`/tasks-next/${id}/descendants/schedule?task=${id}`);
+    it('opens a task selected, in its editor, over the plan view', () => {
+        expect(router.resolve(taskRoute(id)).fullPath).toBe(`/tasks-next/${id}/descendants/plan?task=${id}`);
     });
 
     it('stands for no selection with `_`', () => {
-        expect(router.resolve(tasksRoute()).fullPath).toBe('/tasks-next/_/descendants/schedule');
+        expect(router.resolve(tasksRoute()).fullPath).toBe('/tasks-next/_/descendants/plan');
     });
 
     it('opens a task in its editor over another\'s list', () => {
         expect(router.resolve(tasksRoute('_', 'status', id)).fullPath).toBe(`/tasks-next/_/descendants/status?task=${id}`);
     });
 
-    it('opens the sidebar\'s link on the schedule view of all tasks', async () => {
+    it('opens the sidebar\'s link on the plan view of all tasks', async () => {
         await router.push('/tasks-next');
-        expect(router.currentRoute.value.fullPath).toBe('/tasks-next/_/descendants/schedule');
+        expect(router.currentRoute.value.fullPath).toBe('/tasks-next/_/descendants/plan');
     });
 
     // Where the editor was a tab beside the list.

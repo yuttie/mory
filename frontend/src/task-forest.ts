@@ -28,6 +28,7 @@ export interface TaskMetadata {
         importance?: Importance | number;
         available_from?: string;
         lead_time?: string;
+        estimate?: string;
         start_at?: string;
         due_by?: string;
         deadline?: string;

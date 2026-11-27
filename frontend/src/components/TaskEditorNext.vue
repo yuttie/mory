@@ -432,12 +432,25 @@
                     <v-text-field
                         v-model="form.lead_time"
                         label="Lead time"
+                        hint="How far ahead of its date the task wants starting, in days or weeks."
                         v-bind:placeholder="`${defaultLeadTime}d (resolved default)`"
                         persistent-placeholder
                         v-bind:rules="[leadTimeRule]"
                     >
                         <template v-slot:prepend>
                             <v-icon>{{ mdiTimerSand }}</v-icon>
+                        </template>
+                    </v-text-field>
+                    <v-text-field
+                        v-model="form.estimate"
+                        label="Estimate"
+                        hint="How long the work left takes: 3h, 90m or 1h 30m. A day's plan is filled with it."
+                        v-bind:placeholder="`${defaultEstimate} (resolved default)`"
+                        persistent-placeholder
+                        v-bind:rules="[estimateRule]"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiClockOutline }}</v-icon>
                         </template>
                     </v-text-field>
                     <v-alert
@@ -581,6 +594,7 @@ import {
     mdiPlus,
     mdiTagMultipleOutline,
     mdiTimerSand,
+    mdiClockOutline,
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
@@ -600,6 +614,7 @@ import { required } from '@/rules';
 import { isSaveKey, useShortcuts } from '@/keyboard';
 import { useCalendarsStore } from '@/stores/calendars';
 
+import { estimateMinutes, formatEstimate, resolvedEstimate } from '@/estimate';
 import { isWrittenTaskDate, leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
@@ -613,6 +628,7 @@ type EditableTask = {
     status: Status;
     importance: Importance | null;
     lead_time: string;
+    estimate: string;
     available_from: string;
     due_by: string;
     deadline: string;
@@ -646,6 +662,8 @@ const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.
 const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, form.tags, settings.settings, tasks.now, zones.zone), form.status.kind));
 const plans = usePlansStore();
 const plannedDays = computed(() => plans.plannedDays(uuid.value));
+const defaultEstimate = computed(() => formatEstimate(resolvedEstimate(undefined, form.tags, settings.planning).minutes));
+const estimateRule = (value: string) => !value?.trim() || estimateMinutes(value) !== undefined || 'Use hours and minutes, such as 3h, 90m or 1h 30m.';
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
 // A date is held to how one is written, a bare date or a datetime carrying its offset, as the picker
 // writes it. One the task already holds without its offset is kept as it is, as moried's tools keep
@@ -675,6 +693,7 @@ const form = reactive<EditableTask>({
     status: { kind: 'backlog' },
     importance: null,
     lead_time: '',
+    estimate: '',
     available_from: '',
     due_by: '',
     deadline: '',
@@ -757,6 +776,7 @@ function formOf(t: Task | null | undefined): EditableTask {
             status: { kind: 'backlog' },
             importance: null,
             lead_time: '',
+            estimate: '',
             available_from: '',
             due_by: '',
             deadline: '',
@@ -771,6 +791,7 @@ function formOf(t: Task | null | undefined): EditableTask {
         status: (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status },
         importance: t.importance ?? null,
         lead_time: t.lead_time ?? '',
+        estimate: t.estimate ?? '',
         available_from: t.available_from ?? '',
         due_by: t.due_by ?? '',
         deadline: t.deadline ?? '',
@@ -853,6 +874,7 @@ const UNREAD_FIELDS: Record<EditorKey, (form: EditableTask) => unknown> = {
     tags: (f) => f.tags,
     importance: (f) => f.importance,
     lead_time: (f) => f.lead_time,
+    estimate: (f) => f.estimate,
     available_from: (f) => f.available_from,
     start_at: (f) => f.available_from,
     due_by: (f) => f.due_by,
@@ -1070,6 +1092,7 @@ function taskOf(base: Task | null | undefined): Task {
         status: withoutBlanks(form.status),
         importance: form.importance ?? undefined,
         ...(form.lead_time.trim() ? { lead_time: form.lead_time.trim() } : {}),
+        ...(form.estimate.trim() ? { estimate: form.estimate.trim() } : {}),
         ...(form.available_from !== '' ? { available_from: form.available_from } : {}),
         ...(form.due_by !== '' ? { due_by: form.due_by } : {}),
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
@@ -1111,6 +1134,7 @@ function differs(a: EditableTask, b: EditableTask): boolean {
         !statusEqual(a.status, b.status) ||
         a.importance !== b.importance ||
         a.lead_time !== b.lead_time ||
+        a.estimate !== b.estimate ||
         a.available_from !== b.available_from ||
         a.due_by !== b.due_by ||
         a.deadline !== b.deadline ||

@@ -143,7 +143,7 @@ export function readStatus(metadata: unknown): StatusReading {
 
 // The keys the task editor has a field for and rewrites on a save, as a note names them.
 // `start_at` is the older spelling of `available_from`, read where that is unset.
-export const EDITOR_KEYS = ['tags', 'importance', 'lead_time', 'available_from', 'start_at', 'due_by', 'deadline', 'alarms'] as const;
+export const EDITOR_KEYS = ['tags', 'importance', 'lead_time', 'estimate', 'available_from', 'start_at', 'due_by', 'deadline', 'alarms'] as const;
 export type EditorKey = typeof EDITOR_KEYS[number];
 
 const ALARM_KEYS = new Set(['due_by', 'deadline']);
@@ -170,6 +170,9 @@ export function unreadEditorKeys(metadata: unknown): Partial<Record<EditorKey, s
     }
     if (set(task.lead_time) && typeof task.lead_time !== 'string') {
         unread.lead_time = JSON.stringify(task.lead_time);
+    }
+    if (set(task.estimate) && typeof task.estimate !== 'string') {
+        unread.estimate = JSON.stringify(task.estimate);
     }
     // A date is the editor's as a string, which the date field shows as written, empty or not as
     // a date included; an empty one is read as unset, and saved as unset.
@@ -201,6 +204,8 @@ export interface Task {
     importance?: Importance;
     available_from?: string;
     lead_time?: string;
+    // How long the work left takes (`estimateMinutes`), which a planned day is filled with.
+    estimate?: string;
     // The note as it was read, which a save edits rather than regenerates, and the ETag it was read
     // at, which the save is checked against so that it cannot undo a change made since.
     source?: string;
@@ -270,6 +275,7 @@ export function render(task: Task): string {
             ...(task.importance ? { importance: task.importance } : {}),
             ...(task.available_from ? { available_from: task.available_from } : {}),
             ...(task.lead_time ? { lead_time: task.lead_time } : {}),
+            ...(task.estimate ? { estimate: task.estimate } : {}),
             ...(task.due_by ? { due_by: task.due_by } : {}),
             ...(task.deadline ? { deadline: task.deadline } : {}),
             ...(task.alarms && Object.keys(task.alarms).length > 0 ? { alarms: task.alarms } : {}),
@@ -307,7 +313,7 @@ export function render(task: Task): string {
                 doc.set('task', doc.createNode({}));
             }
             const nextTask = { ...originalTask, ...metadata.task };
-            for (const key of ['urgency', 'progress', 'scheduled_dates', 'start_at', 'importance', 'available_from', 'lead_time', 'due_by', 'deadline', 'alarms']) {
+            for (const key of ['urgency', 'progress', 'scheduled_dates', 'start_at', 'importance', 'available_from', 'lead_time', 'estimate', 'due_by', 'deadline', 'alarms']) {
                 if (!(key in metadata.task)) {
                     delete nextTask[key];
                 }
@@ -452,6 +458,58 @@ function replaceStatusInYaml(source: string, status: Status): string {
 
     if (!parsesTo(edited, { ...before, task: { ...before.task, status: value } })) {
         throw new Error('Changing the status in place would have changed more than the status.');
+    }
+    return edited;
+}
+
+// A note with its task's estimate replaced, and every other byte left alone, as `replaceStatus`
+// leaves a note: the Plan view changes an estimate where the task is planned, holding nothing else
+// of the note. `estimate` is written as given, so it is one `estimateMinutes` reads.
+export function replaceEstimate(markdown: string, estimate: string): string {
+    return editFrontmatter(markdown, (yaml) => replaceEstimateInYaml(yaml, estimate));
+}
+
+function replaceEstimateInYaml(source: string, estimate: string): string {
+    const doc = YAML.parseDocument(source);
+    if (doc.errors.length > 0) {
+        throw new Error(`The frontmatter is not valid YAML: ${doc.errors[0].message}`);
+    }
+    const root = doc.contents;
+    const taskPair = YAML.isMap(root) ? root.items.find((pair) => hasKey(pair, 'task')) : undefined;
+    const task = taskPair?.value;
+    if (!YAML.isMap(task) || task.flow || !task.range) {
+        throw new Error('The frontmatter has no block `task:` mapping to set the estimate in. Set it in the task\'s editor.');
+    }
+    const before = doc.toJS();
+    if (before.task.estimate === estimate) {
+        return source;
+    }
+    const eol = lineEnding(source);
+    const pair = task.items.find((p) => hasKey(p, 'estimate'));
+    let edited: string;
+    if (pair === undefined) {
+        // Where `render` writes it, after the keys it writes before it: in front of the first key
+        // that is not one of those, or of the last key where all are. In front of a key either
+        // way, which keeps its line and its column.
+        const earlier = ['status', 'importance', 'available_from', 'lead_time'];
+        const later = task.items.find((p) => !earlier.some((key) => hasKey(p, key))) ?? task.items.at(-1);
+        const at = (YAML.isScalar(later?.key) ? later.key.range?.[0] : undefined) ?? task.range[0];
+        edited = splice(source, at, at, `estimate: ${estimate}${eol}${' '.repeat(columnOf(source, at))}`);
+    }
+    else if (YAML.isScalar(pair.value) && pair.value.range && pair.value.range[0] < pair.value.range[1]) {
+        edited = splice(source, pair.value.range[0], pair.value.range[1], estimate);
+    }
+    else if (YAML.isScalar(pair.value) && pair.value.value === null && pair.value.range && pair.key.range) {
+        // Named and left empty, as a note written from a template leaves it: the value goes after
+        // the key, ahead of any comment on its line, which `#` begins only after a space.
+        const at = pair.value.range[0];
+        edited = splice(source, pair.key.range[0], at, `estimate: ${estimate}${source[at] === '#' ? ' ' : ''}`);
+    }
+    else {
+        throw new Error('The task\'s estimate is written in a form this edit does not handle. Set it in the task\'s editor.');
+    }
+    if (!parsesTo(edited, { ...before, task: { ...before.task, estimate } })) {
+        throw new Error('Setting the estimate in place would have changed more than the estimate. Set it in the task\'s editor.');
     }
     return edited;
 }

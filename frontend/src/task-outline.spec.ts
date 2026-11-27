@@ -129,6 +129,12 @@ describe('parseOutline', () => {
         expect(parseOutline('- A [3W]\n- B [2 Days]', ZONE).tasks.map((task) => task.fields.lead_time)).toEqual(['3w', '2 days']);
     });
 
+    it('tells an estimate from a lead time by its unit', () => {
+        const fields = parseOutline('- A [2d, 3H]\n- B [1h 30m]\n- C [90m, 2h]', ZONE);
+        expect(fields.tasks.map((task) => [task.fields.lead_time, task.fields.estimate])).toEqual([['2d', '3h'], [undefined, '1h 30m'], [undefined, '90m']]);
+        expect(fields.problems.map((problem) => problem.message).join()).toContain('estimate');
+    });
+
     // Looked up in a plain object, these found its prototype's members.
     it('takes no name an object inherits for a status', () => {
         const { tasks, problems } = parseOutline('- A [constructor]\n- B [toString]\n- C [__proto__]', ZONE);

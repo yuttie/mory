@@ -105,7 +105,7 @@
                 />
             </v-sheet>
             <div class="item-view d-flex flex-column">
-                <v-toolbar flat border color="transparent" class="item-toolbar flex-grow-0">
+                <v-toolbar ref="toolbarRef" flat border color="transparent" class="item-toolbar flex-grow-0">
                     <!-- View mode selector -->
                     <v-btn-toggle
                         v-bind:model-value="descendantsViewMode"
@@ -154,9 +154,10 @@
                         <span class="toolbar-label">Add</span>
                     </v-btn>
                     <!-- Under the selected task, as Add puts one. A phone has no room for it
-                         beside the view modes, so there it is in the menu. -->
+                         beside the view modes, nor has a toolbar squeezed between the drawer and
+                         the tree, so there it is in the menu. -->
                     <v-btn
-                        v-if="!$vuetify.display.xs"
+                        v-if="!quickAddInMenu"
                         title="Quick add"
                         color="primary"
                         variant="outlined"
@@ -180,7 +181,7 @@
                         </template>
                         <v-list>
                             <v-list-item
-                                v-if="$vuetify.display.xs"
+                                v-if="quickAddInMenu"
                                 v-bind:prepend-icon="mdiFormatListChecks"
                                 title="Quick add"
                                 v-on:click="openQuickAdd"
@@ -201,9 +202,16 @@
                 <v-alert v-if="planHistoryError" type="warning">{{ planHistoryError }}</v-alert>
                 <v-alert v-for="problem of taskSettings.problems" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                 <div class="view-container flex-grow-1">
+                    <!-- Plan view -->
+                    <TaskPlanView
+                        v-if="descendantsViewMode === 'plan'"
+                        v-bind:candidates="filteredSelectedNodeDescendants"
+                        v-bind:route-for="listRouteFor"
+                        v-bind:list-root="activeNodeId"
+                    />
                     <!-- Schedule view -->
                     <TaskScheduleView
-                        v-if="descendantsViewMode === 'schedule'"
+                        v-else-if="descendantsViewMode === 'schedule'"
                         v-bind:candidates="filteredSelectedNodeDescendants"
                         v-bind:route-for="listRouteFor"
                         v-bind:list-root="activeNodeId"
@@ -304,7 +312,7 @@
 <script lang="ts" setup>
 import { readImportance, isUrgent, compareUrgency, taskInstant } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue';
 import { usePlansStore } from '@/stores/plans';
 import {
     type RouteLocationNormalized,
@@ -324,6 +332,7 @@ import type NewTaskDialog from '@/components/NewTaskDialog.vue';
 import type TaskTree from '@/components/TaskTree.vue';
 
 import {
+    mdiCalendarClockOutline,
     mdiCalendarMultiselectOutline,
     mdiDotsVertical,
     mdiFormatListChecks,
@@ -400,11 +409,25 @@ const selectedNode = computed<TaskNode | undefined>(() => {
     return undefined;
 });
 
-const descendantsViewMode = computed<'schedule' | 'status' | 'eisenhower'>(() => {
-    if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
-        return route.params.viewMode as 'schedule' | 'status' | 'eisenhower';
+// The toolbar's own width, which the window's does not tell: beside the drawer and the tree, a
+// window 840px wide leaves it 274px, where its buttons without their labels take 300px.
+const toolbarRef = ref<ComponentPublicInstance | null>(null);
+const toolbarWidth = ref(Infinity);
+const toolbarObserver = new ResizeObserver(([entry]) => { toolbarWidth.value = entry.contentRect.width; });
+watch(toolbarRef, (toolbar) => {
+    toolbarObserver.disconnect();
+    if (toolbar) {
+        toolbarObserver.observe(toolbar.$el as Element);
     }
-    return 'schedule';
+});
+onUnmounted(() => toolbarObserver.disconnect());
+const quickAddInMenu = computed(() => display.xs.value || toolbarWidth.value < 310);
+
+const descendantsViewMode = computed<'plan' | 'schedule' | 'status' | 'eisenhower'>(() => {
+    if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
+        return route.params.viewMode as 'plan' | 'schedule' | 'status' | 'eisenhower';
+    }
+    return 'plan';
 });
 
 // The task open in the editor over the list, which the address names. A task the listing does not
@@ -613,6 +636,7 @@ const eisenhowerQuadrants = computed(() => {
 });
 
 const viewModeOptions = computed(() => [
+    { text: 'Plan', icon: mdiCalendarClockOutline, value: 'plan' },
     { text: 'Schedule', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
     { text: 'Status', icon: mdiTrafficLightOutline, value: 'status' },
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
@@ -970,12 +994,12 @@ async function load(primed = false) {
 /* The buttons' labels go by the toolbar's own width, not the window's: the list shares the window
    with the drawer and the tree, and labels too wide for the toolbar push the view modes out of it.
    Without them a button is square, as a minimum width kept for a label is room the toolbar runs
-   out of on a phone. Labelled, the buttons take 686px. */
+   out of on a phone. Labelled, the buttons take 786px. */
 .item-toolbar {
     container-type: inline-size;
 }
 
-@container (width < 700px) {
+@container (width < 800px) {
     .toolbar-label {
         display: none;
     }

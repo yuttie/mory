@@ -4411,6 +4411,7 @@ fn the_task_tools_emit_frontmatter_the_frontend_would_accept() {
             Change::set(&["tags"], serde_yaml::Value::Sequence(vec!["work".into()])),
             Change::set(&["task", "importance"], "medium"),
             Change::set(&["task", "lead_time"], "2w"),
+            Change::set(&["task", "estimate"], "1h 30m"),
             Change::set(&["created_at"], "2026-10-04 14:05:12+09:00"),
             Change::set(&["task", "due_by"], "2026-03-15"),
         ];

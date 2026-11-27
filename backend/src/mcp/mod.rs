@@ -158,7 +158,7 @@ impl Mory {
         description = "List the tasks under `.tasks/`, optionally filtered by status or tag.\n\n\
                        Each result carries the note's `task:` block as the web app reads it: \
                        its status, and whichever of importance (low, medium or high), \
-                       lead_time, available_from, due_by, deadline and alarms it sets. Keys \
+                       lead_time, estimate, available_from, due_by, deadline and alarms it sets. Keys \
                        an older task model wrote are read as the web app reads them: a numeric \
                        importance as low (1 or 2), medium (4) or high (5) and 3 as unrated, \
                        start_at as available_from, and urgency, progress and scheduled_dates \
@@ -384,7 +384,9 @@ impl Mory {
                        medium or high, or left out for an unrated task. lead_time is how long \
                        the work needs before its date, in whole days or weeks (`14d`, `2w`); \
                        left out, it is the longest `.mory/tasks.yaml` sets for one of its tags, \
-                       else that file's default, else 7d. available_from is \
+                       else that file's default, else 7d. estimate is how long the work itself \
+                       takes, in hours and minutes (`3h`, `90m`, `1h 30m`), which the web app \
+                       fills a planned day with. available_from is \
                        when it can be started, due_by the soft target and deadline the hard \
                        cutoff.\n\nUrgency and progress are worked out from these and cannot be \
                        set. To put it on a day's plan, use plan_task. The result echoes the \
@@ -405,7 +407,7 @@ impl Mory {
 
     #[tool(
         name = "update_task",
-        description = "Change a task's status, optional importance or lead_time, editing its \
+        description = "Change a task's status, optional importance, lead_time or estimate, editing its \
                        frontmatter in place. Requires the notes:write scope.\n\nThe rest of the \
                        note is untouched, comments and hand-formatting included. Changing \
                        status replaces the whole status block, so the keys the new one requires \
