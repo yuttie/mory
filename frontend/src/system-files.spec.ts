@@ -5,7 +5,7 @@ import { systemFilePurpose } from '@/system-files';
 describe('systemFilePurpose', () => {
     it('says what each file the application reads is for', () => {
         expect(systemFilePurpose('.mory/calendars.yaml')).toBe('Subscribed calendars, event categories and alarms');
-        expect(systemFilePurpose('.mory/tasks.yaml')).toBe('Lead times and status colours of the tasks');
+        expect(systemFilePurpose('.mory/tasks.yaml')).toBe('Lead times, estimates, working hours and status colours of the tasks');
         expect(systemFilePurpose('.mory/custom-note.less')).toBe('Styles for the notes, unless there is a custom-note.css');
     });
 

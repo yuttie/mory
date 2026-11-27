@@ -18,7 +18,7 @@ import { TASK_ASSESSMENT_PROMPT_PATH } from '@/task-assessment';
 // where its CSS twin is absent.
 const PURPOSES: ReadonlyMap<string, string> = new Map([
     [CALENDARS_PATH, 'Subscribed calendars, event categories and alarms'],
-    [TASK_SETTINGS_PATH, 'Lead times and status colours of the tasks'],
+    [TASK_SETTINGS_PATH, 'Lead times, estimates, working hours and status colours of the tasks'],
     [TASK_DATA_PATH, 'The tasks of the old task model, kept as they were'],
     [TASK_ASSESSMENT_PROMPT_PATH, 'What the task assessment asks for'],
     [AI_ACTIONS_PATH, 'The AI actions the editor offers'],
