@@ -135,6 +135,33 @@ test('sets a task down for the day and takes it up on the next', async ({ contex
     await expect(day(page, '2026-10-05').locator('.day-load')).toHaveText('3h / 7h');
 });
 
+// The menu is opened by the view, on the task chosen. Left to open on a click as well, Vuetify's own
+// listener on a task it had opened on before closed the menu the view had just opened.
+test('opens a planned task\'s menu again, and on another task', async ({ context, page }) => {
+    await page.clock.setFixedTime(MORNING);
+    await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });
+    await page.goto('/tasks-next/_/descendants/plan');
+    const menu = page.locator('.plan-entry-menu');
+    const entry = (title: string) => day(page, '2026-10-05').locator('.plan-entry', { hasText: title });
+    for (const title of ['Alpha', 'Alpha', 'Beta', 'Alpha', 'Beta', 'Beta']) {
+        await entry(title).click();
+        await expect(menu).toBeVisible();
+        await expect(menu.locator('.v-card-title')).toHaveText(title);
+        // Long enough for a menu closed at once to have gone.
+        await page.waitForTimeout(400);
+        await expect(menu).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
+    }
+    // Straight from one task to another, the click that leaves the first opening the second.
+    await entry('Alpha').click();
+    await expect(menu.locator('.v-card-title')).toHaveText('Alpha');
+    await entry('Beta').click();
+    await expect(menu.locator('.v-card-title')).toHaveText('Beta');
+    await page.waitForTimeout(400);
+    await expect(menu).toBeVisible();
+});
+
 test('corrects an estimate where the task is planned', async ({ context, page }) => {
     await page.clock.setFixedTime(MORNING);
     const repository = await mockBackend(context, NOTES, { zone: 'Asia/Tokyo' });

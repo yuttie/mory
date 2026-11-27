@@ -424,10 +424,17 @@
                 </section>
             </div>
         </div>
-        <!-- One menu for every planned task, opened on the one chosen. -->
+        <!-- One menu for the planned tasks, opened on the one chosen, and by `openMenu` alone:
+             Vuetify would also toggle it at a click on its activator, and on a task the menu had
+             opened on before, that listener ran after the view's and closed what it had opened.
+             Keyed by the task, so it is a menu of its own for each: a click on another task while
+             it is open is one outside it, which the menu closes at a moment later, and the same
+             menu opened on the other task was closed with it. -->
         <v-menu
+            v-bind:key="menuKey"
             v-model="menuOpen"
             v-bind:activator="menuActivator"
+            v-bind:open-on-click="false"
             v-bind:close-on-content-click="false"
             location="end"
         >
@@ -829,6 +836,7 @@ const timeline = computed(() => {
 const menuOpen = ref(false);
 const menuActivator = ref<HTMLElement | undefined>(undefined);
 const menuOn = ref<{ date: string; task: string } | null>(null);
+const menuKey = computed(() => (menuOn.value ? `${menuOn.value.date} ${menuOn.value.task}` : ''));
 const chosen = computed(() => {
     const on = menuOn.value;
     const row = on && days.value.find((day) => day.date === on.date)?.rows.find((candidate) => candidate.entry.task === on.task);
